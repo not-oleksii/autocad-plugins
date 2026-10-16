@@ -8,7 +8,7 @@ Works with AutoCAD 2024 and later. No Python or admin rights needed.
 
 1. Close AutoCAD.
 2. Unzip `PDFALL.zip` anywhere and double-click `install.bat`.
-3. Start AutoCAD. The command line shows `PDFALL 1.2.0 loaded`, and the ribbon has a **PDFALL** tab with PDFALL and PDFNUM buttons.
+3. Start AutoCAD. The command line shows `PDFALL 1.3.0 завантажено`, and the ribbon has a **PDFALL** tab with PDFALL and PDFNUM buttons.
 
 To update, run the new `install.bat` the same way. To remove, run `uninstall.bat`.
 

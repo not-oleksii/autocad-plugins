@@ -206,11 +206,11 @@ def load(part):
     if title.marka is None:
         part.unverified.append("марка")
     elif looks(title.marka) != looks(part.marka):
-        part.mismatches.append(f"title block says марка '{title.marka}'")
+        part.mismatches.append(f"в основному написі марка '{title.marka}'")
     if title.sheet is None:
         part.unverified.append("аркуш")
     elif title.sheet != part.number:
-        part.mismatches.append(f"title block says Аркуш {title.sheet}")
+        part.mismatches.append(f"в основному написі Аркуш {title.sheet}")
 
 
 def pick_winners(parts, warnings):
@@ -224,7 +224,7 @@ def pick_winners(parts, warnings):
         winner = candidates[0]
         winners.append(winner)
         for loser in candidates[1:]:
-            warnings.append(f"'{loser.path.name}' ignored, superseded by '{winner.path.name}'")
+            warnings.append(f"'{loser.path.name}' пропущено, його замінює '{winner.path.name}'")
     return winners
 
 
@@ -250,7 +250,7 @@ def propose_renames(parts):
 
 def ask_yes(question):
     try:
-        answer = input(f"{question} [y/N] ")
+        answer = input(f"{question} [так/Ні] ")
     except EOFError:
         return False
     return answer.strip().lower() in ("y", "yes", "т", "так")
@@ -277,7 +277,7 @@ def warn_duplicate_plots(marka, parts, warnings):
         first = seen.setdefault((part.kind, text), part)
         if first is not part:
             warnings.append(
-                f"{marka}: '{part.path.name}' has the same content as '{first.path.name}', wrong sheet plotted?"
+                f"{marka}: '{part.path.name}' має той самий вміст, що й '{first.path.name}'. Надруковано не той лист?"
             )
 
 
@@ -289,9 +289,9 @@ def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, repor
     """
     missing = [n for n, by_kind in sorted(sheets.items()) if sheet_kind not in by_kind]
     if missing:
-        name = "без заливки" if sheet_kind == "unfilled" else "filled"
+        name = "без заливки" if sheet_kind == "unfilled" else "із заливкою"
         listed = ", ".join(f"лист {n}" for n in missing)
-        warnings.append(f"{marka}: '{title}' skipped, no {name} version of {listed}")
+        warnings.append(f"{marka}: '{title}' не зібрано, бракує варіанта {name} для: {listed}")
         return
     sources = [sheets[n][sheet_kind] for n in sorted(sheets)]
     sources += [specs[n] for n in sorted(specs)]
@@ -300,19 +300,19 @@ def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, repor
     target = folder / f"{marka} {title}.pdf"
     wrong = ", ".join(f"'{p.path.name}'" for p in sources if p.mismatches)
     if wrong and not force:
-        warnings.append(f"{marka}: '{target.name}' NOT built, title block mismatch in {wrong}")
+        warnings.append(f"{marka}: '{target.name}' НЕ зібрано, основний напис не збігається з назвою в {wrong}")
         return
     if dry_run:
-        report.append(f"{target.name}: {len(sources)} files, {sum(p.pages for p in sources)} pages")
+        report.append(f"{target.name}: файлів {len(sources)}, сторінок {sum(p.pages for p in sources)}")
         return
     if wrong:
-        warnings.append(f"{marka}: '{target.name}' built anyway despite mismatch in {wrong}")
+        warnings.append(f"{marka}: '{target.name}' зібрано попри розбіжність у {wrong}")
     try:
         pages = merge([p.path for p in sources], target)
     except PermissionError:
-        warnings.append(f"{marka}: could not write '{target.name}', is it open in another program?")
+        warnings.append(f"{marka}: не вдалося записати '{target.name}'. Він відкритий в іншій програмі?")
         return
-    report.append(f"{target.name}: {len(sources)} files, {pages} pages")
+    report.append(f"{target.name}: файлів {len(sources)}, сторінок {pages}")
 
 
 @dataclass
@@ -341,7 +341,7 @@ def scan(folder):
             try:
                 load(part)
             except Exception:
-                warnings.append(f"'{path.name}' is empty or unreadable, skipped (still plotting or syncing?)")
+                warnings.append(f"'{path.name}' порожній або не читається, пропущено (ще друкується чи синхронізується?)")
                 continue
             parts.append(part)
     if not parts:
@@ -362,18 +362,18 @@ def rename_sloppy(folders, root, check):
     renames = [r for folder in folders for r in propose_renames(folder.winners + folder.outputs)]
     if not renames:
         return
-    print("\nThese files have sloppy names:")
+    print("\nЦі файли названо неточно:")
     for part, target in renames:
         print(f"  '{part.path.relative_to(root)}'  ->  '{target.name}'")
     if check:
-        print("A merge run will offer to rename them.")
-    elif ask_yes("Rename these files?"):
+        print("Під час збирання буде запропоновано їх перейменувати.")
+    elif ask_yes("Перейменувати ці файли?"):
         for part, target in renames:
             part.path.rename(target)
             part.path = target
-        print("Renamed.")
+        print("Перейменовано.")
     else:
-        print("Names left as they are.")
+        print("Назви залишено як є.")
 
 
 def confirm_mismatches(folders, root, check):
@@ -381,20 +381,20 @@ def confirm_mismatches(folders, root, check):
     wrong = [p for folder in folders for p in folder.winners if p.mismatches]
     if not wrong:
         return False
-    print("\nTitle block does NOT match the file name:")
+    print("\nОсновний напис НЕ збігається з назвою файлу:")
     for part in wrong:
         print(f"  X '{part.path.relative_to(root)}': {'; '.join(part.mismatches)}")
-    print("The combined files that include these sheets will not be built.")
-    return not check and ask_yes("Build them anyway?")
+    print("Загальні файли з цими листами не буде зібрано.")
+    return not check and ask_yes("Все одно зібрати їх?")
 
 
 def warn_sheet_count(marka, parts, label, numbers, warnings):
     """Warn when a title block's "Аркушів" promises more sheets than there are files."""
     totals = {p.title.total for p in parts if p.title.total}
     if totals and max(totals) > max(numbers, default=0):
-        found = ", ".join(map(str, numbers)) or "none"
+        found = ", ".join(map(str, numbers)) or "жодного"
         warnings.append(
-            f"{marka}: title block says Аркушів {max(totals)}, but only {label} {found} found"
+            f"{marka}: в основному написі Аркушів {max(totals)}, але знайдено лише {label} {found}"
         )
 
 
@@ -410,8 +410,8 @@ def process(entry, root, force, dry_run):
         for other in markas[i + 1:]:
             if looks(marka) == looks(other):
                 warnings.append(
-                    f"'{marka}' and '{other}' look the same but are typed with different "
-                    "(Latin/Cyrillic) letters, so they are merged separately"
+                    f"'{marka}' і '{other}' виглядають однаково, але набрані різними "
+                    "(латинськими/кириличними) літерами, тому збираються окремо"
                 )
 
     report = []
@@ -426,7 +426,7 @@ def process(entry, root, force, dry_run):
         for numbers, label in ((sorted(sheets), SHEET), (sorted(specs), f"{SPEC} {SHEET}")):
             gaps = sorted(set(range(1, max(numbers, default=0) + 1)) - set(numbers))
             if gaps:
-                warnings.append(f"{marka}: no {label} {', '.join(map(str, gaps))}, is that right?")
+                warnings.append(f"{marka}: немає {label} {', '.join(map(str, gaps))}. Так і має бути?")
         drawings = [p for p in by_marka[marka] if p.kind != "spec"]
         warn_sheet_count(marka, drawings, SHEET, sorted(sheets), warnings)
         warn_sheet_count(marka, list(specs.values()), f"{SPEC} {SHEET}", sorted(specs), warnings)
@@ -434,20 +434,20 @@ def process(entry, root, force, dry_run):
         for kind, title in (("filled", GENERAL), ("unfilled", GENERAL_PRINT)):
             build(folder, marka, sheets, specs, kind, title, force, dry_run, report, warnings)
 
-    print("\nWould build:" if dry_run else "\nBuilt:")
-    for line in report or ["(nothing)"]:
+    print("\nБуде зібрано:" if dry_run else "\nЗібрано:")
+    for line in report or ["(нічого)"]:
         print(f"  {line}")
     if warnings:
-        print("\nWarnings:")
+        print("\nПопередження:")
         for line in warnings:
             print(f"  ! {line}")
     unverified = [p for p in entry.winners if p.unverified]
     if unverified:
-        print("\nCould not check against the title block (field empty or unreadable):")
+        print("\nНе вдалося звірити з основним написом (поле порожнє або не читається):")
         for part in sorted(unverified, key=lambda p: p.path.name):
             print(f"  ~ {part.path.name}: {', '.join(part.unverified)}")
     if entry.unrecognized:
-        print("\nUnrecognized PDFs (not merged):")
+        print("\nНерозпізнані PDF (не зібрано):")
         for name in entry.unrecognized:
             print(f"  ? {name}")
 
@@ -468,15 +468,15 @@ def main(check=False):
     check = check or "--check" in args
     roots = [Path(arg).resolve() for arg in args if arg != "--check"] or [home_folder()]
     if check:
-        print("CHECK ONLY: nothing will be built or renamed.")
+        print("ЛИШЕ ПЕРЕВІРКА: нічого не буде зібрано чи перейменовано.")
     for root in roots:
         if not root.is_dir():
-            print(f"\n=== {root}\n  ! not a folder, skipped")
+            print(f"\n=== {root}\n  ! це не папка, пропущено")
             continue
-        print(f"Scanning {root} and its subfolders...")
+        print(f"Переглядаю {root} і вкладені папки...")
         folders = [f for f in map(scan, walk(root)) if f]
         if not folders:
-            print("  no blueprint sheets found")
+            print("  листів креслень не знайдено")
             continue
         rename_sloppy(folders, root, check)
         force = confirm_mismatches(folders, root, check)
@@ -485,7 +485,7 @@ def main(check=False):
     if getattr(sys, "frozen", False):
         # A double-clicked .exe closes its window on exit; keep the report readable.
         try:
-            input("\nPress Enter to close...")
+            input("\nНатисніть Enter, щоб закрити...")
         except EOFError:
             pass
 

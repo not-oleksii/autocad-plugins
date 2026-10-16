@@ -15,7 +15,7 @@
 
 (vl-load-com)
 
-(setq *pdfall-version* "1.2.0")
+(setq *pdfall-version* "1.3.0")
 
 ;;; ---- Settings ---------------------------------------------------------------
 
@@ -300,7 +300,12 @@
 (defun pa:put (key val r) (subst (cons key val) (assoc key r) r))
 
 (defun pa:where (r)
-  (strcat (pa:get 'kind r) " рамка at " (rtos (car (pa:get 'll r)) 2 0) "," (rtos (cadr (pa:get 'll r)) 2 0)))
+  (strcat "рамка " (pa:kind-of (pa:get 'kind r)) " у точці "
+          (rtos (car (pa:get 'll r)) 2 0) "," (rtos (cadr (pa:get 'll r)) 2 0)))
+
+;; "лист" and "специфікація" as they read after "рамка" (of one) and "рамок/рамки" (of many).
+(defun pa:kind-of (kind) (if (= kind "лист") "листа" "специфікації"))
+(defun pa:kind-pl (kind) (if (= kind "лист") "листів" "специфікацій"))
 
 (defun pa:err (msg r) (setq errors (cons (cons msg r) errors)))
 (defun pa:warn (msg) (setq warnings (cons msg warnings)))
@@ -319,36 +324,36 @@
     (progn
       (setq r (car items))
       (if (or (null (pa:get 'sheet r)) (null (pa:get 'total r)))
-        (pa:warn (strcat marka " " kind ": Аркуш/Аркушів cells are empty, treated as лист 1."
-                         " Run PDFNUM to fill them in.")))
+        (pa:warn (strcat marka " " kind ": клітинки Аркуш/Аркушів порожні, тому це лист 1."
+                         " Заповніть їх командою PDFNUM.")))
       (if (null (pa:get 'sheet r)) (setq items (list (pa:put 'sheet 1 r))))))
   (foreach r items
     (if (null (pa:get 'sheet r))
-      (pa:err (strcat marka ": Аркуш cell is empty, but the марка has " (itoa n) " " kind " рамки"
-                      " (PDFNUM fills it in)")
+      (pa:err (strcat marka ": клітинка Аркуш порожня, хоча рамок " (pa:kind-pl kind) ": " (itoa n)
+                      " (PDFNUM її заповнить)")
               r)))
   (setq nums (vl-remove nil (mapcar '(lambda (r) (pa:get 'sheet r)) items)))
   (foreach r items
     (setq k (pa:get 'sheet r))
     (if (and k (> (length (vl-remove-if-not '(lambda (x) (= x k)) nums)) 1))
-      (pa:err (strcat marka ": two " kind " рамки say Аркуш " (itoa k)) r))
+      (pa:err (strcat marka ": Аркуш " (itoa k) " стоїть на кількох рамках " (pa:kind-pl kind)) r))
     (if (and k (or (< k 1) (> k n)))
-      (pa:err (strcat marka ": Аркуш " (itoa k) ", but there are only " (itoa n) " " kind " рамки") r)))
+      (pa:err (strcat marka ": Аркуш " (itoa k) ", але рамок " (pa:kind-pl kind) " лише " (itoa n)) r)))
   (setq k 1)
   (while (<= k n)
     (if (and (not (member k nums)) (= (length nums) n))
-      (pa:err (strcat marka ": no " kind " рамка says Аркуш " (itoa k)) (car items)))
+      (pa:err (strcat marka ": жодна рамка " (pa:kind-of kind) " не має Аркуш " (itoa k)) (car items)))
     (setq k (1+ k)))
   ;; Аркушів: on every лист; on a специфікація only on its first аркуш.
   (foreach r items
     (cond
       ((and (pa:get 'total r) (/= (pa:get 'total r) n))
-       (pa:err (strcat marka ": Аркушів says " (itoa (pa:get 'total r)) ", but " (itoa n) " "
-                       kind " рамки were found")
+       (pa:err (strcat marka ": Аркушів " (itoa (pa:get 'total r)) ", але знайдено рамок "
+                       (pa:kind-pl kind) ": " (itoa n))
                r))
       ((and (null (pa:get 'total r)) (> n 1)
             (or (= kind "лист") (= (pa:get 'sheet r) 1)))
-       (pa:err (strcat marka ": Аркушів cell is empty (PDFNUM fills it in)") r))))
+       (pa:err (strcat marka ": клітинка Аркушів порожня (PDFNUM її заповнить)") r))))
   (vl-sort items '(lambda (a b) (< (cond ((pa:get 'sheet a)) (0)) (cond ((pa:get 'sheet b)) (0))))))
 
 ;;; ---- Files ------------------------------------------------------------------
@@ -386,7 +391,7 @@
            "_F" "_C" "_N" "." "_Y" "_A" path "_N" "_Y")
   (if (findfile path)
     (setq plotted (1+ plotted))
-    (pa:err (strcat "could not write " path) r)))
+    (pa:err (strcat "не вдалося записати " path) r)))
 
 ;;; ---- Layers -----------------------------------------------------------------
 ;;; A layer is off when its colour (62) is negative and frozen when bit 1 of its flags (70) is set.
@@ -433,12 +438,12 @@
   (if (setq e (vl-some 'cdr (reverse errors)))
     (progn
       (command "_.ZOOM" "_W" (trans (pa:get 'll e) 0 1) (trans (pa:get 'ur e) 0 1))
-      (princ "\n  Zoomed to the first рамка with a problem."))))
+      (princ "\n  Показано першу рамку з проблемою."))))
 
 (defun pa:report-warnings ()
   (if warnings
     (progn
-      (princ "\n\nWarnings:")
+      (princ "\n\nПопередження:")
       (foreach w (reverse warnings) (princ (strcat "\n  ! " w))))))
 
 (defun pa:read-records (/ frames kind title names r records)
@@ -446,7 +451,8 @@
   ;; readable марка; the others go to errors.
   (pa:walk-model)
   (setq frames (pa:find-frames))
-  (if (null frames) (pa:err "no рамки (420x297 or 210x297 dash-dot borders) found in Model space" nil))
+  (if (null frames)
+    (pa:err "у Model space немає жодної рамки (штрихпунктирної межі 420x297 або 210x297)" nil))
   (foreach f frames
     (setq kind (if (pa:near (- (caddr f) (car f)) 420.0) "лист" "специфікація")
           title (pa:read-title f kind)
@@ -460,9 +466,9 @@
                   (cons 'sheet (cadr title))
                   (cons 'total (caddr title))))
     (cond
-      ((null names) (pa:err "no марка found in the title block" r))
+      ((null names) (pa:err "в основному написі не знайдено марку" r))
       ((vl-some '(lambda (x) (/= (car x) (caar names))) names)
-       (pa:err (strcat "the title block names more than one марка: "
+       (pa:err (strcat "в основному написі кілька марок: "
                        (apply 'strcat (mapcar '(lambda (x) (strcat (cadr x) " ")) names)))
                r))
       (T (setq records (cons r records)))))
@@ -480,9 +486,9 @@
 
 (defun pa:run (/ hidden ans r records markas groups base dir files locked e)
   (if (= 0 (getvar "DWGTITLED"))
-    (progn (princ "\nPDFALL: save the drawing first, so the PDFs have a folder to go to.") (exit)))
+    (progn (princ "\nPDFALL: спершу збережіть креслення, щоб PDF було куди покласти.") (exit)))
 
-  (princ "\nPDFALL: reading the drawing...")
+  (princ "\nPDFALL: читаю креслення...")
   (setq records (pa:read-records)
         markas (pa:markas records))
 
@@ -491,8 +497,8 @@
   (foreach m markas
     (foreach other (cdr (member m markas))
       (if (= (pa:cyr m) (pa:cyr other))
-        (pa:err (strcat "'" m "' and '" other "' look the same but are typed with different"
-                        " (Latin/Cyrillic) letters; type the марка the same way in every title block")
+        (pa:err (strcat "'" m "' і '" other "' виглядають однаково, але набрані різними"
+                        " (латинськими/кириличними) літерами; наберіть марку однаково в усіх основних написах")
                 (vl-some '(lambda (r) (if (= (pa:get 'marka r) m) r)) records)))))
   (foreach m markas
     (setq groups
@@ -503,24 +509,24 @@
   (setq groups (reverse groups))
 
   (if (null fills)
-    (pa:err (strcat "no шар заливки found (looked for: "
+    (pa:err (strcat "не знайдено шар заливки (шукав: "
                     (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (n) (strcat n ", ")) *pdfall-fill-layers*)))
-                    "). If it was renamed, add the new name to *pdfall-fill-layers* in pdfall.lsp")
+                    "). Якщо його перейменували, додайте нову назву до *pdfall-fill-layers* у pdfall.lsp")
             nil))
   (if errors
     (progn
-      (pa:report-errors "nothing was plotted. Fix these in the drawing and run PDFALL again:")
+      (pa:report-errors "нічого не надруковано. Виправте це в кресленні й запустіть PDFALL ще раз:")
       (pa:report-warnings)
       (exit)))
 
   ;; Hidden layers would silently drop objects from every PDF.
   (if (setq hidden (pa:hidden-layers))
     (progn
-      (princ "\n\nThese layers are off or frozen, so their objects will NOT be on the PDFs:")
+      (princ "\n\nЦі шари вимкнені або заморожені, тож їхніх об'єктів НЕ буде в PDF:")
       (foreach n hidden (princ (strcat "\n  " n)))
-      (initget "Yes No")
-      (setq ans (getkword "\nPlot anyway? [Yes/No] <No>: "))
-      (if (/= ans "Yes") (progn (princ "\nPDFALL: nothing was plotted.") (exit)))))
+      (initget "Так Ні")
+      (setq ans (getkword "\nВсе одно друкувати? [Так/Ні] <Ні>: "))
+      (if (/= ans "Так") (progn (princ "\nPDFALL: нічого не надруковано.") (exit)))))
 
   (if (/= 0 (getvar "DBMOD")) (command "_.QSAVE"))
 
@@ -537,13 +543,13 @@
     (if (setq e (open path "a")) (close e) (setq locked (cons path locked))))
   (if locked
     (progn
-      (princ "\n\nPDFALL: nothing was plotted. Close these files (open in a PDF viewer?) and run PDFALL again:")
+      (princ "\n\nPDFALL: нічого не надруковано. Закрийте ці файли (відкриті в переглядачі PDF?) і запустіть PDFALL ще раз:")
       (foreach path (reverse locked) (princ (strcat "\n  X " path)))
       (exit)))
   (foreach path files (vl-file-delete path))
   (foreach name (vl-directory-files base nil -1)
     (if (not (member name (append '("." "..") markas)))
-      (pa:warn (strcat "'" *pdfall-folder* "\\" name "' is not a марка in this drawing, left as it is"))))
+      (pa:warn (strcat "'" *pdfall-folder* "\\" name "' — не марка цього креслення, залишаю як є"))))
 
   ;; Plot: everything with the шар заливки on, then every лист again with it off.
   (setq sysvars (append sysvars (mapcar '(lambda (v) (cons v (getvar v))) '("BACKGROUNDPLOT" "OSMODE"))))
@@ -552,7 +558,7 @@
   (setq fill-state
     (mapcar '(lambda (n / d) (setq d (pa:layer n)) (list n (cdr (assoc 62 d)) (cdr (assoc 70 d))))
             fills))
-  (princ "\n\nPlotting:")
+  (princ "\n\nДрукую:")
   (pa:set-fill T)
   (foreach g groups
     (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil))))
@@ -562,15 +568,15 @@
     (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r T)))))
   (pa:restore)
 
-  (princ (strcat "\n\nPDFALL: " (itoa plotted) " PDFs in " base))
-  (if errors (pa:report-errors "these PDFs failed:"))
+  (princ (strcat "\n\nPDFALL: " (itoa plotted) " PDF у " base))
+  (if errors (pa:report-errors "ці PDF не вдалося створити:"))
   (pa:report-warnings)
   (cond
     ((null *pdfall-merge*))
     ((findfile *pdfall-merge*)
-     (princ "\nMerging in a separate window...")
+     (princ "\nЗбираю Загальний і Загальний друк в окремому вікні...")
      (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"\"")))
-    (T (princ (strcat "\n! " *pdfall-merge* " not found, so nothing was merged. Run install.bat again.")))))
+    (T (princ (strcat "\n! " *pdfall-merge* " не знайдено, тому нічого не зібрано. Запустіть install.bat ще раз.")))))
 
 ;; AutoCAD's Plotters folder (the first one, if several are set).
 (defun pa:plotters ()
@@ -588,7 +594,7 @@
   (defun *error* (msg)
     (pa:restore)
     (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
-      (princ (strcat "\nPDFALL error: " msg)))
+      (princ (strcat "\nПомилка PDFALL: " msg)))
     (princ))
   (pa:install-pc3)
   (setq plotted 0
@@ -597,8 +603,8 @@
                                *pdfall-devices*))
                      ((last *pdfall-devices*))))
   (if (/= device (car *pdfall-devices*))
-    (pa:warn (strcat (car *pdfall-devices*) " is not in " (pa:plotters) ", so every PDF opens in a viewer."
-                     " Copy it there from " *pdfall-home* ".")))
+    (pa:warn (strcat (car *pdfall-devices*) " немає в " (pa:plotters) ", тож кожен PDF відкриється в переглядачі."
+                     " Скопіюйте його туди з " *pdfall-home* ".")))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
   (setvar "CMDECHO" 0)
   (pa:run)
@@ -702,11 +708,11 @@
       (setq what (if (= (car cell) 'total) (strcat "Аркушів " (itoa n)) (strcat "Аркуш " (itoa i))))
       (cond
         ((and (/= (car cell) 'total) (member i used))
-         (pa:warn (strcat marka ": Аркуш left empty, because another " kind " рамка already says "
-                          (itoa i) "  (" (pa:where r) ")")))
+         (pa:warn (strcat marka ": Аркуш залишено порожнім, бо інша рамка " (pa:kind-of kind)
+                          " вже має " (itoa i) "  (" (pa:where r) ")")))
         ((pa:fill-cell r cell (if (= (car cell) 'total) n i) style)
          (setq done (cons what done)))
-        (T (pa:warn (strcat marka ": could not write " what ", the label is part of a block  ("
+        (T (pa:warn (strcat marka ": не вдалося записати " what ", бо підпис є частиною блока  ("
                             (pa:where r) ")")))))
     (if done
       (setq filled (cons (strcat marka " " kind " " (itoa i) ": "
@@ -719,11 +725,11 @@
   (defun *error* (msg)
     (pa:restore)
     (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
-      (princ (strcat "\nPDFNUM error: " msg)))
+      (princ (strcat "\nПомилка PDFNUM: " msg)))
     (princ))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
   (setvar "CMDECHO" 0)
-  (princ "\nPDFNUM: reading the drawing...")
+  (princ "\nPDFNUM: читаю креслення...")
   (setq records (pa:read-records)
         style (pa:number-style records))
   (command "_.UNDO" "_BE")
@@ -733,16 +739,16 @@
   (command "_.UNDO" "_E")
   (if filled
     (progn
-      (princ "\n\nPDFNUM filled in:")
+      (princ "\n\nPDFNUM заповнив:")
       (foreach s (reverse filled) (princ (strcat "\n  " s)))
-      (princ "\nType U to undo."))
-    (princ "\n\nPDFNUM: no empty Аркуш/Аркушів cells."))
+      (princ "\nЩоб скасувати, введіть U."))
+    (princ "\n\nPDFNUM: порожніх клітинок Аркуш/Аркушів немає."))
   (foreach e (reverse errors)
-    (pa:warn (strcat "skipped: " (car e) (if (cdr e) (strcat "  (" (pa:where (cdr e)) ")") ""))))
+    (pa:warn (strcat "пропущено: " (car e) (if (cdr e) (strcat "  (" (pa:where (cdr e)) ")") ""))))
   (pa:report-warnings)
   (pa:restore)
   (princ))
 
-(princ (strcat "\nPDFALL " *pdfall-version* " loaded. Type PDFALL"))
-(princ " to plot every лист and специфікація to PDF, PDFNUM to fill in empty Аркуш/Аркушів cells.")
+(princ (strcat "\nPDFALL " *pdfall-version* " завантажено. PDFALL друкує всі листи й специфікації в PDF,"))
+(princ " PDFNUM заповнює порожні клітинки Аркуш/Аркушів.")
 (princ)
