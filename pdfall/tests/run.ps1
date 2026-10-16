@@ -64,16 +64,16 @@ $exported = Join-Path $Work 'exported files'
 $pdfs = @(Get-ChildItem $exported -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
 $first, $second = $log -split 'SECOND-PDFNUM', 2
 Check ($log -match 'END-OF-TEST') 'the script ran to the end'
-Check ($first -match 'PDFNUM filled in:') 'PDFNUM filled in the empty counters'
+Check ($first -match 'PDFNUM заповнив:') 'PDFNUM filled in the empty counters'
 Check ($first -match 'К1 специфікація 2: Аркуш 2') 'К1 специфікація 2 got Аркуш 2'
 Check ($first -match '1П лист 1: Аркуш 1, Аркушів 1') '1П лист 1 got Аркуш 1, Аркушів 1'
 Check ($first -notmatch 'К1 лист') 'К1 листи, already numbered, were left alone'
-Check ($second -match 'PDFNUM: no empty') 'a second PDFNUM finds nothing left to fill'
-Check ($log -notmatch 'cells are empty|cell is empty') 'PDFALL finds no empty counters'
-Check ($log -match 'PDFALL: 34 PDFs') 'PDFALL reports 34 PDFs'
+Check ($second -match 'PDFNUM: порожніх клітинок') 'a second PDFNUM finds nothing left to fill'
+Check ($log -notmatch 'клітинк[аи] Аркуш\S* порожн') 'PDFALL finds no empty counters'
+Check ($log -match 'PDFALL: 34 PDF у') 'PDFALL reports 34 PDFs'
 Check ($pdfs.Count -eq 34) "34 PDFs on disk (found $($pdfs.Count))"
 Check (Test-Path (Join-Path $plotters 'PDFALL.pc3')) 'PDFALL.pc3 was copied into the Plotters folder'
-Check ($log -notmatch 'is not in .*every PDF opens in a viewer') 'PDFALL.pc3 was used in the same run'
+Check ($log -notmatch 'відкриється в переглядачі') 'PDFALL.pc3 was used in the same run'
 Check (Test-Path (Join-Path $exported 'К1\К1 лист 1 без заливки.pdf')) 'К1 лист 1 без заливки.pdf exists'
 
 Write-Host 'merge.exe on the exported files...'
@@ -86,7 +86,7 @@ $merged = @(Get-ChildItem $exported -Recurse -Filter '*Загальний*.pdf')
 $markas = @(Get-ChildItem $exported -Directory)
 Check ($m.ExitCode -eq 0) "merge.exe exit code 0 (got $($m.ExitCode))"
 $mergeLog = Get-Content $mergeOut -Raw -Encoding UTF8
-Check ($mergeLog -notmatch 'Could not check') 'merge.exe reads every Аркуш back from the PDFs'
+Check ($mergeLog -notmatch 'Не вдалося звірити') 'merge.exe reads every Аркуш back from the PDFs'
 Check ($merged.Count -eq 2 * $markas.Count) "Загальний and Загальний друк for each of $($markas.Count) марки (found $($merged.Count))"
 
 Write-Host 'Ribbon tab...'

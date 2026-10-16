@@ -1,4 +1,4 @@
-# Installs (or with -Uninstall removes) PDFALL for the current Windows user.
+﻿# Installs (or with -Uninstall removes) PDFALL for the current Windows user.
 # Run it through install.bat or uninstall.bat, with AutoCAD closed.
 # -AcadKey, -PluginsDir and -IgnoreRunningAutoCAD exist for tests\install.ps1.
 param(
@@ -40,7 +40,7 @@ function Remove-StartupCopies($acadProfile) {
     $files = @(1..$count | Where-Object { $count -gt 0 } | ForEach-Object { $props."$($_)Startup" } | Where-Object { $_ })
     $keep = @($files | Where-Object { (Split-Path $_ -Leaf) -ne 'pdfall.lsp' })
     if ($keep.Count -eq $files.Count) { return }
-    foreach ($f in $files | Where-Object { $keep -notcontains $_ }) { Write-Host "Removed from the Startup Suite: $f" }
+    foreach ($f in $files | Where-Object { $keep -notcontains $_ }) { Write-Host "Прибрано зі Startup Suite: $f" }
     1..$count | ForEach-Object { Remove-ItemProperty $key "$($_)Startup" -ErrorAction SilentlyContinue }
     for ($i = 0; $i -lt $keep.Count; $i++) { Set-ItemProperty $key "$($i + 1)Startup" $keep[$i] }
     Set-ItemProperty $key NumStartup "$($keep.Count)"
@@ -48,19 +48,19 @@ function Remove-StartupCopies($acadProfile) {
 
 try {
     if (-not $IgnoreRunningAutoCAD -and (Get-Process acad, accoreconsole -ErrorAction SilentlyContinue)) {
-        throw 'AutoCAD is running. Close it, then run this again.'
+        throw 'AutoCAD відкритий. Закрийте його й запустіть це ще раз.'
     }
     $profiles = @(Get-AcadProfiles)
 
     if ($Uninstall) {
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         foreach ($p in $profiles) { Set-Trusted $p $false }
-        Write-Host 'PDFALL removed.'
+        Write-Host 'PDFALL видалено.'
         return
     }
 
     if (-not (Test-Path (Join-Path $src 'PackageContents.xml'))) {
-        throw 'PDFALL.bundle is not next to install.bat. Unzip the whole PDFALL.zip first.'
+        throw 'Поруч з install.bat немає PDFALL.bundle. Спершу розпакуйте весь PDFALL.zip.'
     }
     if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
     New-Item (Split-Path $dest) -ItemType Directory -Force | Out-Null
@@ -70,14 +70,14 @@ try {
         Remove-StartupCopies $p
     }
     if (-not $profiles) {
-        Write-Host 'Warning: no AutoCAD 2024 settings found. Start AutoCAD once, close it, and run install.bat again,'
-        Write-Host '         or AutoCAD will ask whether to load PDFALL every time it starts.'
+        Write-Host 'Увага: налаштувань AutoCAD 2024 не знайдено. Запустіть AutoCAD один раз, закрийте його й знову запустіть install.bat,'
+        Write-Host '        інакше AutoCAD щоразу питатиме, чи завантажувати PDFALL.'
     }
     $version = ([xml](Get-Content (Join-Path $dest 'PackageContents.xml') -Encoding UTF8)).ApplicationPackage.AppVersion
-    Write-Host "PDFALL $version installed in $dest"
-    Write-Host 'Start AutoCAD, open a drawing and type PDFALL.'
+    Write-Host "PDFALL $version встановлено в $dest"
+    Write-Host 'Запустіть AutoCAD, відкрийте креслення й натисніть PDFALL на вкладці PDFALL.'
 }
 catch {
-    Write-Host "Not done: $($_.Exception.Message)"
+    Write-Host "Не виконано: $($_.Exception.Message)"
     exit 1
 }
