@@ -89,5 +89,14 @@ $mergeLog = Get-Content $mergeOut -Raw -Encoding UTF8
 Check ($mergeLog -notmatch 'Could not check') 'merge.exe reads every Аркуш back from the PDFs'
 Check ($merged.Count -eq 2 * $markas.Count) "Загальний and Загальний друк for each of $($markas.Count) марки (found $($merged.Count))"
 
+Write-Host 'Ribbon tab...'
+[Reflection.Assembly]::LoadFrom((Join-Path (Split-Path $Acad) 'AcCui.dll')) | Out-Null
+$cs = New-Object Autodesk.AutoCAD.Customization.CustomizationSection((Join-Path $Contents 'PDFALL.cuix'))
+$tab = @($cs.MenuGroup.RibbonRoot.RibbonTabSources)[0]
+$macros = @($cs.MenuGroup.MacroGroups | ForEach-Object { $_.MenuMacros })
+Check ($tab.Text -eq 'PDFALL' -and "$($tab.DefaultDisplay)" -eq 'AddToWorkspace') 'PDFALL.cuix has a PDFALL tab that AutoCAD adds by itself'
+Check (($macros | ForEach-Object { $_.macro.Command }) -join ',' -eq '^C^CPDFALL ,^C^CPDFNUM ') 'its buttons run PDFALL and PDFNUM'
+Check (@($macros | Where-Object { -not (Test-Path (Join-Path $Contents $_.macro.LargeImage)) }).Count -eq 0) 'every button image is in Contents'
+
 Write-Host "Logs: $out, $mergeOut"
 if ($failures) { Write-Host "FAILED: $($failures -join '; ')"; exit 1 } else { Write-Host 'All passed.' }
