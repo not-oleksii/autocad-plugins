@@ -1,6 +1,6 @@
 @echo off
-rem Builds dist\PDFALL.zip to give to colleagues: PDFALL.bundle (pdfall.lsp, merge.exe, PDFALL.pc3)
-rem plus install.bat and uninstall.bat. The same files are left unzipped in dist\.
+rem Builds dist\PDFALL.zip to give to colleagues: PDFALL.bundle (pdfall.lsp, merge.exe, PDFALL.pc3,
+rem the ribbon tab) plus install.bat and uninstall.bat. The same files are left unzipped in dist\.
 rem Needs once: py -3 -m pip install pyinstaller pypdf
 setlocal
 set SRC=%~dp0src
@@ -15,6 +15,7 @@ copy /y "%SRC%\PackageContents.xml" "%DIST%\PDFALL.bundle\" >nul || goto :fail
 for %%f in ("%SRC%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
   copy /y "%%~f" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail
 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\ribbon.ps1" -Out "%DIST%\PDFALL.bundle\Contents" || goto :fail
 for %%f in (install.bat install.ps1 uninstall.bat) do (
   copy /y "%SRC%\%%f" "%DIST%\" >nul || goto :fail
 )

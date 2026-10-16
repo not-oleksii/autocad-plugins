@@ -8,7 +8,7 @@ Works with AutoCAD 2024 and later. No Python or admin rights needed.
 
 1. Close AutoCAD.
 2. Unzip `PDFALL.zip` anywhere and double-click `install.bat`.
-3. Start AutoCAD. The command line shows `PDFALL 1.1.0 loaded`.
+3. Start AutoCAD. The command line shows `PDFALL 1.2.0 loaded`, and the ribbon has a **PDFALL** tab with PDFALL and PDFNUM buttons.
 
 To update, run the new `install.bat` the same way. To remove, run `uninstall.bat`.
 
@@ -16,7 +16,7 @@ To update, run the new `install.bat` the same way. To remove, run `uninstall.bat
 
 ## Use
 
-1. Open the drawing and type `PDFALL`.
+1. Open the drawing and click **PDFALL** on the PDFALL ribbon tab, or type `PDFALL`.
 2. Wait for the PDFs. A merge window then opens and shows what it built. Press Enter to close it.
 
 The PDFs go next to the drawing:
@@ -68,6 +68,7 @@ src\pdfall.lsp            the PDFALL and PDFNUM commands
 src\merge_blueprints.py   builds Загальний and Загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle
+srcibbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with AutoCAD's own AcCui.dll
 src\install.ps1           what install.bat and uninstall.bat run
 build.bat                 builds dist\PDFALL.zip
 tests\run.ps1             runs the built PDFNUM, PDFALL and merge.exe on examples\ without opening AutoCAD
@@ -78,7 +79,7 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 To release a change:
 
 1. Raise `*pdfall-version*` in `pdfall.lsp` and `AppVersion` in `PackageContents.xml`, keeping them equal.
-2. Run `build.bat`. It needs `py -3 -m pip install pyinstaller pypdf` once.
+2. Run `build.bat`. It needs AutoCAD 2024 installed (for the ribbon) and `py -3 -m pip install pyinstaller pypdf` once.
 3. Run both tests:
 
    ```bash

@@ -2,7 +2,7 @@
 <!-- AutoCAD loads PDFALL.bundle from %APPDATA%\Autodesk\ApplicationPlugins into every drawing.
      Keep AppVersion equal to *pdfall-version* in pdfall.lsp. -->
 <ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application"
-                    Name="PDFALL" AppVersion="1.1.0"
+                    Name="PDFALL" AppVersion="1.2.0"
                     Description="Plots every лист and специфікація in Model space to PDF and merges them."
                     ProductCode="{7B1B8584-E07A-4DFE-B3C7-90CADBF6934E}"
                     UpgradeCode="{2D5B5A1F-3249-4158-8168-F061F321423A}">
@@ -15,5 +15,8 @@
         <Command Local="PDFNUM" Global="PDFNUM" />
       </Commands>
     </ComponentEntry>
+    <!-- The PDFALL ribbon tab, built by src\ribbon.ps1. -->
+    <ComponentEntry AppName="PDFALL_Ribbon" ModuleName="./Contents/PDFALL.cuix"
+                    AppDescription="PDFALL ribbon tab" LoadOnAutoCADStartup="True" />
   </Components>
 </ApplicationPackage>
