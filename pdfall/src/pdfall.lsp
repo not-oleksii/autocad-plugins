@@ -1,4 +1,5 @@
 ;;; PDFALL: plot every лист and специфікація drawn in Model space to PDF, then merge them.
+;;; PDFNUM: fill in the empty Аркуш and Аркушів cells of their title blocks.
 ;;;
 ;;; Terms are defined in GLOSSARY.md, the design in docs/adr/0001-plot-from-model-space-with-lisp.md.
 ;;; install.bat installs it as PDFALL.bundle, which AutoCAD loads by itself at startup.
@@ -14,7 +15,7 @@
 
 (vl-load-com)
 
-(setq *pdfall-version* "1.0.0")
+(setq *pdfall-version* "1.1.0")
 
 ;;; ---- Settings ---------------------------------------------------------------
 
@@ -132,7 +133,10 @@
     ((and (< dy *pa-tol*) (or (pa:near dx 420.0) (pa:near dx 210.0)))
      (setq hsegs (cons (list (min (car p) (car q)) (max (car p) (car q)) (cadr p)) hsegs)))
     ((and (< dx *pa-tol*) (pa:near dy 297.0))
-     (setq vsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) vsegs)))))
+     (setq vsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) vsegs)))
+    ;; short vertical lines: the cell edges of title blocks, used by PDFNUM to centre numbers
+    ((and (< dx *pa-tol*) (< 2.0 dy 60.0))
+     (setq cellsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) cellsegs)))))
 
 (defun pa:pt (m p) (pa:apply m (car p) (cadr p)))
 
@@ -144,10 +148,12 @@
     (pa:add-seg (pa:pt m (car pts)) (pa:pt m (cadr pts)))
     (setq pts (cdr pts))))
 
+;; texts entries are (x y comparable as-typed owner): owner is the TEXT or MTEXT entity when it
+;; sits directly in Model space (so PDFNUM can edit it), nil when it is inside a block.
 (defun pa:add-string (p raw)
   (setq raw (vl-string-trim " \t\n" raw))
   (if (/= raw "")
-    (setq texts (cons (list (car p) (cadr p) (pa:cyr raw) raw) texts))))
+    (setq texts (cons (list (car p) (cadr p) (pa:cyr raw) raw pa-owner) texts))))
 
 (defun pa:rotate (p dx dy ang)
   (list (+ (car p) (- (* dx (cos ang)) (* dy (sin ang))))
@@ -194,12 +200,14 @@
                                          (- (car ins) (+ (* a (car o)) (* b (cadr o))))
                                          (- (cadr ins) (+ (* c (car o)) (* dd (cadr o))))))
                      (1+ depth))
+      (setq pa-owner nil)
       (if (= 1 (cdr (assoc 66 d)))
         (while (and (setq e (entnext e)) (= "ATTRIB" (cdr (assoc 0 (setq ad (entget e))))))
           (if (= 0 (logand 1 (cdr (assoc 70 ad)))) (pa:add-text ad m)))))))
 
 (defun pa:walk-ent (e m depth / d type)
-  (setq d (entget e) type (cdr (assoc 0 d)))
+  (setq d (entget e) type (cdr (assoc 0 d))
+        pa-owner (if (and (= depth 0) (member type '("TEXT" "MTEXT"))) e))
   (cond
     ((= type "LINE") (pa:add-seg (pa:pt m (cdr (assoc 10 d))) (pa:pt m (cdr (assoc 11 d)))))
     ((= type "LWPOLYLINE") (pa:add-pline d m))
@@ -237,21 +245,24 @@
         (setq out (cons (list (car b) (caddr b) (cadr b) (caddr tp)) out)))))
   out)
 
-(defun pa:below (z zone / v)
-  ;; The number written in the cell under the label z.
+(defun pa:below-entry (z zone / v)
+  ;; The text of the number written in the cell under the label z.
   (foreach o zone
     (if (and (pa:digits-p (caddr o))
              (< (abs (- (car o) (car z))) 6.0)
              (< 2.0 (- (cadr z) (cadr o)) 12.0))
-      (setq v (atoi (caddr o)))))
+      (setq v o)))
   v)
 
-(defun pa:read-title (f kind / all zone top w v names sheet total)
-  ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
-  ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic.
-  ;; Positions are measured from the рамка's bottom-right corner.
+(defun pa:below (z zone / o)
+  ;; The number written in the cell under the label z.
+  (if (setq o (pa:below-entry z zone)) (atoi (caddr o))))
+
+(defun pa:title-zone (f kind / all v top)
+  ;; The texts of a рамка's title block, as (x y comparable as-typed owner) with x and y measured
+  ;; from the рамка's bottom-right corner.
   (foreach tx texts
-    (setq v (list (- (car tx) (caddr f)) (- (cadr tx) (cadr f)) (caddr tx) (cadddr tx)))
+    (setq v (cons (- (car tx) (caddr f)) (cons (- (cadr tx) (cadr f)) (cddr tx))))
     (if (and (<= -192.0 (car v) 0.0) (<= 0.0 (cadr v) 60.0))
       (setq all (cons v all))))
   ;; The title block is 55 mm high on a лист, 40 mm on a первый аркуш специфікації, 15 mm after that.
@@ -260,7 +271,12 @@
                             all)
                    45.0)
                   (T 20.0)))
-  (setq zone (vl-remove-if '(lambda (z) (> (cadr z) top)) all))
+  (vl-remove-if '(lambda (z) (> (cadr z) top)) all))
+
+(defun pa:read-title (f kind / zone w v names sheet total)
+  ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
+  ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic.
+  (setq zone (pa:title-zone f kind))
   (foreach z zone
     (setq w (pa:words (car (pa:split (caddr z) "\n"))))
     (cond
@@ -304,11 +320,13 @@
       (setq r (car items))
       (if (or (null (pa:get 'sheet r)) (null (pa:get 'total r)))
         (pa:warn (strcat marka " " kind ": Аркуш/Аркушів cells are empty, treated as лист 1."
-                         " Please fill them in.")))
+                         " Run PDFNUM to fill them in.")))
       (if (null (pa:get 'sheet r)) (setq items (list (pa:put 'sheet 1 r))))))
   (foreach r items
     (if (null (pa:get 'sheet r))
-      (pa:err (strcat marka ": Аркуш cell is empty, but the марка has " (itoa n) " " kind " рамки") r)))
+      (pa:err (strcat marka ": Аркуш cell is empty, but the марка has " (itoa n) " " kind " рамки"
+                      " (PDFNUM fills it in)")
+              r)))
   (setq nums (vl-remove nil (mapcar '(lambda (r) (pa:get 'sheet r)) items)))
   (foreach r items
     (setq k (pa:get 'sheet r))
@@ -330,7 +348,7 @@
                r))
       ((and (null (pa:get 'total r)) (> n 1)
             (or (= kind "лист") (= (pa:get 'sheet r) 1)))
-       (pa:err (strcat marka ": Аркушів cell is empty") r))))
+       (pa:err (strcat marka ": Аркушів cell is empty (PDFNUM fills it in)") r))))
   (vl-sort items '(lambda (a b) (< (cond ((pa:get 'sheet a)) (0)) (cond ((pa:get 'sheet b)) (0))))))
 
 ;;; ---- Files ------------------------------------------------------------------
@@ -423,16 +441,12 @@
       (princ "\n\nWarnings:")
       (foreach w (reverse warnings) (princ (strcat "\n  ! " w))))))
 
-(defun pa:run (/ hidden ans frames kind title names r records markas groups base dir files locked e)
-  (if (= 0 (getvar "DWGTITLED"))
-    (progn (princ "\nPDFALL: save the drawing first, so the PDFs have a folder to go to.") (exit)))
-
-  (princ "\nPDFALL: reading the drawing...")
+(defun pa:read-records (/ frames kind title names r records)
+  ;; Walks Model space and reads every рамка's title block. Returns one record per рамка with a
+  ;; readable марка; the others go to errors.
   (pa:walk-model)
   (setq frames (pa:find-frames))
   (if (null frames) (pa:err "no рамки (420x297 or 210x297 dash-dot borders) found in Model space" nil))
-
-  ;; Read every title block.
   (foreach f frames
     (setq kind (if (pa:near (- (caddr f) (car f)) 420.0) "лист" "специфікація")
           title (pa:read-title f kind)
@@ -440,6 +454,7 @@
           r (list (cons 'kind kind)
                   (list 'll (car f) (cadr f) 0.0)
                   (list 'ur (caddr f) (cadddr f) 0.0)
+                  (cons 'frame f)
                   ;; the марка exactly as typed: it may mix Latin and Cyrillic letters, like X1A1Р
                   (cons 'marka (cadar names))
                   (cons 'sheet (cadr title))
@@ -451,11 +466,27 @@
                        (apply 'strcat (mapcar '(lambda (x) (strcat (cadr x) " ")) names)))
                r))
       (T (setq records (cons r records)))))
+  records)
+
+(defun pa:markas (records / out)
+  ;; The марки of the records, sorted.
+  (foreach r records
+    (if (not (member (pa:get 'marka r) out)) (setq out (cons (pa:get 'marka r) out))))
+  (acad_strlsort out))
+
+(defun pa:of (marka kind records)
+  ;; The records of one kind of one марка.
+  (vl-remove-if-not '(lambda (r) (and (= (pa:get 'marka r) marka) (= (pa:get 'kind r) kind))) records))
+
+(defun pa:run (/ hidden ans r records markas groups base dir files locked e)
+  (if (= 0 (getvar "DWGTITLED"))
+    (progn (princ "\nPDFALL: save the drawing first, so the PDFs have a folder to go to.") (exit)))
+
+  (princ "\nPDFALL: reading the drawing...")
+  (setq records (pa:read-records)
+        markas (pa:markas records))
 
   ;; Check each марка.
-  (foreach r records
-    (if (not (member (pa:get 'marka r) markas)) (setq markas (cons (pa:get 'marka r) markas))))
-  (setq markas (acad_strlsort markas))
   ;; Two марки that look the same but are typed with different letters would split one марка in two.
   (foreach m markas
     (foreach other (cdr (member m markas))
@@ -466,13 +497,8 @@
   (foreach m markas
     (setq groups
       (cons (list m
-                  (pa:check m "лист"
-                            (vl-remove-if-not '(lambda (r) (and (= (pa:get 'marka r) m) (= (pa:get 'kind r) "лист")))
-                                              records))
-                  (pa:check m "специфікація"
-                            (vl-remove-if-not '(lambda (r) (and (= (pa:get 'marka r) m)
-                                                                (= (pa:get 'kind r) "специфікація")))
-                                              records)))
+                  (pa:check m "лист" (pa:of m "лист" records))
+                  (pa:check m "специфікація" (pa:of m "специфікація" records)))
             groups)))
   (setq groups (reverse groups))
 
@@ -557,7 +583,8 @@
            (findfile (strcat *pdfall-home* "\\" name)))
     (vl-file-copy (strcat *pdfall-home* "\\" name) (strcat (pa:plotters) "\\" name))))
 
-(defun c:PDFALL (/ *error* texts hsegs vsegs errors warnings fills fill-state sysvars plotted device)
+(defun c:PDFALL (/ *error* texts hsegs vsegs cellsegs pa-owner errors warnings fills fill-state sysvars
+                   plotted device)
   (defun *error* (msg)
     (pa:restore)
     (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
@@ -578,6 +605,144 @@
   (pa:restore)
   (princ))
 
+;;; ---- PDFNUM -----------------------------------------------------------------
+;;; Fills in empty Аркуш and Аркушів cells. A number that is already written is never changed.
+
+(defun pa:empty-cells (f kind / zone w out)
+  ;; The counter labels of a title block that have no number yet: ((role . label) ...), where role
+  ;; is sheet (Аркуш), total (Аркушів) or corner (Арк. on a later аркуш of a специфікація).
+  (setq zone (pa:title-zone f kind))
+  (foreach z zone
+    (setq w (pa:words (car (pa:split (caddr z) "\n"))))
+    (if (null (pa:below z zone))
+      (cond
+        ((equal w '("Аркуш")) (setq out (cons (cons 'sheet z) out)))
+        ((equal w '("Аркушів")) (setq out (cons (cons 'total z) out)))
+        ((and (equal w '("Арк.")) (> (car z) -25.0)) (setq out (cons (cons 'corner z) out))))))
+  ;; Аркуш before Аркушів, so the report reads in cell order
+  (append (vl-remove-if '(lambda (c) (= (car c) 'total)) out)
+          (vl-remove-if-not '(lambda (c) (= (car c) 'total)) out)))
+
+(defun pa:number-style (records / zone o d)
+  ;; The look of a number someone already wrote under a counter label, so new numbers match it:
+  ;; ((8 . layer) (7 . style) (40 . height) ...), or nil if there is none.
+  (foreach r records
+    (if (= (pa:get 'kind r) "специфікація")
+      (progn
+        (setq zone (pa:title-zone (pa:get 'frame r) "специфікація"))
+        (foreach z zone
+          (if (and (null d)
+                   (member (car (pa:words (caddr z))) '("Аркуш" "Аркушів" "Арк."))
+                   (setq o (pa:below-entry z zone))
+                   (nth 4 o)
+                   (= "TEXT" (cdr (assoc 0 (entget (nth 4 o))))))
+            (setq d (entget (nth 4 o))))))))
+  (if d (pa:text-style d)))
+
+(defun pa:text-style (d)
+  (vl-remove nil (mapcar '(lambda (k) (assoc k d)) '(8 7 40 41 62))))
+
+(defun pa:gap (a b) (distance (list (car a) (cadr a)) (list (car b) (cadr b))))
+
+(defun pa:label-style (z zone / o)
+  ;; The look of the label z, or of the nearest plain text of its title block if z is inside a block.
+  (if (and (nth 4 z) (= "TEXT" (cdr (assoc 0 (entget (nth 4 z))))))
+    (pa:text-style (entget (nth 4 z)))
+    (progn
+      (foreach x zone
+        (if (and (nth 4 x) (= "TEXT" (cdr (assoc 0 (entget (nth 4 x)))))
+                 (or (null o) (< (pa:gap z x) (pa:gap z o))))
+          (setq o x)))
+      (if o (pa:text-style (entget (nth 4 o))) (list (cons 40 2.5))))))
+
+(defun pa:cell-x (x y / left right)
+  ;; The middle of the title-block cell around x at height y, from its edge lines; x if none are found.
+  (foreach s cellsegs
+    (if (and (<= (cadr s) y (caddr s)) (< (abs (- (car s) x)) 30.0))
+      (if (< (car s) x)
+        (if (or (null left) (> (car s) left)) (setq left (car s)))
+        (if (or (null right) (< (car s) right)) (setq right (car s))))))
+  (if (and left right) (/ (+ left right) 2.0) x))
+
+(defun pa:fill-cell (r cell n style / f z x y d e)
+  ;; Writes number n into the empty cell. Returns nil when it can't.
+  (setq f (pa:get 'frame r)
+        z (cdr cell)
+        e (nth 4 z)
+        x (+ (car z) (caddr f))
+        y (+ (cadr z) (cadr f)))
+  (if (= (pa:get 'kind r) "лист")
+    ;; On a лист the number follows the label in the same text: "Аркуш 2".
+    (if e
+      (progn
+        (setq d (entget e))
+        (entmod (subst (cons 1 (strcat (cdr (assoc 1 d)) " " (itoa n))) (assoc 1 d) d))))
+    ;; On a специфікація it goes in the cell under the label: 5 mm lower, 7.5 mm in the corner cell.
+    (progn
+      (setq y (- y (if (= (car cell) 'corner) 7.5 5.0))
+            x (pa:cell-x x y))
+      (entmake (append (list '(0 . "TEXT") (list 10 x y 0.0) (list 11 x y 0.0) '(72 . 1) '(73 . 2)
+                             (cons 1 (itoa n)))
+                       (cond (style) ((pa:label-style z (pa:title-zone f "специфікація")))))))))
+
+(defun pa:position< (a b / ya yb)
+  ;; Upper row first, then left to right.
+  (setq ya (cadr (pa:get 'll a)) yb (cadr (pa:get 'll b)))
+  (if (> (abs (- ya yb)) 100.0) (> ya yb) (< (car (pa:get 'll a)) (car (pa:get 'll b)))))
+
+(defun pa:number (marka kind items style / n used i done what)
+  ;; Fills the empty cells of one kind of one марка, numbering its рамки by position.
+  (setq items (vl-sort items 'pa:position<)
+        n (length items)
+        used (vl-remove nil (mapcar '(lambda (r) (pa:get 'sheet r)) items))
+        i 0)
+  (foreach r items
+    (setq i (1+ i) done nil)
+    (foreach cell (pa:empty-cells (pa:get 'frame r) kind)
+      (setq what (if (= (car cell) 'total) (strcat "Аркушів " (itoa n)) (strcat "Аркуш " (itoa i))))
+      (cond
+        ((and (/= (car cell) 'total) (member i used))
+         (pa:warn (strcat marka ": Аркуш left empty, because another " kind " рамка already says "
+                          (itoa i) "  (" (pa:where r) ")")))
+        ((pa:fill-cell r cell (if (= (car cell) 'total) n i) style)
+         (setq done (cons what done)))
+        (T (pa:warn (strcat marka ": could not write " what ", the label is part of a block  ("
+                            (pa:where r) ")")))))
+    (if done
+      (setq filled (cons (strcat marka " " kind " " (itoa i) ": "
+                                 (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (s) (strcat s ", "))
+                                                                                   (reverse done)))))
+                         filled)))))
+
+(defun c:PDFNUM (/ *error* texts hsegs vsegs cellsegs pa-owner errors warnings fill-state sysvars
+                   records style filled)
+  (defun *error* (msg)
+    (pa:restore)
+    (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
+      (princ (strcat "\nPDFNUM error: " msg)))
+    (princ))
+  (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
+  (setvar "CMDECHO" 0)
+  (princ "\nPDFNUM: reading the drawing...")
+  (setq records (pa:read-records)
+        style (pa:number-style records))
+  (command "_.UNDO" "_BE")
+  (foreach m (pa:markas records)
+    (pa:number m "лист" (pa:of m "лист" records) style)
+    (pa:number m "специфікація" (pa:of m "специфікація" records) style))
+  (command "_.UNDO" "_E")
+  (if filled
+    (progn
+      (princ "\n\nPDFNUM filled in:")
+      (foreach s (reverse filled) (princ (strcat "\n  " s)))
+      (princ "\nType U to undo."))
+    (princ "\n\nPDFNUM: no empty Аркуш/Аркушів cells."))
+  (foreach e (reverse errors)
+    (pa:warn (strcat "skipped: " (car e) (if (cdr e) (strcat "  (" (pa:where (cdr e)) ")") ""))))
+  (pa:report-warnings)
+  (pa:restore)
+  (princ))
+
 (princ (strcat "\nPDFALL " *pdfall-version* " loaded. Type PDFALL"))
-(princ " to plot every лист and специфікація to PDF.")
+(princ " to plot every лист and специфікація to PDF, PDFNUM to fill in empty Аркуш/Аркушів cells.")
 (princ)
