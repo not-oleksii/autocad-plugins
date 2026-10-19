@@ -647,7 +647,8 @@
   (if d (pa:text-style d)))
 
 (defun pa:text-style (d)
-  (vl-remove nil (mapcar '(lambda (k) (assoc k d)) '(8 7 40 41 62))))
+  ;; Layer, style, height, width, colour and slant (51): title blocks lean their text 15 degrees.
+  (vl-remove nil (mapcar '(lambda (k) (assoc k d)) '(8 7 40 41 51 62))))
 
 (defun pa:gap (a b) (distance (list (car a) (cadr a)) (list (car b) (cadr b))))
 

@@ -130,6 +130,13 @@ $pasteScr = @"
   (princ (strcat "\nFRAMES=" (itoa (length f))))
   (foreach tx texts (if (wcmatch (caddr tx) "*Джгут*") (princ (strcat "\nNAME=" (cadddr tx)))))
   (princ (strcat "\nCLAYER=" (getvar "CLAYER"))))
+(defun slant (/ ss i d n up)
+  (setq ss (ssget "_X" '((0 . "TEXT") (410 . "Model"))) i 0 n 0 up 0)
+  (while (< i (sslength ss))
+    (setq d (entget (ssname ss i)) i (1+ i))
+    (if (wcmatch (cdr (assoc 1 d)) "#,##")
+      (setq n (1+ n) up (if (< (abs (cdr (assoc 51 d))) 0.01) (1+ up) up))))
+  (princ (strcat "\nNUMBERS=" (itoa n) " UPRIGHT=" (itoa up))))
 (tpaste "PDFLIST" "1ЧП" 2 "PDFALL_list.dwg")
 1000,1000
 1500,1000
@@ -140,6 +147,7 @@ $pasteScr = @"
 3600,1000
 (report)
 PDFNUM
+(slant)
 (command "_.-LAYER" "_M" "Цвет" "")
 (command "_.SAVEAS" "2018" "$($pasteDir -replace '\\', '/')/paste.dwg")
 PDFALL
@@ -155,6 +163,7 @@ Check ($plog -match 'NAME=Джгут 1ЧП' -and $plog -match 'NAME=Джгут �
 Check ($plog -notmatch 'NAME=Джгут МАРКА') 'no name cell still says МАРКА'
 Check ($plog -match 'CLAYER=0') 'the current layer was put back'
 Check ($plog -match 'К1 специфікація 3: Аркуш 3') 'PDFNUM numbers the pasted специфікації'
+Check ($plog -match 'NUMBERS=[1-9]\d* UPRIGHT=0') 'the numbers PDFNUM wrote lean 15 degrees like the title block'
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 
