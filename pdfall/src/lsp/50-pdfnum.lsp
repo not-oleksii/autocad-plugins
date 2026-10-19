@@ -2,34 +2,26 @@
 ;;; Fills in empty Аркуш and Аркушів cells. A number that is already written is never changed.
 ;;; Defines c:PDFNUM; nothing here is called from the other files.
 
-(defun pa:empty-cells (zone / w out)
-  ;; The counter labels of a title block that have no number yet: ((role . label) ...), where role
-  ;; is sheet (Аркуш), total (Аркушів) or corner (Арк. on a later аркуш of a специфікація).
-  (foreach z zone
-    (setq w (pa:words (car (pa:split (caddr z) "\n"))))
-    (if (null (pa:below z zone))
-      (cond
-        ((equal w '("Аркуш")) (setq out (cons (cons 'sheet z) out)))
-        ((equal w '("Аркушів")) (setq out (cons (cons 'total z) out)))
-        ((and (equal w '("Арк.")) (> (car z) -25.0)) (setq out (cons (cons 'corner z) out))))))
-  ;; Аркуш before Аркушів, so the report reads in cell order
+(defun pa:empty-cells (r / out)
+  ;; The counter cells of a рамка that have no number yet: ((role . label) ...), Аркуш before
+  ;; Аркушів, so the report reads in cell order.
+  (foreach c (pa:get 'counters r)
+    (if (null (caddr c)) (setq out (cons (cons (car c) (cadr c)) out))))
   (append (vl-remove-if '(lambda (c) (= (car c) 'total)) out)
           (vl-remove-if-not '(lambda (c) (= (car c) 'total)) out)))
 
-(defun pa:number-style (records / zone o d)
-  ;; The look of a number someone already wrote under a counter label, so new numbers match it:
-  ;; ((8 . layer) (7 . style) (40 . height) ...), or nil if there is none.
+(defun pa:number-style (records / o e d)
+  ;; The look of a number someone already wrote in a counter cell of a специфікація, so new numbers
+  ;; match it: ((8 . layer) (7 . style) (40 . height) ...), or nil if there is none.
   (foreach r records
     (if (= (pa:get 'kind r) "специфікація")
-      (progn
-        (setq zone (pa:get 'zone r))
-        (foreach z zone
-          (if (and (null d)
-                   (member (car (pa:words (caddr z))) '("Аркуш" "Аркушів" "Арк."))
-                   (setq o (pa:below-entry z zone))
-                   (nth 4 o)
-                   (= "TEXT" (cdr (assoc 0 (entget (nth 4 o))))))
-            (setq d (entget (nth 4 o))))))))
+      (foreach c (pa:get 'counters r)
+        ;; (nth 4 nil) is an error in AutoLISP, so the entry is checked first
+        (if (and (null d)
+                 (setq o (cadddr c))
+                 (setq e (nth 4 o))
+                 (= "TEXT" (cdr (assoc 0 (entget e)))))
+          (setq d (entget e))))))
   (if d (pa:text-style d)))
 
 (defun pa:text-style (d)
@@ -92,7 +84,7 @@
         i 0)
   (foreach r items
     (setq i (1+ i) done nil)
-    (foreach cell (pa:empty-cells (pa:get 'zone r))
+    (foreach cell (pa:empty-cells r)
       (setq what (if (= (car cell) 'total) (strcat "Аркушів " (itoa n)) (strcat "Аркуш " (itoa i))))
       (cond
         ((and (/= (car cell) 'total) (member i used))

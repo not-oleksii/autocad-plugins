@@ -3,13 +3,13 @@
 ;;;   pa:read-drawing  -> (records problems)
 ;;;   pa:get pa:put    a record's fields
 ;;;   pa:markas pa:of  the марки of the records, and the records of one kind of one марка
-;;;   pa:below pa:below-entry  the number written under a label of a record's zone
 ;;;
 ;;; A record is one рамка:
 ;;;   ((kind . "лист"|"специфікація") (ll x y 0) (ur x y 0) (frame llx lly urx ury)
-;;;    (marka . s) (sheet . n) (total . n) (zone ...) (cells ...))
-;;; zone holds the texts of its title block as (x y comparable as-typed owner), cells the short
-;;; vertical lines around it as (x y1 y2), both measured from the рамка's bottom-right corner.
+;;;    (marka . s) (sheet . n) (total . n) (zone ...) (counters ...) (cells ...))
+;;; zone holds the texts of its title block as (x y comparable as-typed owner), counters its
+;;; Аркуш, Аркушів and Арк. cells as pa:title-cells returns them, cells the short vertical lines
+;;; around it as (x y1 y2); x and y are measured from the рамка's bottom-right corner.
 ;;; owner is the TEXT or MTEXT entity when it sits directly in Model space (so PDFNUM can edit it),
 ;;; nil when it is inside a block.
 
@@ -202,10 +202,6 @@
       (setq v o)))
   v)
 
-(defun pa:below (z zone / o)
-  ;; The number written in the cell under the label z.
-  (if (setq o (pa:below-entry z zone)) (atoi (caddr o))))
-
 (defun pa:title-zone (f kind / all v top)
   ;; The texts of a рамка's title block, with x and y measured from the рамка's bottom-right corner.
   (foreach tx texts
@@ -228,23 +224,40 @@
       (setq out (cons s out))))
   out)
 
-(defun pa:read-title (zone / w v names sheet total)
-  ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
-  ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic.
+(defun pa:title-cells (zone / w o out)
+  ;; The counter cells of a title block, as (role label n entry):
+  ;;   role   sheet (Аркуш), total (Аркушів) or corner (Арк. on a later аркуш of a специфікація)
+  ;;   label  the zone entry of the label
+  ;;   n      the number in the cell, nil when it is empty
+  ;;   entry  the zone entry of the number when it is written under the label; nil when it follows
+  ;;          the label in the same text, as PDFNUM writes it on a лист ("Аркуш 2")
   (foreach z zone
     (setq w (pa:words (car (pa:split (caddr z) "\n"))))
     (cond
-      ((and (= (car w) "Аркуш") (pa:digits-p (cadr w))) (setq sheet (atoi (cadr w))))
-      ((and (= (car w) "Аркушів") (pa:digits-p (cadr w))) (setq total (atoi (cadr w))))
-      ((equal w '("Аркуш")) (if (setq v (pa:below z zone)) (setq sheet v)))
-      ((equal w '("Аркушів")) (if (setq v (pa:below z zone)) (setq total v)))
-      ((equal w '("Арк."))
-       ;; only the sheet-number cell in the corner, not the "Арк." column of the changes table
-       (if (and (> (car z) -25.0) (setq v (pa:below z zone))) (setq sheet v)))
-      ((and (cadr w)
-            (not (member (car w) '("Аркуш" "Аркушів" "Арк." "Лист" "Листів" "Масштаб" "Маса" "Літера")))
-            (pa:marka-p (cadr w)))
-       (setq names (cons (list (cadr w) (cadr (pa:words (car (pa:split (cadddr z) "\n"))))) names)))))
+      ((and (member (car w) '("Аркуш" "Аркушів")) (pa:digits-p (cadr w)))
+       (setq out (cons (list (if (= (car w) "Аркуш") 'sheet 'total) z (atoi (cadr w)) nil) out)))
+      ((or (equal w '("Аркуш")) (equal w '("Аркушів"))
+           ;; only the sheet-number cell in the corner, not the "Арк." column of the changes table
+           (and (equal w '("Арк.")) (> (car z) -25.0)))
+       (setq o (pa:below-entry z zone)
+             out (cons (list (cdr (assoc (car w) '(("Аркуш" . sheet) ("Аркушів" . total) ("Арк." . corner))))
+                             z
+                             (if o (atoi (caddr o)))
+                             o)
+                       out)))))
+  (reverse out))
+
+(defun pa:read-title (zone counters / w names sheet total)
+  ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
+  ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic.
+  (foreach c counters
+    (if (caddr c) (if (= (car c) 'total) (setq total (caddr c)) (setq sheet (caddr c)))))
+  (foreach z zone
+    (setq w (pa:words (car (pa:split (caddr z) "\n"))))
+    (if (and (cadr w)
+             (not (member (car w) '("Аркуш" "Аркушів" "Арк." "Лист" "Листів" "Масштаб" "Маса" "Літера")))
+             (pa:marka-p (cadr w)))
+      (setq names (cons (list (cadr w) (cadr (pa:words (car (pa:split (cadddr z) "\n"))))) names))))
   (list names sheet total))
 
 ;;; ---- Records ----------------------------------------------------------------
@@ -252,7 +265,7 @@
 (defun pa:get (key r) (cdr (assoc key r)))
 (defun pa:put (key val r) (subst (cons key val) (assoc key r) r))
 
-(defun pa:read-drawing (/ texts hsegs vsegs cellsegs pa-owner frames kind zone title names r
+(defun pa:read-drawing (/ texts hsegs vsegs cellsegs pa-owner frames kind zone counters title names r
                           records problems)
   ;; Walks Model space and reads every рамка's title block. Returns (records problems): one record
   ;; per рамка with a readable марка, and (message . record) for every рамка without one, in the
@@ -265,7 +278,8 @@
   (foreach f frames
     (setq kind (if (pa:near (- (caddr f) (car f)) 420.0) "лист" "специфікація")
           zone (pa:title-zone f kind)
-          title (pa:read-title zone)
+          counters (pa:title-cells zone)
+          title (pa:read-title zone counters)
           names (car title)
           r (list (cons 'kind kind)
                   (list 'll (car f) (cadr f) 0.0)
@@ -276,6 +290,7 @@
                   (cons 'sheet (cadr title))
                   (cons 'total (caddr title))
                   (cons 'zone zone)
+                  (cons 'counters counters)
                   (cons 'cells (pa:cells f))))
     (cond
       ((null names) (setq problems (cons (cons "в основному написі не знайдено марку" r) problems)))

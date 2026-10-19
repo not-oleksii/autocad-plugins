@@ -130,13 +130,24 @@ $pasteScr = @"
   (foreach r rs
     (foreach z (pa:get 'zone r) (if (wcmatch (caddr z) "*Джгут*") (princ (strcat "\nNAME=" (cadddr z))))))
   (princ (strcat "\nCLAYER=" (getvar "CLAYER"))))
-(defun slant (/ ss i d n up)
-  (setq ss (ssget "_X" '((0 . "TEXT") (410 . "Model"))) i 0 n 0 up 0)
+(defun decoy (/ r z f p)
+  (foreach x (car (pa:read-drawing))
+    (if (= (pa:get 'kind x) "специфікація")
+      (foreach y (pa:get 'zone x)
+        (if (and (null z) (equal (pa:words (caddr y)) '("Арк.")) (< (car y) -25.0)) (setq z y r x)))))
+  (if z
+    (progn
+      (setq f (pa:get 'frame r) p (list (+ (car z) (caddr f)) (+ (cadr z) (cadr f) -5.0) 0.0))
+      (entmake (list '(0 . "TEXT") '(8 . "0") (cons 10 p) (cons 11 p) '(72 . 1) '(73 . 2) '(40 . 9.0) '(51 . 0.2618) '(1 . "7")))))
+  (princ (strcat "\nDECOY=" (if z "1" "0"))))
+(defun slant (/ ss i d n up tall)
+  (setq ss (ssget "_X" '((0 . "TEXT") (410 . "Model"))) i 0 n 0 up 0 tall 0)
   (while (< i (sslength ss))
     (setq d (entget (ssname ss i)) i (1+ i))
     (if (wcmatch (cdr (assoc 1 d)) "#,##")
-      (setq n (1+ n) up (if (< (abs (cdr (assoc 51 d))) 0.01) (1+ up) up))))
-  (princ (strcat "\nNUMBERS=" (itoa n) " UPRIGHT=" (itoa up))))
+      (setq n (1+ n) up (if (< (abs (cdr (assoc 51 d))) 0.01) (1+ up) up)
+            tall (if (< (abs (- (cdr (assoc 40 d)) 9.0)) 0.1) (1+ tall) tall))))
+  (princ (strcat "\nNUMBERS=" (itoa n) " UPRIGHT=" (itoa up) " TALL=" (itoa tall))))
 (tpaste "PDFLIST" "1ЧП" 2 "PDFALL_list.dwg")
 1000,1000
 1500,1000
@@ -146,6 +157,7 @@ $pasteScr = @"
 3300,1000
 3600,1000
 (report)
+(decoy)
 PDFNUM
 (slant)
 (command "_.-LAYER" "_M" "Цвет" "")
@@ -165,6 +177,8 @@ Check ($plog -notmatch 'NAME=Джгут МАРКА') 'no name cell still says М
 Check ($plog -match 'CLAYER=0') 'the current layer was put back'
 Check ($plog -match 'К1 специфікація 3: Аркуш 3') 'PDFNUM numbers the pasted специфікації'
 Check ($plog -match 'NUMBERS=[1-9]\d* UPRIGHT=0') 'the numbers PDFNUM wrote lean 15 degrees like the title block'
+# A 9 mm "7" under the "Арк." column of a changes table is not a sheet number, so PDFNUM must not copy its look.
+Check ($plog -match 'DECOY=1' -and $plog -match 'TALL=1\b') 'PDFNUM ignores a number in the changes table''s Арк. column'
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader keeps its texts and lines to itself'
