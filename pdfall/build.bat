@@ -12,7 +12,8 @@ py -3 -m PyInstaller --noconfirm --onefile --console --name merge --distpath "%W
 if exist "%DIST%" rmdir /s /q "%DIST%"
 mkdir "%DIST%\PDFALL.bundle\Contents" || goto :fail
 copy /y "%SRC%\PackageContents.xml" "%DIST%\PDFALL.bundle\" >nul || goto :fail
-for %%f in ("%SRC%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\join.ps1" -Out "%DIST%\PDFALL.bundle\Contents\pdfall.lsp" || goto :fail
+for %%f in ("%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
   copy /y "%%~f" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail
 )
 copy /y "%SRC%\templates\*.dwg" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail

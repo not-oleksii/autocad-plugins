@@ -76,7 +76,8 @@ The layer states are restored afterwards, and the drawing is saved before plotti
 ## Developing
 
 ```
-src\pdfall.lsp            the PDFALL, PDFNUM, PDFLIST and PDFSPEC commands
+src\lsp\*.lsp             the PDFALL, PDFNUM, PDFLIST and PDFSPEC commands, one module per file
+src\join.ps1              joins src\lsp\*.lsp in name order into the bundle's one pdfall.lsp
 src\merge_blueprints.py   builds Загальний and Загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle
@@ -92,7 +93,7 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 
 To release a change:
 
-1. Raise `*pdfall-version*` in `pdfall.lsp` and `AppVersion` in `PackageContents.xml`, keeping them equal.
+1. Raise `*pdfall-version*` in `src\lsp\00-settings.lsp` and `AppVersion` in `PackageContents.xml`, keeping them equal.
 2. Run `build.bat`. It needs AutoCAD 2024 installed (for the ribbon) and `py -3 -m pip install pyinstaller pypdf` once.
 3. Run both tests:
 
@@ -106,6 +107,6 @@ To release a change:
 
 4. Share `dist\PDFALL.zip`.
 
-Settings live at the top of `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed.
+Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed.
 
 `examples\` (the sample drawing and hand-made PDFs that the tests use) is kept out of git because it contains real drawings.

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- AutoCAD loads PDFALL.bundle from %APPDATA%\Autodesk\ApplicationPlugins into every drawing.
-     Keep AppVersion equal to *pdfall-version* in pdfall.lsp. -->
+     Keep AppVersion equal to *pdfall-version* in src\lsp\00-settings.lsp. -->
 <ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application"
                     Name="PDFALL" AppVersion="1.4.0"
                     Description="Plots every лист and специфікація in Model space to PDF and merges them."
