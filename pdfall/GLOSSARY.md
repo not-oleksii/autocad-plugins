@@ -40,6 +40,10 @@ _Avoid_: layout (in AutoCAD a Layout is a paper-space tab, which these drawings 
 The stamp in the bottom-right corner of every лист and специфікація. It prints the product and марка in its name cell ("Джгут 1ЧП"; the product word may differ) and the sheet number and count (Аркуш, Аркушів, or Арк. on continuation sheets).
 _Avoid_: штамп, stamp
 
+**Name cell** (клітинка назви):
+The title block cell that names the product and марка ("Джгут 1ЧП"; on a лист followed by "Складальне креслення"). PDFLIST and PDFSPEC write the марка there; its text fills the cell and is centred in it, so it wraps only when the марка is too long for the cell.
+_Avoid_: name field, title
+
 **Загальний**:
 The combined document of a марка: every filled лист in order, followed by every специфікація in order.
 _Avoid_: merged, combined, full set

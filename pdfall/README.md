@@ -1,113 +1,76 @@
 # PDFALL
 
-One command in AutoCAD, `PDFALL`, plots every лист and специфікація of a drawing to PDF and combines them into Загальний and Загальний друк. Terms are explained in [GLOSSARY.md](GLOSSARY.md). Why it works this way is in [docs/adr](docs/adr).
+Плагін для AutoCAD 2024 і новіших. Команда `PDFALL` друкує в PDF усі листи й специфікації креслення та збирає з них Загальний і Загальний друк для кожної марки. `PDFNUM` заповнює порожні клітинки Аркуш і Аркушів, а `PDFLIST` і `PDFSPEC` вставляють порожню рамку листа або специфікації.
 
-Works with AutoCAD 2024 and later. No Python or admin rights needed.
+Python і права адміністратора не потрібні.
 
-## Install (each colleague, once)
+Для розробників: [DEVELOPING.md](DEVELOPING.md) (англійською).
 
-1. Close AutoCAD.
-2. Unzip `PDFALL.zip` anywhere and double-click `install.bat`.
-3. Start AutoCAD. The command line shows `PDFALL 1.4.0 завантажено`, and the ribbon has a **PDFALL** tab with PDFALL and PDFNUM buttons and, under *Нова рамка*, Лист and Специфікація buttons.
+## Встановлення (кожен один раз)
 
-To update, run the new `install.bat` the same way. To remove, run `uninstall.bat`.
+1. Закрийте AutoCAD.
+2. Розпакуйте `PDFALL.zip` будь-куди й двічі клацніть `install.bat`.
+3. Запустіть AutoCAD. У command line (командному рядку) з'явиться `PDFALL … завантажено`, а на ribbon (стрічці) — вкладка **PDFALL** з кнопками PDFALL і PDFNUM та, у групі *Нова рамка*, кнопками Лист і Специфікація.
 
-`install.bat` copies `PDFALL.bundle` into `%APPDATA%\Autodesk\ApplicationPlugins`, where AutoCAD loads it into every drawing. It also adds that folder to *Trusted Locations*, so AutoCAD doesn't ask whether to load it, and removes any older `pdfall.lsp` from the *Startup Suite*. On its first run, PDFALL copies `PDFALL.pc3` into AutoCAD's Plotters folder. That's the *AutoCAD PDF (General Documentation)* printer with "Open in viewer when done" turned off, so a run doesn't open 30+ viewer windows. Your normal printer is not changed.
+Щоб оновити, так само запустіть новий `install.bat`. Щоб видалити, запустіть `uninstall.bat`.
 
-## Use
+`install.bat` копіює `PDFALL.bundle` до `%APPDATA%\Autodesk\ApplicationPlugins`, звідки AutoCAD завантажує його в кожне креслення. Він також додає цю папку до *Trusted Locations* (довірених розташувань), щоб AutoCAD не питав, чи завантажувати плагін, і прибирає старий `pdfall.lsp` зі *Startup Suite* (списку автозавантаження). Під час першого запуску PDFALL копіює `PDFALL.pc3` у папку Plotters (плотерів) AutoCAD. Це принтер *AutoCAD PDF (General Documentation)*, у якого вимкнено "Open in viewer when done", тож друк не відкриває 30+ вікон переглядача. Ваш звичайний принтер не змінюється.
 
-1. Open the drawing and click **PDFALL** on the PDFALL ribbon tab, or type `PDFALL`.
-2. Wait for the PDFs. A merge window then opens and shows what it built. Press Enter to close it.
+## Друк: PDFALL
 
-The PDFs go next to the drawing:
+1. Відкрийте креслення й натисніть **PDFALL** на вкладці PDFALL або введіть `PDFALL`.
+2. Зачекайте, поки з'являться PDF. Потім відкриється вікно збирання й покаже, що зібрано. Натисніть Enter, щоб його закрити.
 
-```
-<drawing folder>\exported files\1ЧП\1ЧП лист 1.pdf
-                                    1ЧП лист 1 без заливки.pdf
-                                    1ЧП специфікація лист 1.pdf
-                                    1ЧП Загальний.pdf
-                                    1ЧП Загальний друк.pdf
-```
-
-## Paste an empty рамка: PDFLIST and PDFSPEC
-
-Click **Лист** or **Специфікація** on the ribbon (or type `PDFLIST` / `PDFSPEC`) to paste an empty рамка with its title block into Model space.
-
-1. Type the марка, exactly as it should read in the title block (e.g. `1ЧП`). Press Enter to reuse the last one.
-2. For a специфікація, choose `Перший` or `Наступний` аркуш. The first has the Аркуш/Аркушів cells, a later one has the small Арк. cell. After a специфікація of the same марка the default is `Наступний`, and within one run every аркуш after the first is a `Наступний`.
-3. Click where the **lower-left corner** of the рамка goes. The рамка follows the cursor, so object snaps work. Click again for the next one, and press Esc when you're done.
-
-The name cell gets `Джгут <марка>` (a лист also `Складальне креслення`). Аркуш and Аркушів stay empty for `PDFNUM`, and `U` undoes the last pasted рамка. The рамка is pasted exploded, on the same layers as the sample drawing, so it is found by `PDFNUM` and `PDFALL` like one drawn by hand. It needs the World UCS and the Model tab.
-
-The templates are `PDFALL_list.dwg`, `PDFALL_spec1.dwg` and `PDFALL_spec2.dwg` in `PDFALL.bundle\Contents`. To change the title block, edit those files in AutoCAD, but keep the `МАРКА` text of the name cell, the рамка's lower-left corner at the DWG's origin, and its 420x297 or 210x297 size.
-
-## Fill in Аркуш and Аркушів: PDFNUM
-
-Type `PDFNUM` to fill in every empty Аркуш and Аркушів cell in the drawing, then check the result and run `PDFALL`.
-
-- Each марка's листи and специфікації are numbered separately, by position: left to right, upper row first.
-- Аркушів is the number of листи (or специфікації) found for that марка.
-- **A number that is already written is never changed.** If an empty cell's number is already used by another рамка, the cell is left empty and PDFNUM says so.
-- On a лист the number is added to the label ("Аркуш 2"). On a специфікація it goes in the cell under the label, in the same style as numbers already written in the drawing.
-- `U` undoes the whole PDFNUM in one step.
-
-To merge PDFs that were exported by hand, drag their folder onto `merge.exe` in `%APPDATA%\Autodesk\ApplicationPlugins\PDFALL.bundle\Contents`.
-
-## What PDFALL checks
-
-It plots **nothing** and lists the problems (zooming to the first bad рамка) when:
-
-- a title block has no readable марка, or names two different марки;
-- the same марка is typed with different letters in different title blocks, e.g. Latin `K1` on one and Cyrillic `К1` on another. The марка is used exactly as typed, so mixed codes like X1A1Р are fine as long as every title block spells it the same way;
-- the Аркуш numbers of a марка's листи (or специфікації) are not exactly 1…N, or one is missing (PDFNUM fills in missing ones);
-- an Аркушів cell is empty, or disagrees with the number of рамки found;
-- no шар заливки (`Цвет` or `Колір`) exists;
-- an old PDF it has to replace is open in another program.
-
-It **asks** before plotting when a layer other than `Defpoints` is off or frozen, because its objects would be missing from every PDF.
-
-It **warns** but plots when:
-
-- a single-sheet марка has empty Аркуш/Аркушів cells (it's treated as лист 1; PDFNUM fills them in);
-- `exported files` holds a folder for a марка that's no longer in the drawing.
-
-The layer states are restored afterwards, and the drawing is saved before plotting.
-
-## Developing
+PDF кладуться поруч із кресленням:
 
 ```
-src\lsp\*.lsp             the PDFALL, PDFNUM, PDFLIST and PDFSPEC commands, one module per file
-src\messages.json         every text the commands, merge.exe, the installer and the ribbon show or look for
-src\build_lisp.py         checks messages.json against the code, then joins src\lsp\*.lsp and it into the bundle's pdfall.lsp
-src\merge_blueprints.py   builds Загальний and Загальний друк (shipped as merge.exe)
-src\PDFALL.pc3            the PDF printer without the viewer
-src\PackageContents.xml   tells AutoCAD how to load the bundle
-src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with AutoCAD's own AcCui.dll
-src\templates\*.dwg       the empty рамки that PDFLIST and PDFSPEC paste
-src\make_templates.ps1    cuts those templates out of examples\*.dxf (only when the sample's title blocks change)
-src\install.ps1           what install.bat and uninstall.bat run
-build.bat                 builds dist\PDFALL.zip
-tests\run.ps1             runs the built PDFNUM, PDFALL, merge.exe, PDFLIST and PDFSPEC without opening AutoCAD
-tests\install.ps1         tests the installer against a fake copy of the AutoCAD settings
-merge.bat, check.bat      run the Python merge by hand (check.bat only reports problems)
+<папка креслення>\exported files\1ЧП\1ЧП лист 1.pdf
+                                     1ЧП лист 1 без заливки.pdf
+                                     1ЧП специфікація лист 1.pdf
+                                     1ЧП Загальний.pdf
+                                     1ЧП Загальний друк.pdf
 ```
 
-To release a change:
+## Порожня рамка: PDFLIST і PDFSPEC
 
-1. Raise `*pdfall-version*` in `src\lsp\00-settings.lsp` and `AppVersion` in `PackageContents.xml`, keeping them equal.
-2. Run `build.bat`. It needs AutoCAD 2024 installed (for the ribbon) and `py -3 -m pip install pyinstaller pypdf` once.
-3. Run both tests:
+Натисніть **Лист** або **Специфікація** на ribbon (або введіть `PDFLIST` чи `PDFSPEC`), щоб вставити порожню рамку з основним написом у Model space (простір моделі).
 
-   ```bash
-   powershell -ExecutionPolicy Bypass -File tests/run.ps1
-   ```
+1. Введіть марку точно так, як вона має стояти в основному написі (наприклад, `1ЧП`). Натисніть Enter, щоб узяти попередню.
+2. Для специфікації виберіть аркуш `Перший` або `Наступний`. На першому є клітинки Аркуш і Аркушів, на наступному — маленька клітинка Арк. Після специфікації тієї самої марки за замовчуванням пропонується `Наступний`, а в межах одного запуску кожен аркуш після першого — `Наступний`.
+3. Клацніть там, де має бути **лівий нижній кут** рамки. Рамка рухається за курсором, тож Object Snap (прив'язки) працюють. Клацніть ще раз для наступної рамки, а коли закінчите, натисніть Esc.
 
-   ```bash
-   powershell -ExecutionPolicy Bypass -File tests/install.ps1
-   ```
+У клітинку назви вписується `Джгут <марка>` (на листі ще й `Складальне креслення`). Текст стоїть по центру клітинки в один рядок і переноситься на наступний, лише коли марка задовга. Аркуш і Аркушів лишаються порожніми для `PDFNUM`, а `U` скасовує останню вставлену рамку. Рамка вставляється розбитою (exploded), на тих самих шарах, що й у зразковому кресленні, тож `PDFNUM` і `PDFALL` знаходять її так само, як намальовану вручну. Потрібні World UCS (світова система координат) і вкладка Model.
 
-4. Share `dist\PDFALL.zip`.
+Шаблони рамок — це `PDFALL_list.dwg`, `PDFALL_spec1.dwg` і `PDFALL_spec2.dwg` у `PDFALL.bundle\Contents`. Як їх змінювати, описано в [DEVELOPING.md](DEVELOPING.md#templates).
 
-Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed.
+## Номери Аркуш і Аркушів: PDFNUM
 
-`examples\` (the sample drawing and hand-made PDFs that the tests use) is kept out of git because it contains real drawings.
+Введіть `PDFNUM`, щоб заповнити всі порожні клітинки Аркуш і Аркушів у кресленні. Потім перевірте результат і запустіть `PDFALL`.
+
+- Листи й специфікації кожної марки нумеруються окремо, за розташуванням: зліва направо, починаючи з верхнього ряду.
+- Аркушів — це кількість знайдених листів (або специфікацій) цієї марки.
+- **Уже написаний номер ніколи не змінюється.** Якщо номер для порожньої клітинки вже стоїть на іншій рамці, клітинка лишається порожньою, і PDFNUM про це скаже.
+- На листі номер дописується до підпису ("Аркуш 2"). На специфікації він стає по центру клітинки під підписом, тим самим стилем, що й номери, уже написані в кресленні.
+- `U` скасовує весь PDFNUM одним кроком.
+
+Щоб зібрати PDF, експортовані вручну, перетягніть їхню папку на `merge.exe` у `%APPDATA%\Autodesk\ApplicationPlugins\PDFALL.bundle\Contents`.
+
+## Що перевіряє PDFALL
+
+Він **нічого не друкує** й показує список проблем (і наближає першу рамку з проблемою), коли:
+
+- в основному написі немає марки, яку можна прочитати, або там дві різні марки;
+- ту саму марку набрано різними літерами в різних основних написах, наприклад латинське `K1` в одному й кириличне `К1` в іншому. Марка береться точно так, як набрана, тож змішані коди на кшталт X1A1Р — це нормально, якщо в усіх основних написах її написано однаково;
+- номери Аркуш листів (або специфікацій) марки — не рівно 1…N, або якогось бракує (PDFNUM заповнює відсутні);
+- клітинка Аркушів порожня або не збігається з кількістю знайдених рамок;
+- немає шару заливки (`Цвет` або `Колір`);
+- старий PDF, який треба замінити, відкритий в іншій програмі.
+
+Він **питає**, перш ніж друкувати, коли якийсь Layer (шар), крім `Defpoints`, вимкнено (Off) або заморожено (Freeze), бо його об'єктів не буде в жодному PDF.
+
+Він **попереджає**, але друкує, коли:
+
+- у марки з одним листом порожні клітинки Аркуш і Аркушів (він вважається листом 1; PDFNUM їх заповнить);
+- у `exported files` є папка марки, якої вже немає в кресленні.
+
+Перед друком креслення зберігається, а після друку стан шарів відновлюється.

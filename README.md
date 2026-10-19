@@ -4,7 +4,7 @@ AutoCAD 2024 plugins, one folder each. Every plugin builds a zip with an `instal
 
 | Plugin | What it does |
 | --- | --- |
-| [pdfall](pdfall) | `PDFALL`: plots every лист and специфікація in Model space to PDF and merges them per марка. `PDFNUM`: fills in empty Аркуш/Аркушів cells. `PDFLIST`, `PDFSPEC`: paste an empty лист or специфікація рамка |
+| [pdfall](pdfall/README.md) (the guide for colleagues, in Ukrainian; developers: [DEVELOPING.md](pdfall/DEVELOPING.md)) | `PDFALL`: plots every лист and специфікація in Model space to PDF and merges them per марка. `PDFNUM`: fills in empty Аркуш/Аркушів cells. `PDFLIST`, `PDFSPEC`: paste an empty лист or специфікація рамка |
 
 ## Adding a plugin
 
