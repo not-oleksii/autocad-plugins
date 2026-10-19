@@ -6,7 +6,8 @@ Usage:
 build.bat runs it. It fails, and writes nothing, when:
   - the code uses a key that messages.json doesn't have, in the section it reads it from;
   - a message and the code that shows it disagree on its {names};
-  - a Ukrainian string is written in src/lsp outside 00-settings.lsp (it belongs in messages.json).
+  - a Ukrainian string is written in src/lsp outside 00-settings.lsp (it belongs in messages.json);
+  - the version in 00-settings.lsp and PackageContents.xml differ or isn't <major>.<minor>.<patch>.
 A key that no code uses is only a warning.
 
 pdfall.lsp is src/lsp/*.lsp in name order, with messages.json written as LISP lists right after
@@ -161,12 +162,25 @@ class Checker:
                 self.key(funcs[node.func.id], key, where)
 
     def powershell(self, path):
-        """Calls Msg 'key' or Msg 'key' @{ name = value; ... } in install.ps1 and ribbon.ps1."""
+        """Calls Msg 'key' or Msg 'key' @{ name = value; ... } in the PowerShell scripts."""
         text = path.read_text(encoding="utf-8-sig")
         for m in re.finditer(r"\bMsg\s+'([^']+)'(\s+@\{([^}]*)\})?", text):
             where = f"{path.name}:{text.count(chr(10), 0, m.start()) + 1}"
             given = re.findall(r"(\w+)\s*=", m.group(3) or "")
             self.names(m.group(1), given, where)
+
+
+def version_errors():
+    """The version must be the same in 00-settings.lsp and PackageContents.xml, and a release number."""
+    lisp = re.search(r'\(setq \*pdfall-version\* "([^"]*)"\)', (LSP / "00-settings.lsp").read_text(encoding="utf-8"))
+    xml = re.search(r'AppVersion="([^"]*)"', (SRC / "PackageContents.xml").read_text(encoding="utf-8"))
+    if not (lisp and xml):
+        return ["the version is missing from 00-settings.lsp or PackageContents.xml"]
+    if lisp.group(1) != xml.group(1):
+        return [f"version {lisp.group(1)} in 00-settings.lsp but {xml.group(1)} in PackageContents.xml"]
+    if not re.fullmatch(r"\d+\.\d+\.\d+", lisp.group(1)):
+        return [f"version {lisp.group(1)} is not <major>.<minor>.<patch>"]
+    return []
 
 
 def lisp_string(s):
@@ -201,8 +215,9 @@ def main():
     for path in files:
         checker.lisp(path)
     checker.python(SRC / "merge_blueprints.py")
-    checker.powershell(SRC / "install.ps1")
-    checker.powershell(SRC / "ribbon.ps1")
+    for script in ("install.ps1", "update.ps1", "ribbon.ps1", "../release.ps1"):
+        checker.powershell(SRC / script)
+    checker.errors += version_errors()
     if checker.errors:
         print("messages.json and the code disagree:", file=sys.stderr)
         for e in checker.errors:
