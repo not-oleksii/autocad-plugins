@@ -24,23 +24,6 @@
           (setq d (entget e))))))
   (if d (pa:text-style d)))
 
-(defun pa:text-style (d)
-  ;; Layer, style, height, width, colour and slant (51): title blocks lean their text 15 degrees.
-  (vl-remove nil (mapcar '(lambda (k) (assoc k d)) '(8 7 40 41 51 62))))
-
-(defun pa:gap (a b) (distance (list (car a) (cadr a)) (list (car b) (cadr b))))
-
-(defun pa:label-style (z zone / o)
-  ;; The look of the label z, or of the nearest plain text of its title block if z is inside a block.
-  (if (and (nth 4 z) (= "TEXT" (cdr (assoc 0 (entget (nth 4 z))))))
-    (pa:text-style (entget (nth 4 z)))
-    (progn
-      (foreach x zone
-        (if (and (nth 4 x) (= "TEXT" (cdr (assoc 0 (entget (nth 4 x)))))
-                 (or (null o) (< (pa:gap z x) (pa:gap z o))))
-          (setq o x)))
-      (if o (pa:text-style (entget (nth 4 o))) (list (cons 40 2.5))))))
-
 (defun pa:cell-x (cells x y / left right)
   ;; The middle of the title-block cell around x at height y, from its edge lines; x if none are found.
   (foreach s cells

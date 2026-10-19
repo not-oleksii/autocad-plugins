@@ -1,6 +1,6 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
-;;; Checks every марка, plots every рамка to PDF and runs merge.exe. Defines c:PDFALL; nothing here
-;;; is called from the other files.
+;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
+;;; merge.exe. Defines c:PDFALL; nothing here is called from the other files.
 
 ;;; ---- Checks -----------------------------------------------------------------
 
@@ -185,6 +185,7 @@
     (mapcar '(lambda (n / d) (setq d (pa:layer n)) (list n (cdr (assoc 62 d)) (cdr (assoc 70 d))))
             fills))
   (princ (strcat "\n\n" (pa:msg "pdfall.plotting" nil)))
+  (pa:date-add records)
   (pa:set-fill T)
   (foreach g groups
     (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil))))
@@ -192,6 +193,7 @@
   (pa:set-fill nil)
   (foreach g groups
     (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r T)))))
+  (pa:date-remove)
   (pa:restore)
 
   (princ (strcat "\n\n" (pa:msg "pdfall.plotted" (list "n" plotted "folder" base))))
@@ -215,8 +217,9 @@
            (findfile (strcat *pdfall-home* "\\" name)))
     (vl-file-copy (strcat *pdfall-home* "\\" name) (strcat (pa:plotters) "\\" name))))
 
-(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars plotted device)
+(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device)
   (defun *error* (msg)
+    (pa:date-remove)
     (pa:restore)
     (pa:report-crash "PDFALL" msg)
     (princ))

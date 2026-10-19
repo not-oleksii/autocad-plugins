@@ -44,6 +44,10 @@ _Avoid_: штамп, stamp
 The title block cell that names the product and марка ("Джгут 1ЧП"; on a лист followed by "Складальне креслення"). PDFLIST and PDFSPEC write the марка there; its text fills the cell and is centred in it, so it wraps only when the марка is too long for the cell.
 _Avoid_: name field, title
 
+**Дата cell** (клітинка Дата):
+The title block cell that holds the date: in the Дата column, in the row below its head, or in the top row on a later аркуш of a специфікація. PDFALL writes the day of the export there in every PDF, as dd.mm.yyyy, without changing the drawing.
+_Avoid_: date field, date stamp
+
 **Загальний**:
 The combined document of a марка: every filled лист in order, followed by every специфікація in order.
 _Avoid_: merged, combined, full set

@@ -31,8 +31,9 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 00-settings.lsp   version, settings, *pdfall-home*   (opens the joined file)
                   <- messages.json goes here, as *pa-messages*, *pa-labels* and *pa-files*
 10-text.lsp       pa:msg, pa:label, pa:file and the string helpers
-20-reader.lsp     Model space -> records: pa:read-drawing
+20-reader.lsp     Model space -> records: pa:read-drawing; title-block cells and the look of their texts
 30-command.lsp    errors, warnings, reports, restoring layers and system variables
+35-date.lsp       the export date PDFALL writes into the Дата cell while it plots
 40-pdfall.lsp     c:PDFALL: марка checks, PDF names, layers, plotting, merge.exe
 50-pdfnum.lsp     c:PDFNUM
 60-paste.lsp      c:PDFLIST, c:PDFSPEC

@@ -3,6 +3,8 @@
 ;;;   pa:read-drawing  -> (records problems)
 ;;;   pa:get pa:put    a record's fields
 ;;;   pa:markas pa:of  the марки of the records, and the records of one kind of one марка
+;;;   pa:cell-box      the edges of the title-block cell around a point
+;;;   pa:text-style pa:label-style  the look of a title-block text, to write new ones like it
 ;;;
 ;;; A record is one рамка:
 ;;;   ((kind . "list"|"spec") (ll x y 0) (ur x y 0) (frame llx lly urx ury)
@@ -234,6 +236,40 @@
     (if (and (<= -10.0 (car s) 65.0) (<= -230.0 (caddr s)) (<= (cadr s) 30.0))
       (setq out (cons s out))))
   out)
+
+(defun pa:cell-box (r x y / left right below above)
+  ;; The title-block cell of r around the point x,y (measured from the рамка's bottom-right corner)
+  ;; as (left bottom right top), from its edge lines; nil unless all four are found.
+  (foreach s (pa:get 'cells r)
+    (if (and (<= (cadr s) y (caddr s)) (< (abs (- (car s) x)) 30.0))
+      (if (< (car s) x)
+        (if (or (null left) (> (car s) left)) (setq left (car s)))
+        (if (or (null right) (< (car s) right)) (setq right (car s))))))
+  (foreach s (pa:get 'rows r)
+    (if (<= (cadr s) x (caddr s))
+      (if (< (car s) y)
+        (if (or (null below) (> (car s) below)) (setq below (car s)))
+        (if (or (null above) (< (car s) above)) (setq above (car s))))))
+  (if (and left right below above) (list left below right above)))
+
+(defun pa:text-style (d)
+  ;; Layer, style, height, width, colour and slant (51) of a TEXT: title blocks lean their text
+  ;; 15 degrees.
+  (vl-remove nil (mapcar '(lambda (k) (assoc k d)) '(8 7 40 41 51 62))))
+
+(defun pa:gap (a b) (distance (list (car a) (cadr a)) (list (car b) (cadr b))))
+
+(defun pa:label-style (z zone / o)
+  ;; The look of the zone entry z, or of the nearest plain text of its title block if z is inside a
+  ;; block.
+  (if (and (nth 4 z) (= "TEXT" (cdr (assoc 0 (entget (nth 4 z))))))
+    (pa:text-style (entget (nth 4 z)))
+    (progn
+      (foreach x zone
+        (if (and (nth 4 x) (= "TEXT" (cdr (assoc 0 (entget (nth 4 x)))))
+                 (or (null o) (< (pa:gap z x) (pa:gap z o))))
+          (setq o x)))
+      (if o (pa:text-style (entget (nth 4 o))) (list (cons 40 2.5))))))
 
 (defun pa:title-cells (zone / roles w role o out)
   ;; The counter cells of a title block, as (role label n entry):
