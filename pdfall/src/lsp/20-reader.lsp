@@ -3,6 +3,7 @@
 ;;;   pa:read-drawing  -> (records problems)
 ;;;   pa:get pa:put    a record's fields
 ;;;   pa:markas pa:of  the марки of the records, and the records of one kind of one марка
+;;;   pa:paper pa:off-size  the paper a рамка is plotted on, and its size when it is a little off
 ;;;   pa:cell-box      the edges of the title-block cell around a point
 ;;;   pa:text-style pa:label-style  the look of a title-block text, to write new ones like it
 ;;;
@@ -12,15 +13,19 @@
 ;;; zone holds the texts of its title block as (x y comparable as-typed owner), counters its
 ;;; Аркуш, Аркушів and Арк. cells as pa:title-cells returns them, cells the vertical cell edges
 ;;; around it as (x y1 y2) and rows the horizontal ones as (y x1 x2); x and y are measured from
-;;; the рамка's bottom-right corner.
+;;; the рамка's bottom-right corner. kind follows from the title block, not the рамка: an old
+;;; drawing may have an A4 лист (docs/adr/0008-read-old-drawings.md).
 ;;; owner is the TEXT or MTEXT entity when it sits directly in Model space (so PDFNUM can edit it),
 ;;; nil when it is inside a block.
 
 ;;; ---- Geometry ---------------------------------------------------------------
 
 (setq *pa-tol* 0.5)
+;; How far a рамка's sides may be off 420x297 or 210x297: an old drawing has a 210x295 one.
+(setq *pa-frame-tol* 3.0)
 
 (defun pa:near (a b) (< (abs (- a b)) *pa-tol*))
+(defun pa:about (a b) (< (abs (- a b)) *pa-frame-tol*))
 
 ;; A transform is (a b c d e f): x' = a*x + b*y + e, y' = c*x + d*y + f.
 (setq *pa-identity* '(1.0 0.0 0.0 1.0 0.0 0.0))
@@ -82,12 +87,13 @@
 (defun pa:add-seg (p q / dx dy)
   (setq dx (abs (- (car q) (car p))) dy (abs (- (cadr q) (cadr p))))
   (cond
-    ((and (< dy *pa-tol*) (or (pa:near dx 420.0) (pa:near dx 210.0)))
+    ((and (< dy *pa-tol*) (or (pa:about dx 420.0) (pa:about dx 210.0)))
      (setq hsegs (cons (list (min (car p) (car q)) (max (car p) (car q)) (cadr p)) hsegs)))
-    ((and (< dx *pa-tol*) (pa:near dy 297.0))
+    ((and (< dx *pa-tol*) (pa:about dy 297.0))
      (setq vsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) vsegs)))
-    ;; shorter lines: the cell edges of title blocks, used by PDFNUM to centre numbers
-    ((and (< dx *pa-tol*) (< 2.0 dy 60.0))
+    ;; shorter lines: the cell edges of title blocks, used by PDFNUM to centre numbers; an old title
+    ;; block draws one 63 mm high, past its top
+    ((and (< dx *pa-tol*) (< 2.0 dy 70.0))
      (setq cellsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) cellsegs)))
     ((and (< dy *pa-tol*) (< 2.0 dx 419.0))
      (setq rowsegs (cons (list (cadr p) (min (car p) (car q)) (max (car p) (car q))) rowsegs)))))
@@ -185,12 +191,12 @@
            vsegs))
 
 (defun pa:find-frames (/ out)
-  ;; Rectangles of 420x297 or 210x297 with all four sides drawn: (llx lly urx ury).
+  ;; Rectangles of about 420x297 or 210x297 with all four sides drawn: (llx lly urx ury).
   (foreach b hsegs
     (foreach tp hsegs
       (if (and (pa:near (car tp) (car b))
                (pa:near (cadr tp) (cadr b))
-               (pa:near (- (caddr tp) (caddr b)) 297.0)
+               (pa:about (- (caddr tp) (caddr b)) 297.0)
                (pa:vseg-p (car b) (caddr b) (caddr tp))
                (pa:vseg-p (cadr b) (caddr b) (caddr tp))
                (not (vl-some '(lambda (f) (and (pa:near (car f) (car b)) (pa:near (cadr f) (caddr b))))
@@ -204,6 +210,15 @@
     (if (and (pa:digits-p (caddr o))
              (< (abs (- (car o) (car z))) 6.0)
              (< 2.0 (- (cadr z) (cadr o)) 12.0))
+      (setq v o)))
+  v)
+
+(defun pa:right-entry (z zone / v)
+  ;; The text of the number written after the label z in the same cell, as old title blocks have it.
+  (foreach o zone
+    (if (and (pa:digits-p (caddr o))
+             (< 2.0 (- (car o) (car z)) 15.0)
+             (< (abs (- (cadr o) (cadr z))) 2.5))
       (setq v o)))
   v)
 
@@ -254,8 +269,10 @@
 
 (defun pa:text-style (d)
   ;; Layer, style, height, width, colour and slant (51) of a TEXT: title blocks lean their text
-  ;; 15 degrees.
-  (vl-remove nil (mapcar '(lambda (k) (assoc k d)) '(8 7 40 41 51 62))))
+  ;; 15 degrees. Of an MTEXT, as old title blocks have, only layer, style, height and colour: its 41
+  ;; is the width of its box, not of its letters.
+  (vl-remove nil (mapcar '(lambda (k) (assoc k d))
+                         (if (= (cdr (assoc 0 d)) "MTEXT") '(8 7 40 62) '(8 7 40 41 51 62)))))
 
 (defun pa:gap (a b) (distance (list (car a) (cadr a)) (list (car b) (cadr b))))
 
@@ -276,8 +293,9 @@
   ;;   role   sheet (Аркуш), total (Аркушів) or corner (Арк. on a later аркуш of a специфікація)
   ;;   label  the zone entry of the label
   ;;   n      the number in the cell, nil when it is empty
-  ;;   entry  the zone entry of the number when it is written under the label; nil when it follows
-  ;;          the label in the same text, as PDFNUM writes it on a лист ("Аркуш 2")
+  ;;   entry  the zone entry of the number when it is a text of its own: under the label, or after it
+  ;;          in the same row as old title blocks have it; nil when it follows the label in the same
+  ;;          text, as PDFNUM writes it on a new лист ("Аркуш 2")
   (setq roles (list (cons (pa:label "sheet") 'sheet) (cons (pa:label "total") 'total)
                     (cons (pa:label "corner") 'corner)))
   (foreach z zone
@@ -289,11 +307,12 @@
       ((and role (null (cdr w))
             ;; only the sheet-number cell in the corner, not the "Арк." column of the changes table
             (or (/= role 'corner) (> (car z) -25.0)))
-       (setq o (pa:below-entry z zone)
+       (setq o (cond ((pa:below-entry z zone))
+                     ((/= role 'corner) (pa:right-entry z zone)))
              out (cons (list role z (if o (atoi (caddr o))) o) out)))))
   (reverse out))
 
-(defun pa:read-title (zone counters / w names sheet total)
+(defun pa:read-title (zone counters kind / w names sheet total)
   ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
   ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic.
   (foreach c counters
@@ -304,7 +323,28 @@
              (not (member (car w) (pa:label "not-names")))
              (pa:marka-p (cadr w)))
       (setq names (cons (list (cadr w) (cadr (pa:words (car (pa:split (cadddr z) "\n"))))) names))))
+  ;; Old title blocks write only the марка in the name cell ("M1"). Such a text counts only inside
+  ;; the name cell, so a connector label drawn near the title block isn't taken for the марка.
+  (if (null names)
+    (foreach z zone
+      (setq w (pa:words (car (pa:split (caddr z) "\n"))))
+      (if (and w (null (cdr w)) (pa:marka-p (car w))
+               (< -125.0 (car z) -55.0)
+               (if (= kind "list") (< 20.0 (cadr z) 45.0) (< (cadr z) 30.0)))
+        (setq names (cons (list (car w) (car (pa:words (car (pa:split (cadddr z) "\n"))))) names)))))
   (list names sheet total))
+
+(defun pa:paper (r)
+  ;; "a3" or "a4": the paper a рамка is plotted on, by its width.
+  (if (> (- (caddr (pa:get 'frame r)) (car (pa:get 'frame r))) 315.0) "a3" "a4"))
+
+(defun pa:off-size (r / f w h)
+  ;; The рамка's size as "210x295" when it is off 420x297 or 210x297 by more than a trace; else nil.
+  (setq f (pa:get 'frame r)
+        w (- (caddr f) (car f))
+        h (- (cadddr f) (cadr f)))
+  (if (or (not (pa:near w (if (= (pa:paper r) "a3") 420.0 210.0))) (not (pa:near h 297.0)))
+    (strcat (rtos w 2 0) "x" (rtos h 2 0))))
 
 ;;; ---- Records ----------------------------------------------------------------
 
@@ -321,10 +361,15 @@
   (if (null frames)
     (setq problems (list (cons (pa:msg "reader.no-frames" nil) nil))))
   (foreach f frames
-    (setq kind (if (pa:near (- (caddr f) (car f)) 420.0) "list" "spec")
-          zone (pa:title-zone f kind)
+    ;; The title block decides the kind: an A3 рамка is a лист, and so is an A4 one whose title block
+    ;; is a лист's, with Масштаб (an old Складальний кресленик); an A4 without is a специфікація.
+    (setq zone (pa:title-zone f "list")
+          kind (if (or (> (- (caddr f) (car f)) 315.0)
+                       (vl-some '(lambda (z) (= (car (pa:words (caddr z))) (pa:label "scale"))) zone))
+                 "list" "spec")
+          zone (if (= kind "list") zone (pa:title-zone f kind))
           counters (pa:title-cells zone)
-          title (pa:read-title zone counters)
+          title (pa:read-title zone counters kind)
           names (car title)
           r (list (cons 'kind kind)
                   (list 'll (car f) (cadr f) 0.0)

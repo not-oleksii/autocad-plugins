@@ -1,6 +1,7 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
 ;;; merge.exe. Defines c:PDFALL; nothing here is called from the other files.
+;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md.
 
 ;;; ---- Checks -----------------------------------------------------------------
 
@@ -70,19 +71,31 @@
     (setq out (strcat out (if (member c (vl-string->list "#@.*?~[]-,`")) "`" "") (chr c))))
   out)
 
-(defun pa:plot (r path / sheetp p1 p2)
-  (setq sheetp (= (pa:get 'kind r) "list")
+(defun pa:plot (r path / a3 paper p1 p2)
+  ;; Plots one рамка at 1:1 on its paper size and orientation, which follow from the рамка, not
+  ;; from its kind: a лист may be A4 portrait. After the first plot AutoCAD refuses, nothing more is
+  ;; plotted (refused, local to c:PDFALL).
+  (setq a3 (= (pa:paper r) "a3")
+        paper (if a3 *pdfall-paper-a3* *pdfall-paper-a4*)
         p1 (trans (pa:get 'll r) 0 1)
         p2 (trans (pa:get 'ur r) 0 1))
-  (if (findfile path) (vl-file-delete path))
-  (princ (strcat "\n  " (vl-filename-base path) "..."))
-  (command "_.-PLOT" "_Y" "Model" device
-           (if sheetp *pdfall-paper-sheet* *pdfall-paper-spec*)
-           "_M" (if sheetp "_L" "_P") "_N" "_W" p1 p2
-           "_F" "_C" "_N" "." "_Y" "_A" path "_N" "_Y")
-  (if (findfile path)
-    (setq plotted (1+ plotted))
-    (pa:err (pa:msg "pdfall.cannot-write" (list "path" path)) r)))
+  (if (not refused)
+    (progn
+      (if (findfile path) (vl-file-delete path))
+      (princ (strcat "\n  " (vl-filename-base path) "..."))
+      (command "_.-PLOT" "_Y" "Model" device paper)
+      ;; -PLOT quits on a paper size the device doesn't know, and every answer after it would run as
+      ;; a command ("Неизвестная команда M"). CMDNAMES holds English command names in any language.
+      (if (wcmatch (strcase (getvar "CMDNAMES")) "*PLOT*")
+        (command "_M" (if a3 "_L" "_P") "_N" "_W" p1 p2
+                 "1=1" "_C" "_N" "." "_Y" "_A" path "_N" "_Y")
+        (progn
+          (setq refused T)
+          (pa:err (pa:msg "pdfall.paper-refused" (list "paper" paper "device" device)) r)))
+      (cond
+        (refused)
+        ((findfile path) (setq plotted (1+ plotted)))
+        (T (pa:err (pa:msg "pdfall.cannot-write" (list "path" path)) r))))))
 
 ;;; ---- Layers -----------------------------------------------------------------
 
@@ -139,10 +152,16 @@
             groups)))
   (setq groups (reverse groups))
 
+  ;; Old drawings have no шар заливки: their листи без заливки come out the same as the filled ones.
   (if (null fills)
-    (pa:err (pa:msg "check.no-fill-layer"
-                    (list "layers" (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (n) (strcat n ", ")) *pdfall-fill-layers*)))))
-            nil))
+    (pa:warn (pa:msg "pdfall.no-fill-layer"
+                     (list "layers" (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (n) (strcat n ", ")) *pdfall-fill-layers*)))))))
+  ;; A рамка a few millimetres off its size, as in old drawings, is plotted at 1:1 all the same.
+  (foreach r records
+    (if (pa:off-size r)
+      (pa:warn (pa:msg "pdfall.off-size" (list "marka" (pa:get 'marka r) "size" (pa:off-size r)
+                                               "nominal" (if (= (pa:paper r) "a3") "420x297" "210x297")
+                                               "where" (pa:where r))))))
   (if errors
     (progn
       (pa:report-errors (pa:msg "pdfall.fix-first" nil))
@@ -222,7 +241,7 @@
            (findfile (strcat *pdfall-home* "\\" name)))
     (vl-file-copy (strcat *pdfall-home* "\\" name) (strcat (pa:plotters) "\\" name))))
 
-(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device)
+(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device refused)
   (defun *error* (msg)
     (pa:date-remove)
     (pa:restore)

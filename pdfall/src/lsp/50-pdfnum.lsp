@@ -43,17 +43,35 @@
         (if (or (null above) (< (car s) above)) (setq above (car s))))))
   (if (and below above (< (- above below) 20.0)) (/ (+ below above) 2.0) y))
 
-(defun pa:fill-cell (r cell n style / f z x y d e)
+(defun pa:row-number (r / z)
+  ;; A number of r's title block written as a text of its own after its label, in the same row, as
+  ;; old title blocks have it ("Аркушiв" then "1"): its zone entry, or nil.
+  (foreach c (pa:get 'counters r)
+    (if (and (cadddr c) (< (abs (- (cadr (cadddr c)) (cadr (cadr c)))) 2.5))
+      (setq z (cadddr c))))
+  z)
+
+(defun pa:fill-cell (r cell n style / f z x y d e old box)
   ;; Writes number n into the empty cell. Returns nil when it can't.
   (setq f (pa:get 'frame r)
         z (cdr cell)
         e (nth 4 z))
   (if (= (pa:get 'kind r) "list")
-    ;; On a лист the number follows the label in the same text: "Аркуш 2".
-    (if e
-      (progn
-        (setq d (entget e))
-        (entmod (subst (cons 1 (strcat (cdr (assoc 1 d)) " " (itoa n))) (assoc 1 d) d))))
+    (cond
+      ((null e) nil)
+      ;; On a new лист the number follows the label in the same text: "Аркуш 2".
+      ((and (= "TEXT" (cdr (assoc 0 (setq d (entget e))))) (null (pa:row-number r)))
+       (entmod (subst (cons 1 (strcat (cdr (assoc 1 d)) " " (itoa n))) (assoc 1 d) d)))
+      ;; An old title block writes it as a text of its own, after the label in the same cell, in
+      ;; the look of a number already there: centred between the label and the cell's right edge.
+      (T
+       (setq old (pa:row-number r)
+             box (pa:cell-box r (car z) (cadr z))
+             x (+ (if box (/ (+ (car z) (caddr box)) 2.0) (+ (car z) 6.0)) (caddr f))
+             y (+ (if box (/ (+ (cadr box) (cadddr box)) 2.0) (cadr z)) (cadr f)))
+       (entmake (append (list '(0 . "TEXT") (list 10 x y 0.0) (list 11 x y 0.0) '(72 . 1) '(73 . 2)
+                              (cons 1 (itoa n)))
+                        (pa:text-style (entget (if (and old (nth 4 old)) (nth 4 old) e)))))))
     ;; On a специфікація it goes in the middle of the cell under the label, the cell found around
     ;; the point 5 mm below the label (7.5 mm in the corner cell); at that point if its edges aren't.
     ;; x and y are measured from the рамка's bottom-right corner until the text is made.
