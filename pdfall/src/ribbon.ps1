@@ -83,7 +83,7 @@ function Add-Panel($text, $idPrefix, $buttons) {
         $button.ElementID = "RBN_$($b.Name)_BUTTON"
         $button.ButtonStyle = 'LargeWithText'
         $button.MacroID = $macro.ElementID
-        $button.TooltipTitle = $b.Name
+        $button.TooltipTitle = $button.Text
         $row.Items.Add($button)
     }
     $mg.RibbonRoot.RibbonPanelSources.Add($panel)
@@ -93,9 +93,9 @@ function Add-Panel($text, $idPrefix, $buttons) {
     $tab.Items.Add($ref)
 }
 
-Add-Panel 'PDF' 'PDFALL' @(
-    @{ Name = 'PDFALL'; Help = (Msg 'ribbon.pdfall') },
-    @{ Name = 'PDFNUM'; Help = (Msg 'ribbon.pdfnum') }
+Add-Panel (Msg 'ribbon.print-panel') 'PDFALL' @(
+    @{ Name = 'PDFALL'; Text = (Msg 'ribbon.pdfall'); Help = (Msg 'ribbon.pdfall-help') },
+    @{ Name = 'PDFNUM'; Text = (Msg 'ribbon.pdfnum'); Help = (Msg 'ribbon.pdfnum-help') }
 )
 Add-Panel (Msg 'ribbon.frame-panel') 'PDFFRAME' @(
     @{ Name = 'PDFLIST'; Text = (Msg 'ribbon.list'); Help = (Msg 'ribbon.list-help') },
