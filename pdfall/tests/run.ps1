@@ -229,6 +229,7 @@ PDFNUM
 (slant)
 (centred)
 (dates)
+(princ (strcat "\nTODAY=" (pa:today) "|"))
 (command "_.-LAYER" "_M" "Цвет" "")
 (command "_.SAVEAS" "2018" "$($pasteDir -replace '\\', '/')/paste.dwg")
 PDFALL
@@ -255,6 +256,8 @@ Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted �
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
 Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
+$today = Get-Date -Format 'dd.MM.yy'
+Check ($plog -match "TODAY=$([regex]::Escape($today))\|") "the date reads dd.mm.yy ($today)"
 Check ($plog -match 'DATED-PLOTS=7 TODAY-LEFT=0') 'all 7 PDFs of the pasted рамки were plotted with the date, and the drawing has none left'
 
 # The real command, ended by Esc (0x1B), which also ends the script.

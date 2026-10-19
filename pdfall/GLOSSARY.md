@@ -45,7 +45,7 @@ The title block cell that names the product and марка ("Джгут 1ЧП"; 
 _Avoid_: name field, title
 
 **Дата cell** (клітинка Дата):
-The title block cell that holds the date: in the Дата column, in the row below its head, or in the top row on a later аркуш of a специфікація. PDFALL writes the day of the export there in every PDF, as dd.mm.yyyy, without changing the drawing.
+The title block cell that holds the date: in the Дата column, in the row below its head, or in the top row on a later аркуш of a специфікація. PDFALL writes the day of the export there in every PDF, as dd.mm.yy, without changing the drawing.
 _Avoid_: date field, date stamp
 
 **Загальний**:

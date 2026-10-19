@@ -1,6 +1,6 @@
 # The export date is written only into the PDFs
 
-Every PDF carries the day it was exported in its Дата cell (dd.mm.yyyy). PDFALL writes the date into the drawing after its checks pass and it has saved the drawing, plots, and then takes the date out again: it deletes the texts it made and puts back any date it wrote over. Its `*error*` does the same, so a cancelled or failed run leaves no date behind.
+Every PDF carries the day it was exported in its Дата cell (dd.mm.yy, since a four-digit year doesn't fit every Дата cell). PDFALL writes the date into the drawing after its checks pass and it has saved the drawing, plots, and then takes the date out again: it deletes the texts it made and puts back any date it wrote over. Its `*error*` does the same, so a cancelled or failed run leaves no date behind.
 
 We chose this over writing the date and saving it with the drawing because the DWG should only change when someone edits it. A saved date would make every export a change to the drawing, and would read as the day the drawing was last changed when it is only the day it was last plotted.
 

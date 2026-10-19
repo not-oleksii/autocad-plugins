@@ -12,9 +12,9 @@
 ;;; is already there (dd.mm.yy or dd.mm.yyyy) gets the new date written over it.
 
 (defun pa:today (/ d)
-  ;; dd.mm.yyyy
+  ;; dd.mm.yy: a four-digit year doesn't fit every Дата cell
   (setq d (rtos (getvar "CDATE") 2 6))
-  (strcat (substr d 7 2) "." (substr d 5 2) "." (substr d 1 4)))
+  (strcat (substr d 7 2) "." (substr d 5 2) "." (substr d 3 2)))
 
 (defun pa:date-p (s) (wcmatch s "##`.##`.##,##`.##`.####"))
 
