@@ -1,10 +1,12 @@
 ﻿# Installs (or with -Uninstall removes) PDFALL for the current Windows user.
 # Run it through install.bat or uninstall.bat, with AutoCAD closed.
-# -AcadKey, -PluginsDir and -IgnoreRunningAutoCAD exist for tests\install.ps1.
+# update.ps1 runs the install.ps1 of the release it downloaded.
+# -AcadKey, -PluginsDir, -StartMenuDir and -IgnoreRunningAutoCAD exist for tests\install.ps1.
 param(
     [switch]$Uninstall,
     [string]$AcadKey = 'HKCU:\Software\Autodesk\AutoCAD',
     [string]$PluginsDir = (Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins'),
+    [string]$StartMenuDir = (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
     [switch]$IgnoreRunningAutoCAD
 )
 $ErrorActionPreference = 'Stop'
@@ -26,8 +28,9 @@ function Msg($key, $values = @{}) {
     foreach ($name in $values.Keys) { $text = $text.Replace("{$name}", [string]$values[$name]) }
     $text
 }
+$shortcut = Join-Path $StartMenuDir "$(Msg 'install.shortcut').lnk"
 
-# Every AutoCAD 2024-or-later profile of this user, e.g. ...\R24.3\ACAD-7101:409\Profiles\<<Unnamed Profile>>
+# Every AutoCAD R24 (2021) or later profile of this user, e.g. ...\R24.3\ACAD-7101:409\Profiles\<<Unnamed Profile>>
 function Get-AcadProfiles {
     Get-ChildItem $AcadKey -ErrorAction SilentlyContinue |
         Where-Object { $_.PSChildName -match '^R(\d+)\.' -and [int]$Matches[1] -ge 24 } |
@@ -60,6 +63,23 @@ function Remove-StartupCopies($acadProfile) {
     Set-ItemProperty $key NumStartup "$($keep.Count)"
 }
 
+# The Start menu entry that runs the bundle's update.bat. It starts in %TEMP%, because the update
+# replaces the bundle folder and Windows can't delete a folder that a program is working in.
+function Set-Shortcut {
+    try {
+        New-Item $StartMenuDir -ItemType Directory -Force | Out-Null
+        $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+        $link.TargetPath = Join-Path $dest 'update.bat'
+        $link.WorkingDirectory = $env:TEMP
+        $link.Description = Msg 'install.shortcut'
+        $link.Save()
+        Write-Host (Msg 'install.update-hint' @{ shortcut = (Msg 'install.shortcut') })
+    }
+    catch {
+        Write-Host (Msg 'install.no-shortcut' @{ shortcut = (Msg 'install.shortcut'); msg = $_.Exception.Message; file = (Join-Path $dest 'update.bat') })
+    }
+}
+
 try {
     if (-not $IgnoreRunningAutoCAD -and (Get-Process acad, accoreconsole -ErrorAction SilentlyContinue)) {
         throw (Msg 'install.acad-running')
@@ -68,6 +88,7 @@ try {
 
     if ($Uninstall) {
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        if (Test-Path -LiteralPath $shortcut) { Remove-Item -LiteralPath $shortcut -Force }
         foreach ($p in $profiles) { Set-Trusted $p $false }
         Write-Host (Msg 'install.uninstalled')
         return
@@ -89,6 +110,7 @@ try {
     $version = ([xml](Get-Content (Join-Path $dest 'PackageContents.xml') -Encoding UTF8)).ApplicationPackage.AppVersion
     Write-Host (Msg 'install.done' @{ version = $version; folder = $dest })
     Write-Host (Msg 'install.next')
+    Set-Shortcut
 }
 catch {
     Write-Host (Msg 'install.failed' @{ msg = $_.Exception.Message })

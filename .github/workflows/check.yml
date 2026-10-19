@@ -1,0 +1,25 @@
+# What can be checked without AutoCAD: messages.json against the code, the version in
+# 00-settings.lsp and PackageContents.xml, and that merge_blueprints.py compiles.
+# build.bat and the tests need AutoCAD 2024 on Windows, so they are run locally (see DEVELOPING.md).
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pdfall:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: messages.json and the version
+        run: python pdfall/src/build_lisp.py "$RUNNER_TEMP/pdfall.lsp"
+      - name: merge_blueprints.py compiles
+        run: python -m py_compile pdfall/src/merge_blueprints.py

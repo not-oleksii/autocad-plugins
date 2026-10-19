@@ -1,6 +1,6 @@
 @echo off
 rem Builds dist\PDFALL.zip to give to colleagues: PDFALL.bundle (pdfall.lsp, merge.exe, PDFALL.pc3,
-rem the frame templates, the ribbon tab) plus install.bat, uninstall.bat and the messages.json they read.
+rem the frame templates, the ribbon tab, the updater) plus install.bat, uninstall.bat and the messages.json they read.
 rem The same files are left unzipped in dist\.
 rem Needs once: py -3 -m pip install pyinstaller pypdf
 setlocal
@@ -15,7 +15,10 @@ py -3 -m PyInstaller --noconfirm --onefile --console --name merge --distpath "%W
 
 if exist "%DIST%" rmdir /s /q "%DIST%"
 mkdir "%DIST%\PDFALL.bundle\Contents" || goto :fail
-copy /y "%SRC%\PackageContents.xml" "%DIST%\PDFALL.bundle\" >nul || goto :fail
+rem The updater rides in the bundle, so update.bat is there for the Start menu entry.
+for %%f in (PackageContents.xml update.bat update.ps1 messages.json) do (
+  copy /y "%SRC%\%%f" "%DIST%\PDFALL.bundle\" >nul || goto :fail
+)
 for %%f in ("%WORK%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
   copy /y "%%~f" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail
 )

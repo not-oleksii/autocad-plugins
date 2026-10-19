@@ -1,0 +1,27 @@
+## Summary
+
+<!-- What changes for the people who use the plugin, and why. Name the plugin if the repo has several. -->
+
+## Version impact
+
+<!-- Pick one (https://semver.org). The version itself is raised later, in the release pull request. -->
+
+- [ ] **patch**: only fixes
+- [ ] **minor**: something new; drawings, PDFs and habits keep working
+- [ ] **major**: something works differently and colleagues must know (e.g. PDF or command names)
+- [ ] **none**: nothing users get changes (tests, docs for developers, tooling)
+
+## Checklist
+
+- [ ] `CHANGELOG.md`: a line under **Невипущене**, in Ukrainian, written for colleagues (skip for "none")
+- [ ] User-facing texts are in `src/messages.json`, in Ukrainian; code and developer docs in English
+- [ ] `README.md` (the Ukrainian guide) and `DEVELOPING.md` describe the change
+- [ ] A design decision has an ADR in `docs/adr`
+- [ ] No real drawings, PDFs, names or other private data added (`examples/` stays out of git)
+
+## Test plan
+
+<!-- CI only checks messages.json; build and tests need AutoCAD 2024 on Windows. -->
+
+- [ ] `build.bat`, then `tests\run.ps1` and `tests\install.ps1` report "All passed"
+- [ ] Checked by hand in AutoCAD:

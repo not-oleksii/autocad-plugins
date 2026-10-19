@@ -15,13 +15,17 @@ src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with
 src\templates\*.dwg       the empty рамки that PDFLIST and PDFSPEC paste
 src\make_templates.ps1    cuts those templates out of examples\*.dxf (only when the sample's title blocks change)
 src\install.ps1           what install.bat and uninstall.bat run
+src\update.ps1            what update.bat (Start menu: Оновити PDFALL) runs: updates from the GitHub releases
 build.bat                 builds dist\PDFALL.zip
+release.ps1               raises the version (-Prepare) and publishes a GitHub release
+CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
 tests\run.ps1             runs the built PDFNUM, PDFALL, merge.exe, PDFLIST and PDFSPEC without opening AutoCAD
-tests\install.ps1         tests the installer against a fake copy of the AutoCAD settings
+tests\install.ps1         tests the installer and the updater against fake AutoCAD settings and a fake release list
 merge.bat, check.bat      run the Python merge by hand (check.bat only reports problems)
+..\.github                the pull request template and the CI check
 ```
 
-`examples\` (the sample drawing and hand-made PDFs that the tests use) is kept out of git because it contains real drawings.
+`examples\` (the sample drawing and hand-made PDFs that the tests use) is kept out of git because it contains real drawings. The repository is public: never commit drawings, PDFs, names from title blocks or anything else from real projects. The templates in `src\templates` hold only the empty title-block form.
 
 ## The LISP modules
 
@@ -68,20 +72,53 @@ The рамки that PDFLIST and PDFSPEC paste are `src\templates\PDFALL_list.dwg
 
 - the рамка's lower-left corner at the DWG's origin, and its 420x297 or 210x297 size;
 - the `МАРКА` text in the name cell;
-- that MTEXT anchored Middle Center at the cell's centre, exactly as wide and as high as the cell.
+- that MTEXT anchored Middle Center at the cell's centre, exactly as wide and as high as the cell;
+- no names, dates or other project data in the title block.
+
+## Building and testing
+
+`build.bat` needs AutoCAD 2024 installed (for the ribbon) and `py -3 -m pip install pyinstaller pypdf` once. Then run both tests:
+
+```bash
+powershell -ExecutionPolicy Bypass -File tests/run.ps1
+```
+
+```bash
+powershell -ExecutionPolicy Bypass -File tests/install.ps1
+```
+
+GitHub Actions (`.github/workflows/check.yml`) can't build or test without AutoCAD, so on every pull request it only runs `build_lisp.py`'s checks: `messages.json` against the code, and the version.
+
+## Pull requests
+
+Work on a branch and merge through a pull request; the template (`.github/pull_request_template.md`) asks for the version impact and a test plan. A pull request that changes what colleagues get adds a line, in Ukrainian and written for them, under **Невипущене** in `CHANGELOG.md`, in the section that fits: Додано (added), Змінено (changed), Виправлено (fixed) or Вилучено (removed). It doesn't raise the version; the release does.
 
 ## Releasing
 
-1. Raise `*pdfall-version*` in `src\lsp\00-settings.lsp` and `AppVersion` in `src\PackageContents.xml`, keeping them equal.
-2. Run `build.bat`. It needs AutoCAD 2024 installed (for the ribbon) and `py -3 -m pip install pyinstaller pypdf` once.
-3. Run both tests:
+Versions follow [Semantic Versioning](https://semver.org): *major.minor.patch*, judged by what colleagues notice.
+
+- **patch** (1.8.0 → 1.8.1): only fixes.
+- **minor** (1.8.1 → 1.9.0): something new, while drawings, PDFs and habits keep working.
+- **major** (1.9.0 → 2.0.0): something works differently and colleagues must know, e.g. PDF names, command names or the title-block words in `labels` change.
+
+A release is a GitHub release tagged `pdfall-v<version>` (the prefix keeps each plugin's versions apart in this repository) with two files: `PDFALL-<version>.zip` and `PDFALL-<version>.zip.sha256`. Its notes are the version's section of `CHANGELOG.md`, plus install help after a `---` line. `update.ps1` reads the repository's releases from the GitHub API, takes the newest `pdfall-v*` that is neither a draft nor a pre-release, shows the notes of every version newer than the installed one, and installs the zip only if it matches the `.sha256` ([ADR 0007](docs/adr/0007-update-from-github-releases.md)). So a release must never be edited to point at a different zip: publish a new version instead.
+
+1. Prepare the version in a pull request. On a branch from `main`:
 
    ```bash
-   powershell -ExecutionPolicy Bypass -File tests/run.ps1
+   powershell -ExecutionPolicy Bypass -File release.ps1 -Prepare 1.9.0
    ```
+
+   This sets the version in `00-settings.lsp` and `PackageContents.xml` and turns **Невипущене** into `## 1.9.0 - <today>`. Read the notes as a colleague would, commit, and merge the pull request.
+
+2. Publish from the merged `main`:
 
    ```bash
-   powershell -ExecutionPolicy Bypass -File tests/install.ps1
+   powershell -ExecutionPolicy Bypass -File release.ps1
    ```
 
-4. Share `dist\PDFALL.zip`.
+   It refuses unless `main` is clean and equal to `origin/main`, the tag is new, and `CHANGELOG.md` has the version's section. Then it runs `build.bat` and both tests, writes the zip, its `.sha256` and the notes to `dist\release`, creates and pushes the annotated tag, and publishes the release with the [GitHub CLI](https://cli.github.com) (`winget install GitHub.cli`, then `gh auth login` once). Without `gh` it prints a link to a pre-filled release page; attach the two files there and publish. `-DryRun` stops before the tag.
+
+3. Colleagues on 1.8.0 or later run **Оновити PDFALL** from the Start menu. Older installs take this zip by hand once.
+
+`build_lisp.py` fails the build if the two version numbers differ, so a half-raised version can't be built.
