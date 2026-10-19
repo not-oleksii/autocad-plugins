@@ -2,6 +2,7 @@
 ;;; String helpers that every other file may use:
 ;;;   pa:msg pa:label pa:file  the texts of messages.json
 ;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:cyr
+;;;   pa:lower pa:pad pa:bad-char
 ;;;
 ;;; build.bat writes messages.json into *pa-messages*, *pa-labels* and *pa-files* just before
 ;;; this file, and fails if the code uses a key or {name} that messages.json doesn't have, or a
@@ -30,6 +31,19 @@
 (defun pa:cyr (s)
   ;; Latin letters that look identical to Cyrillic ones, turned into the Cyrillic letter.
   (vl-string-translate (pa:label "lookalike-latin") (pa:label "lookalike-cyrillic") s))
+
+(defun pa:lower (s)
+  ;; s in lower case; strcase alone leaves Cyrillic letters as they are.
+  (vl-string-translate (pa:label "upper") (pa:label "lower") (strcase s T)))
+
+(defun pa:pad (n)
+  ;; A sheet number as it is written in a file name: at least two digits.
+  (if (< n 10) (strcat "0" (itoa n)) (itoa n)))
+
+(defun pa:bad-char (s)
+  ;; The first character of s that Windows doesn't allow in a file name, or nil.
+  (vl-some '(lambda (c) (if (vl-string-position c s) (chr c)))
+           (vl-string->list "\\/:*?\"<>|")))
 
 (defun pa:split (s sep / out p)
   (while (setq p (vl-string-search sep s))

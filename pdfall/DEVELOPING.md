@@ -8,7 +8,7 @@ How PDFALL is built, tested and released. What it does for colleagues is in [REA
 src\lsp\*.lsp             the PDFALL, PDFNUM, PDFLIST and PDFSPEC commands, one module per file
 src\messages.json         every text the commands, merge.exe, the installer and the ribbon show or look for
 src\build_lisp.py         checks messages.json against the code, then joins src\lsp\*.lsp and it into the bundle's pdfall.lsp
-src\merge_blueprints.py   builds Загальний and Загальний друк (shipped as merge.exe)
+src\merge_blueprints.py   builds загальний and загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle
 src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with AutoCAD's own AcCui.dll
@@ -48,7 +48,7 @@ Every Ukrainian word the user sees or PDFALL looks for is in `src\messages.json`
 
 - `messages`: what the user reads. Free to edit; `{name}` is filled in by the program.
 - `labels`: words read from title blocks (`Аркуш`, `Аркушів`, `Арк.`, the `МАРКА` placeholder, ...). Changing one stops PDFALL from reading drawings that use the old word.
-- `files`: the words of the PDF names (`лист`, `без заливки`, `Загальний друк`, ...). PDFALL writes them and merge.exe reads them, so changing one makes PDFs already exported unrecognisable.
+- `files`: the words of the PDF names (`лист`, `без заливки`, `загальний друк`, ...), all in lower case ([ADR 0006](docs/adr/0006-one-file-name-pattern.md)). PDFALL writes them and merge.exe reads them, so changing one makes PDFs already exported unrecognisable.
 
 The code reads them with `pa:msg`/`pa:label`/`pa:file` in LISP, `msg`/`label`/`file_word` in merge_blueprints.py and `Msg` in install.ps1 and ribbon.ps1, always with a literal key. `build.bat` runs `build_lisp.py` first, which fails the build when:
 

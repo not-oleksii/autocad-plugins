@@ -90,6 +90,11 @@ QUIT
 Y
 "@
 
+# PDFs under the names of earlier versions, which PDFALL must clear away before it plots.
+$oldNames = 'К1 лист 1.pdf', 'К1 лист 1 без заливки.pdf', 'К1 лист 2.pdf', 'К1 специфікація лист 1.pdf', 'К1 Загальний.pdf', 'К1 Загальний друк.pdf'
+New-Item (Join-Path $Work 'exported files\К1') -ItemType Directory -Force | Out-Null
+foreach ($n in $oldNames) { Set-Content (Join-Path $Work "exported files\К1\$n") 'old' }
+
 Write-Host "PDFNUM and PDFALL in accoreconsole ($Work)..."
 $log = Invoke-Acad 'sample' $scr (Join-Path $Work 'sample.dxf')
 $out = Join-Path $Work 'sample\acad.txt'
@@ -108,7 +113,11 @@ Check ($log -match 'PDFALL: 34 PDF у') 'PDFALL reports 34 PDFs'
 Check ($pdfs.Count -eq 34) "34 PDFs on disk (found $($pdfs.Count))"
 Check (Test-Path (Join-Path $plotters 'PDFALL.pc3')) 'PDFALL.pc3 was copied into the Plotters folder'
 Check ($log -notmatch 'відкриється в переглядачі') 'PDFALL.pc3 was used in the same run'
-Check (Test-Path (Join-Path $exported 'К1\К1 лист 1 без заливки.pdf')) 'К1 лист 1 без заливки.pdf exists'
+Check (Test-Path (Join-Path $exported 'К1\К1 лист 01 без заливки.pdf')) 'К1 лист 01 без заливки.pdf exists'
+Check (Test-Path (Join-Path $exported 'К1\К1 специфікація 02.pdf')) 'К1 специфікація 02.pdf exists'
+$left = @(Get-ChildItem (Join-Path $exported 'К1') -Filter '*.pdf' | Where-Object { $_.Length -lt 100 })
+Check ($left.Count -eq 0) "the $($oldNames.Count) PDFs under earlier names were cleared away (left: $($left.Name -join ', '))"
+Check (@(Get-ChildItem $exported -Recurse -Filter '*.pdf' | Where-Object { $_.Name -cmatch '[A-ZА-ЯІЇЄҐ][а-яіїєґ]+\.pdf$|лист \d[ .]|специфікація (лист )?\d[ .]' }).Count -eq 0) 'every exported name is lower case with two-digit sheet numbers'
 $oldBefore = if ($log -match 'OLD-BEFORE=(\d+)') { [int]$Matches[1] } else { -1 }
 Check ($log -match 'DATED-PLOTS=34 ' ) 'every one of the 34 PDFs was plotted with the day''s date'
 Check ($oldBefore -gt 0 -and $log -match "TODAY-LEFT=0 OLD-AFTER=$oldBefore\b") "the $oldBefore dates already in the drawing are back as they were, and no new date is left"
@@ -120,12 +129,31 @@ $m = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$exported`
     -RedirectStandardOutput $mergeOut -PassThru -NoNewWindow
 $null = $m.Handle
 if (-not $m.WaitForExit(120000)) { $m.Kill(); $script:failures += 'merge.exe timed out' }
-$merged = @(Get-ChildItem $exported -Recurse -Filter '*Загальний*.pdf')
+$merged = @(Get-ChildItem $exported -Recurse -Filter '*загальний*.pdf')
 $markas = @(Get-ChildItem $exported -Directory)
 Check ($m.ExitCode -eq 0) "merge.exe exit code 0 (got $($m.ExitCode))"
 $mergeLog = Get-Content $mergeOut -Raw -Encoding UTF8
 Check ($mergeLog -notmatch 'Не вдалося звірити') 'merge.exe reads every Аркуш back from the PDFs'
-Check ($merged.Count -eq 2 * $markas.Count) "Загальний and Загальний друк for each of $($markas.Count) марки (found $($merged.Count))"
+Check ($merged.Count -eq 2 * $markas.Count) "загальний and загальний друк for each of $($markas.Count) марки (found $($merged.Count))"
+Check (@($merged | Where-Object { $_.Name -cmatch ' загальний( друк)?\.pdf$' }).Count -eq $merged.Count) 'every merged file is named in lower case'
+
+# A folder of PDFs under the names of earlier versions: merge.exe offers to rename them (answer y).
+$oldDir = Join-Path $Work 'oldnames\К1'
+New-Item $oldDir -ItemType Directory -Force | Out-Null
+Get-ChildItem (Join-Path $exported 'К1') -Filter '*.pdf' | Where-Object { $_.Name -notmatch 'загальний' } | ForEach-Object {
+    $n = $_.Name -replace ' лист 0(\d)', ' лист $1' -replace 'специфікація 0(\d)', 'специфікація лист $1'
+    Copy-Item $_.FullName (Join-Path $oldDir $n)
+}
+$oldCount = @(Get-ChildItem $oldDir).Count
+$answers = Join-Path $Work 'answers.txt'
+[IO.File]::WriteAllText($answers, "y`ny`n", (New-Object Text.UTF8Encoding($false)))
+$m2 = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$(Join-Path $Work 'oldnames')`"" -RedirectStandardInput $answers `
+    -RedirectStandardOutput (Join-Path $Work 'merge-old.txt') -PassThru -NoNewWindow
+$null = $m2.Handle
+if (-not $m2.WaitForExit(120000)) { $m2.Kill(); $script:failures += 'merge.exe (old names) timed out' }
+$oldNow = @(Get-ChildItem $oldDir | Where-Object { $_.Name -cmatch 'лист \d[ .]|специфікація лист' })
+Check ($oldNow.Count -eq 0 -and (Test-Path (Join-Path $oldDir 'К1 лист 01.pdf')) -and (Test-Path (Join-Path $oldDir 'К1 специфікація 01.pdf'))) "merge.exe renamed the $oldCount PDFs under earlier names to the new ones"
+Check ((Test-Path (Join-Path $oldDir 'К1 загальний.pdf')) -and (Test-Path (Join-Path $oldDir 'К1 загальний друк.pdf'))) 'and built загальний and загальний друк from them'
 
 Write-Host 'PDFLIST and PDFSPEC in an empty drawing...'
 $pasteDir = Join-Path $Work 'paste'
@@ -235,6 +263,11 @@ PDFNUM
 PDFALL
 (princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today)))))
 (princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner dated)))))
+(princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК")))))
+;; a марка that Windows can't use in a file name stops PDFALL before it plots anything
+(tpaste "PDFLIST" "1/2П" 1 "PDFALL_list.dwg")
+5000,1000
+PDFALL
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -255,6 +288,8 @@ Check ($plog -match 'NUMS=4/4\b') 'PDFNUM centres the 4 numbers it wrote in thei
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
+Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк\)') 'the name helpers find a forbidden character, pad a number and lower-case Cyrillic'
+Check ($plog -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($plog, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots'
 Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
 $today = Get-Date -Format 'dd.MM.yy'
 Check ($plog -match "TODAY=$([regex]::Escape($today))\|") "the date reads dd.mm.yy ($today)"

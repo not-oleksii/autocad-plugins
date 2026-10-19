@@ -42,26 +42,26 @@
 ;;; ---- Files ------------------------------------------------------------------
 
 (defun pa:file-name (marka r unfilled)
-  ;; <марка> лист N.pdf, <марка> лист N без заливки.pdf or <марка> специфікація лист N.pdf
-  (strcat marka
-          (if (= (pa:get 'kind r) "list") "" (strcat " " (pa:file "spec")))
-          " " (pa:file "sheet") " " (itoa (pa:get 'sheet r))
+  ;; <марка> лист NN.pdf, <марка> лист NN без заливки.pdf or <марка> специфікація NN.pdf
+  (strcat marka " " (if (= (pa:get 'kind r) "list") (pa:file "sheet") (pa:file "spec")) " " (pa:pad (pa:get 'sheet r))
           (if unfilled (strcat " " (pa:file "unfilled")) "")
           ".pdf"))
 
 (defun pa:ours-p (name marka / w)
-  ;; True for the PDFs PDFALL and merge.exe write for this марка.
+  ;; True for the PDFs PDFALL and merge.exe write for this марка, also under the names of earlier
+  ;; versions (Загальний, лист 1, специфікація лист 1), so a new run clears them away.
   (if (and (wcmatch (strcase name) "*.PDF")
            (> (strlen name) (+ (strlen marka) 5))
            (= (substr name 1 (1+ (strlen marka))) (strcat marka " ")))
     (progn
-      (setq w (pa:words (substr name (+ 2 (strlen marka)) (- (strlen name) (strlen marka) 5))))
+      (setq w (mapcar 'pa:lower (pa:words (substr name (+ 2 (strlen marka)) (- (strlen name) (strlen marka) 5)))))
       (or (equal w (pa:words (pa:file "general")))
           (equal w (pa:words (pa:file "general-print")))
           (and (= (car w) (pa:file "sheet")) (pa:digits-p (cadr w))
                (or (null (cddr w)) (equal (cddr w) (pa:words (pa:file "unfilled")))))
-          (and (= (car w) (pa:file "spec")) (= (cadr w) (pa:file "sheet")) (pa:digits-p (caddr w))
-               (null (cdddr w)))))))
+          (and (= (car w) (pa:file "spec"))
+               (setq w (if (= (cadr w) (pa:file "sheet")) (cddr w) (cdr w)))
+               (pa:digits-p (car w)) (null (cdr w)))))))
 
 (defun pa:escape (s / out)
   ;; s with wildcard characters escaped for ssget and wcmatch.
@@ -126,6 +126,11 @@
       (if (= (pa:cyr m) (pa:cyr other))
         (pa:err (pa:msg "check.lookalike" (list "marka" m "other" other))
                 (vl-some '(lambda (r) (if (= (pa:get 'marka r) m) r)) records)))))
+  ;; A марка is a folder and the start of every file name.
+  (foreach m markas
+    (if (pa:bad-char m)
+      (pa:err (pa:msg "check.bad-char" (list "marka" m "char" (pa:bad-char m)))
+              (vl-some '(lambda (r) (if (= (pa:get 'marka r) m) r)) records))))
   (foreach m markas
     (setq groups
       (cons (list m
