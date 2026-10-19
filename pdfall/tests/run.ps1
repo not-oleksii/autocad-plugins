@@ -316,6 +316,8 @@ $tab = @($cs.MenuGroup.RibbonRoot.RibbonTabSources)[0]
 $macros = @($cs.MenuGroup.MacroGroups | ForEach-Object { $_.MenuMacros })
 Check ($tab.Text -eq 'PDFALL' -and "$($tab.DefaultDisplay)" -eq 'AddToWorkspace') 'PDFALL.cuix has a PDFALL tab that AutoCAD adds by itself'
 Check (($macros | ForEach-Object { $_.macro.Command }) -join ',' -eq '^C^CPDFALL ,^C^CPDFNUM ,^C^CPDFLIST ,^C^CPDFSPEC ') 'its buttons run PDFALL, PDFNUM, PDFLIST and PDFSPEC'
+$labels = @($cs.MenuGroup.RibbonRoot.RibbonPanelSources | ForEach-Object { $_.Items } | ForEach-Object { $_.Items } | ForEach-Object { $_.Text })
+Check (($labels -join '|') -eq 'Друк у PDF|Номери аркушів|Лист|Специфікація') "the buttons read in Ukrainian, not as command names (got $($labels -join ', '))"
 Check (@($macros | Where-Object { -not (Test-Path (Join-Path $Contents $_.macro.LargeImage)) }).Count -eq 0) 'every button image is in Contents'
 Check (@('PDFALL_list.dwg', 'PDFALL_spec1.dwg', 'PDFALL_spec2.dwg' | Where-Object { -not (Test-Path (Join-Path $Contents $_)) }).Count -eq 0) 'the three рамка templates are in Contents'
 
