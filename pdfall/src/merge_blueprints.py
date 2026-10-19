@@ -7,6 +7,7 @@ Every given folder is processed together with all folders inside it. With no fol
 given, the folder this script is in is processed. See GLOSSARY.md for the terms.
 """
 
+import json
 import logging
 import os
 import re
@@ -17,22 +18,47 @@ from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 
-GENERAL = "Загальний"
-GENERAL_PRINT = "Загальний друк"
+
+def load_texts():
+    """messages.json: next to this script, or packed into merge.exe by PyInstaller."""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return json.loads((base / "messages.json").read_text(encoding="utf-8"))
+
+
+TEXTS = load_texts()
+
+
+def msg(key, **values):
+    """The message key from messages.json with each {name} filled in."""
+    return TEXTS["messages"][key].format(**values)
+
+
+def label(key):
+    """A word read from title blocks."""
+    return TEXTS["labels"][key]
+
+
+def file_word(key):
+    """A word of the PDF names."""
+    return TEXTS["files"][key]
+
+
+GENERAL = file_word("general")
+GENERAL_PRINT = file_word("general-print")
 
 # Latin letters that look identical to Cyrillic ones, mapped to the Cyrillic letter.
-LOOKALIKES = str.maketrans(
-    "ABCEHIKMOPTXYaceiopxy",
-    "АВСЕНІКМОРТХУасеіорху",
-)
+LOOKALIKES = str.maketrans(label("lookalike-latin"), label("lookalike-cyrillic"))
 
-SHEET = "лист"
-SPEC = "специфікація"
-UNFILLED = "без заливки"
+SHEET = file_word("sheet")
+SPEC = file_word("spec")
+UNFILLED = file_word("unfilled")
 
+SHEET_LABEL = label("sheet")
+TOTAL_LABEL = label("total")
+CORNER_LABEL = label("corner")
 # The title block's name cell reads "<product> <марка>", e.g. "Джгут 1ЧП". These labels
 # also start a title-block line but are never a product.
-LABELS = {"Аркуш", "Аркушів", "Лист", "Листів", "Масштаб", "Маса", "Літера", "Стадія"}
+LABELS = set(label("not-names"))
 # The title block sits within this many points of the bottom edge on every sheet format.
 TITLE_BLOCK_HEIGHT = 130
 
@@ -161,23 +187,23 @@ def read_title_block(items):
     title = TitleBlock(marka=read_marka(items))
     labels = {}
     for x, y, text in items:
-        if m := re.fullmatch(r"Аркуш\s+(\d+)", text):
+        if m := re.fullmatch(rf"{re.escape(SHEET_LABEL)}\s+(\d+)", text):
             title.sheet = int(m.group(1))
-        elif m := re.fullmatch(r"Аркушів\s+(\d+)", text):
+        elif m := re.fullmatch(rf"{re.escape(TOTAL_LABEL)}\s+(\d+)", text):
             title.total = int(m.group(1))
-        elif text in ("Аркуш", "Аркушів", "Арк."):
+        elif text in (SHEET_LABEL, TOTAL_LABEL, CORNER_LABEL):
             labels[text] = (x, y)
 
-    if title.sheet is None and "Аркуш" in labels:
-        x, y = labels["Аркуш"]
-        x_max = labels["Аркушів"][0] if "Аркушів" in labels else x + 40
+    if title.sheet is None and SHEET_LABEL in labels:
+        x, y = labels[SHEET_LABEL]
+        x_max = labels[TOTAL_LABEL][0] if TOTAL_LABEL in labels else x + 40
         title.sheet = number_below(items, x, y, x_max, 20)
-    if title.total is None and "Аркушів" in labels:
-        x, y = labels["Аркушів"]
+    if title.total is None and TOTAL_LABEL in labels:
+        x, y = labels[TOTAL_LABEL]
         title.total = number_below(items, x, y, x + 50, 20)
     right_edge = max((x for x, _, _ in items), default=0)
-    if title.sheet is None and "Арк." in labels and labels["Арк."][0] > right_edge - 60:
-        x, y = labels["Арк."]
+    if title.sheet is None and CORNER_LABEL in labels and labels[CORNER_LABEL][0] > right_edge - 60:
+        x, y = labels[CORNER_LABEL]
         title.sheet = number_below(items, x, y, x + 20, 28)
     return title
 
@@ -204,13 +230,13 @@ def load(part):
     part.title = title = read_title_block(items)
 
     if title.marka is None:
-        part.unverified.append("марка")
+        part.unverified.append(msg("merge.field-marka"))
     elif looks(title.marka) != looks(part.marka):
-        part.mismatches.append(f"в основному написі марка '{title.marka}'")
+        part.mismatches.append(msg("merge.title-marka", marka=title.marka))
     if title.sheet is None:
-        part.unverified.append("аркуш")
+        part.unverified.append(msg("merge.field-sheet"))
     elif title.sheet != part.number:
-        part.mismatches.append(f"в основному написі Аркуш {title.sheet}")
+        part.mismatches.append(msg("merge.title-sheet", sheet=title.sheet))
 
 
 def pick_winners(parts, warnings):
@@ -224,7 +250,7 @@ def pick_winners(parts, warnings):
         winner = candidates[0]
         winners.append(winner)
         for loser in candidates[1:]:
-            warnings.append(f"'{loser.path.name}' пропущено, його замінює '{winner.path.name}'")
+            warnings.append(msg("merge.replaced", loser=loser.path.name, winner=winner.path.name))
     return winners
 
 
@@ -249,11 +275,12 @@ def propose_renames(parts):
 
 
 def ask_yes(question):
+    yes = msg("merge.yes")
     try:
-        answer = input(f"{question} [так/Ні] ")
+        answer = input(msg("merge.ask", question=question, yes=yes, no=msg("merge.no")))
     except EOFError:
         return False
-    return answer.strip().lower() in ("y", "yes", "т", "так")
+    return answer.strip().lower() in ("y", "yes", yes.lower()[:1], yes.lower())
 
 
 def merge(sources, target):
@@ -276,9 +303,7 @@ def warn_duplicate_plots(marka, parts, warnings):
             continue
         first = seen.setdefault((part.kind, text), part)
         if first is not part:
-            warnings.append(
-                f"{marka}: '{part.path.name}' має той самий вміст, що й '{first.path.name}'. Надруковано не той лист?"
-            )
+            warnings.append(msg("merge.same-content", marka=marka, name=part.path.name, first=first.path.name))
 
 
 def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, report, warnings):
@@ -289,9 +314,9 @@ def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, repor
     """
     missing = [n for n, by_kind in sorted(sheets.items()) if sheet_kind not in by_kind]
     if missing:
-        name = "без заливки" if sheet_kind == "unfilled" else "із заливкою"
-        listed = ", ".join(f"лист {n}" for n in missing)
-        warnings.append(f"{marka}: '{title}' не зібрано, бракує варіанта {name} для: {listed}")
+        variant = msg("merge.variant-unfilled") if sheet_kind == "unfilled" else msg("merge.variant-filled")
+        listed = ", ".join(msg("merge.sheet-n", n=n) for n in missing)
+        warnings.append(msg("merge.missing-variant", marka=marka, title=title, variant=variant, sheets=listed))
         return
     sources = [sheets[n][sheet_kind] for n in sorted(sheets)]
     sources += [specs[n] for n in sorted(specs)]
@@ -300,19 +325,19 @@ def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, repor
     target = folder / f"{marka} {title}.pdf"
     wrong = ", ".join(f"'{p.path.name}'" for p in sources if p.mismatches)
     if wrong and not force:
-        warnings.append(f"{marka}: '{target.name}' НЕ зібрано, основний напис не збігається з назвою в {wrong}")
+        warnings.append(msg("merge.mismatch-skipped", marka=marka, name=target.name, files=wrong))
         return
     if dry_run:
-        report.append(f"{target.name}: файлів {len(sources)}, сторінок {sum(p.pages for p in sources)}")
+        report.append(msg("merge.summary", name=target.name, files=len(sources), pages=sum(p.pages for p in sources)))
         return
     if wrong:
-        warnings.append(f"{marka}: '{target.name}' зібрано попри розбіжність у {wrong}")
+        warnings.append(msg("merge.mismatch-forced", marka=marka, name=target.name, files=wrong))
     try:
         pages = merge([p.path for p in sources], target)
     except PermissionError:
-        warnings.append(f"{marka}: не вдалося записати '{target.name}'. Він відкритий в іншій програмі?")
+        warnings.append(msg("merge.cannot-write", marka=marka, name=target.name))
         return
-    report.append(f"{target.name}: файлів {len(sources)}, сторінок {pages}")
+    report.append(msg("merge.summary", name=target.name, files=len(sources), pages=pages))
 
 
 @dataclass
@@ -341,7 +366,7 @@ def scan(folder):
             try:
                 load(part)
             except Exception:
-                warnings.append(f"'{path.name}' порожній або не читається, пропущено (ще друкується чи синхронізується?)")
+                warnings.append(msg("merge.unreadable", name=path.name))
                 continue
             parts.append(part)
     if not parts:
@@ -362,18 +387,18 @@ def rename_sloppy(folders, root, check):
     renames = [r for folder in folders for r in propose_renames(folder.winners + folder.outputs)]
     if not renames:
         return
-    print("\nЦі файли названо неточно:")
+    print("\n" + msg("merge.sloppy-names"))
     for part, target in renames:
         print(f"  '{part.path.relative_to(root)}'  ->  '{target.name}'")
     if check:
-        print("Під час збирання буде запропоновано їх перейменувати.")
-    elif ask_yes("Перейменувати ці файли?"):
+        print(msg("merge.rename-later"))
+    elif ask_yes(msg("merge.rename-ask")):
         for part, target in renames:
             part.path.rename(target)
             part.path = target
-        print("Перейменовано.")
+        print(msg("merge.renamed"))
     else:
-        print("Назви залишено як є.")
+        print(msg("merge.not-renamed"))
 
 
 def confirm_mismatches(folders, root, check):
@@ -381,21 +406,19 @@ def confirm_mismatches(folders, root, check):
     wrong = [p for folder in folders for p in folder.winners if p.mismatches]
     if not wrong:
         return False
-    print("\nОсновний напис НЕ збігається з назвою файлу:")
+    print("\n" + msg("merge.mismatches"))
     for part in wrong:
         print(f"  X '{part.path.relative_to(root)}': {'; '.join(part.mismatches)}")
-    print("Загальні файли з цими листами не буде зібрано.")
-    return not check and ask_yes("Все одно зібрати їх?")
+    print(msg("merge.mismatches-skipped"))
+    return not check and ask_yes(msg("merge.build-anyway"))
 
 
 def warn_sheet_count(marka, parts, label, numbers, warnings):
     """Warn when a title block's "Аркушів" promises more sheets than there are files."""
     totals = {p.title.total for p in parts if p.title.total}
     if totals and max(totals) > max(numbers, default=0):
-        found = ", ".join(map(str, numbers)) or "жодного"
-        warnings.append(
-            f"{marka}: в основному написі Аркушів {max(totals)}, але знайдено лише {label} {found}"
-        )
+        found = ", ".join(map(str, numbers)) or msg("merge.none")
+        warnings.append(msg("merge.total-more", marka=marka, total=max(totals), label=label, found=found))
 
 
 def process(entry, root, force, dry_run):
@@ -409,10 +432,7 @@ def process(entry, root, force, dry_run):
     for i, marka in enumerate(markas):
         for other in markas[i + 1:]:
             if looks(marka) == looks(other):
-                warnings.append(
-                    f"'{marka}' і '{other}' виглядають однаково, але набрані різними "
-                    "(латинськими/кириличними) літерами, тому збираються окремо"
-                )
+                warnings.append(msg("merge.lookalike", marka=marka, other=other))
 
     report = []
     for marka in sorted(by_marka):
@@ -426,7 +446,7 @@ def process(entry, root, force, dry_run):
         for numbers, label in ((sorted(sheets), SHEET), (sorted(specs), f"{SPEC} {SHEET}")):
             gaps = sorted(set(range(1, max(numbers, default=0) + 1)) - set(numbers))
             if gaps:
-                warnings.append(f"{marka}: немає {label} {', '.join(map(str, gaps))}. Так і має бути?")
+                warnings.append(msg("merge.gaps", marka=marka, label=label, gaps=", ".join(map(str, gaps))))
         drawings = [p for p in by_marka[marka] if p.kind != "spec"]
         warn_sheet_count(marka, drawings, SHEET, sorted(sheets), warnings)
         warn_sheet_count(marka, list(specs.values()), f"{SPEC} {SHEET}", sorted(specs), warnings)
@@ -434,20 +454,20 @@ def process(entry, root, force, dry_run):
         for kind, title in (("filled", GENERAL), ("unfilled", GENERAL_PRINT)):
             build(folder, marka, sheets, specs, kind, title, force, dry_run, report, warnings)
 
-    print("\nБуде зібрано:" if dry_run else "\nЗібрано:")
-    for line in report or ["(нічого)"]:
+    print("\n" + (msg("merge.will-build") if dry_run else msg("merge.built")))
+    for line in report or [msg("merge.nothing")]:
         print(f"  {line}")
     if warnings:
-        print("\nПопередження:")
+        print("\n" + msg("warnings"))
         for line in warnings:
             print(f"  ! {line}")
     unverified = [p for p in entry.winners if p.unverified]
     if unverified:
-        print("\nНе вдалося звірити з основним написом (поле порожнє або не читається):")
+        print("\n" + msg("merge.unverified"))
         for part in sorted(unverified, key=lambda p: p.path.name):
             print(f"  ~ {part.path.name}: {', '.join(part.unverified)}")
     if entry.unrecognized:
-        print("\nНерозпізнані PDF (не зібрано):")
+        print("\n" + msg("merge.unrecognized"))
         for name in entry.unrecognized:
             print(f"  ? {name}")
 
@@ -468,15 +488,15 @@ def main(check=False):
     check = check or "--check" in args
     roots = [Path(arg).resolve() for arg in args if arg != "--check"] or [home_folder()]
     if check:
-        print("ЛИШЕ ПЕРЕВІРКА: нічого не буде зібрано чи перейменовано.")
+        print(msg("merge.check-only"))
     for root in roots:
         if not root.is_dir():
-            print(f"\n=== {root}\n  ! це не папка, пропущено")
+            print(f"\n=== {root}\n  ! " + msg("merge.not-a-folder"))
             continue
-        print(f"Переглядаю {root} і вкладені папки...")
+        print(msg("merge.scanning", folder=root))
         folders = [f for f in map(scan, walk(root)) if f]
         if not folders:
-            print("  листів креслень не знайдено")
+            print("  " + msg("merge.no-sheets"))
             continue
         rename_sloppy(folders, root, check)
         force = confirm_mismatches(folders, root, check)
@@ -485,7 +505,7 @@ def main(check=False):
     if getattr(sys, "frozen", False):
         # A double-clicked .exe closes its window on exit; keep the report readable.
         try:
-            input("\nНатисніть Enter, щоб закрити...")
+            input("\n" + msg("merge.press-enter"))
         except EOFError:
             pass
 

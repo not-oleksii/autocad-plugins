@@ -1,26 +1,30 @@
 @echo off
 rem Builds dist\PDFALL.zip to give to colleagues: PDFALL.bundle (pdfall.lsp, merge.exe, PDFALL.pc3,
-rem the frame templates, the ribbon tab) plus install.bat and uninstall.bat. The same files are left unzipped in dist\.
+rem the frame templates, the ribbon tab) plus install.bat, uninstall.bat and the messages.json they read.
+rem The same files are left unzipped in dist\.
 rem Needs once: py -3 -m pip install pyinstaller pypdf
 setlocal
 set SRC=%~dp0src
 set DIST=%~dp0dist
 set WORK=%TEMP%\pdfall-build
 
-py -3 -m PyInstaller --noconfirm --onefile --console --name merge --distpath "%WORK%\exe" --workpath "%WORK%" --specpath "%WORK%" "%SRC%\merge_blueprints.py" || goto :fail
+if not exist "%WORK%" mkdir "%WORK%"
+rem First, since it is quick: messages.json against the code, and the joined pdfall.lsp.
+py -3 "%SRC%\build_lisp.py" "%WORK%\pdfall.lsp" || goto :fail
+py -3 -m PyInstaller --noconfirm --onefile --console --name merge --distpath "%WORK%\exe" --workpath "%WORK%" --specpath "%WORK%" --add-data "%SRC%\messages.json;." "%SRC%\merge_blueprints.py" || goto :fail
 
 if exist "%DIST%" rmdir /s /q "%DIST%"
 mkdir "%DIST%\PDFALL.bundle\Contents" || goto :fail
 copy /y "%SRC%\PackageContents.xml" "%DIST%\PDFALL.bundle\" >nul || goto :fail
-for %%f in ("%SRC%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
+for %%f in ("%WORK%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
   copy /y "%%~f" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail
 )
 copy /y "%SRC%\templates\*.dwg" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\ribbon.ps1" -Out "%DIST%\PDFALL.bundle\Contents" || goto :fail
-for %%f in (install.bat install.ps1 uninstall.bat) do (
+for %%f in (install.bat install.ps1 uninstall.bat messages.json) do (
   copy /y "%SRC%\%%f" "%DIST%\" >nul || goto :fail
 )
-tar -a -c -f "%DIST%\PDFALL.zip" -C "%DIST%" PDFALL.bundle install.bat install.ps1 uninstall.bat || goto :fail
+tar -a -c -f "%DIST%\PDFALL.zip" -C "%DIST%" PDFALL.bundle install.bat install.ps1 uninstall.bat messages.json || goto :fail
 
 echo.
 echo Built %DIST%\PDFALL.zip

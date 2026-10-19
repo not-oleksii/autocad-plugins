@@ -2,8 +2,9 @@
 #   PDFALL_list.dwg    a лист (A3 landscape) with its title block
 #   PDFALL_spec1.dwg   the first аркуш of a специфікація (A4 portrait, 40 mm title block + table)
 #   PDFALL_spec2.dwg   a later аркуш of a специфікація (15 mm title block + table)
-# Each holds the рамка, the title block form and the name cell (with МАРКА where the марка goes),
-# but none of the drawing, dates or table contents that happen to be in the sample.
+# Each holds the рамка, the title block form and the name cell (with МАРКА where the марка goes,
+# made as wide and high as its cell and centred in it), but none of the drawing, dates or table
+# contents that happen to be in the sample.
 # The result is committed in src\templates, so this only has to run when the sample's title blocks
 # change. It needs AutoCAD 2024 and examples\*.dxf (kept out of git).
 # Usage: powershell -ExecutionPolicy Bypass -File src\make_templates.ps1
@@ -43,6 +44,56 @@ $lisp = @"
   (or (and (= style "основная надпись") (>= h 3.0))
       (and (= style "стиль1") (>= h 3.5))))
 
+;; (x1 y1 x2 y2) of every LINE and LWPOLYLINE segment in ss.
+(defun segs (ss / i d out pts)
+  (setq i (sslength ss))
+  (while (> i 0)
+    (setq i (1- i) d (entget (ssname ss i)))
+    (cond
+      ((= (cdr (assoc 0 d)) "LINE")
+       (setq out (cons (list (cadr (assoc 10 d)) (caddr (assoc 10 d)) (cadr (assoc 11 d)) (caddr (assoc 11 d))) out)))
+      ((= (cdr (assoc 0 d)) "LWPOLYLINE")
+       (setq pts nil)
+       (foreach g d (if (= (car g) 10) (setq pts (cons (cdr g) pts))))
+       (setq pts (reverse pts))
+       (if (= 1 (logand 1 (cdr (assoc 70 d)))) (setq pts (append pts (list (car pts)))))
+       (while (cadr pts)
+         (setq out (cons (list (caar pts) (cadar pts) (caadr pts) (cadadr pts)) out) pts (cdr pts))))))
+  out)
+
+;; The cell around the point (px py): (left bottom right top) from the nearest lines on each side.
+(defun cell (segs px py / left right bottom top)
+  (foreach s segs
+    (cond
+      ((and (< (abs (- (car s) (caddr s))) 0.01) (<= (min (cadr s) (cadddr s)) py (max (cadr s) (cadddr s))))
+       (if (< (car s) px)
+         (if (or (null left) (> (car s) left)) (setq left (car s)))
+         (if (or (null right) (< (car s) right)) (setq right (car s)))))
+      ((and (< (abs (- (cadr s) (cadddr s))) 0.01) (<= (min (car s) (caddr s)) px (max (car s) (caddr s))))
+       (if (< (cadr s) py)
+         (if (or (null bottom) (> (cadr s) bottom)) (setq bottom (cadr s)))
+         (if (or (null top) (< (cadr s) top)) (setq top (cadr s)))))))
+  (if (and left right bottom top) (list left bottom right top)))
+
+;; The name MTEXT made to fill its cell: anchored at the cell's centre (attachment 5), as wide and as
+;; high as the cell, so it stays on one line and wraps only when the марка is too long for the cell.
+(defun fit (d segs name / w h at col row c)
+  (setq w (cond ((/= 0.0 (cdr (assoc 41 d))) (cdr (assoc 41 d))) ((cdr (assoc 42 d))))
+        h (cond ((cdr (assoc 43 d))) (0.0))
+        at (cdr (assoc 71 d)) col (rem (1- at) 3) row (/ (1- at) 3)
+        c (cell segs (+ (cadr (assoc 10 d)) (* w (- 0.5 (* 0.5 col)))) (+ (caddr (assoc 10 d)) (* h (- (* 0.5 row) 0.5)))))
+  (if (null c) (progn (princ (strcat "\nTEMPLATE-FAIL " name ": no cell around the name")) (exit)))
+  (princ (strcat "\nTEMPLATE " name ": name cell " (rtos (- (caddr c) (car c)) 2 2) " x " (rtos (- (cadddr c) (cadr c)) 2 2)))
+  (setq d (subst (cons 71 5) (assoc 71 d) d)
+        d (subst (list 10 (/ (+ (car c) (caddr c)) 2.0) (/ (+ (cadr c) (cadddr c)) 2.0) 0.0) (assoc 10 d) d)
+        d (subst (cons 41 (- (caddr c) (car c))) (assoc 41 d) d))
+  ;; An MTEXT with columns (the лист's name cell in the sample has them, though entget doesn't show
+  ;; them) takes its width from the column width, so the columns are turned off (75 = 0).
+  (setq d (if (assoc 75 d) (subst (cons 75 0) (assoc 75 d) d) (append d (list (cons 75 0)))))
+  (if (assoc 46 d)
+    (subst (cons 46 (- (cadddr c) (cadr c))) (assoc 46 d) d)
+    (append d (list (cons 46 (- (cadddr c) (cadr c)))))))
+
 (defun mk (name llx lly w / all ss i d keep s a b)
   (setq all (ssget "_X" (list '(410 . "Model") (cons 8 "Формат чертежа,Defpoints"))) ss (ssadd) i (sslength all))
   (while (> i 0)
@@ -63,7 +114,8 @@ $lisp = @"
   (setq d (cdar keep) s (cdr (assoc 1 d))
         a (+ (vl-string-search "Джгут " s) 6)
         b (vl-string-search "\\P" s a))
-  (entmod (subst (cons 1 (strcat (substr s 1 a) "МАРКА" (if b (substr s (1+ b)) ""))) (assoc 1 d) d))
+  (entmod (fit (subst (cons 1 (strcat (substr s 1 a) "МАРКА" (if b (substr s (1+ b)) ""))) (assoc 1 d) d)
+               (segs ss) name))
   (ssadd (caar keep) ss)
   (princ (strcat "\nTEMPLATE " name ": " (itoa (sslength ss)) " objects"))
   (command "_.-WBLOCK" (strcat "$o/" name ".dwg") "" (list llx lly 0.0) ss ""))

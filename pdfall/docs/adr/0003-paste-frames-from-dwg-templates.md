@@ -7,6 +7,7 @@ We chose this over drawing the рамки in LISP because the title block has ab
 ## Consequences
 
 - A template's lower-left corner is the DWG's origin, and its name cell holds the text `МАРКА`, which is replaced when it is pasted. Editing a template must keep both.
+- The name cell's MTEXT is anchored at the cell's centre (Middle Center) and is exactly as wide and as high as the cell, so the марка stays on one line and wraps only when it is too long for the cell. `make_templates.ps1` sets this up from the cell's lines once, rather than PDFLIST and PDFSPEC fitting it on every paste, because the cell never moves within a template. Editing a template must keep the MTEXT fitted to its cell.
 - The pasted рамка follows the cursor, which only `-INSERT` with a pause gives, but that prompt does not accept Enter. A run is therefore ended with Esc, which PDFLIST and PDFSPEC catch around the insert to report what they pasted.
 - The block that `-INSERT` makes is deleted after it is exploded, so a changed template is picked up the next time. That uses ActiveX, which the console AutoCAD that the tests run in doesn't have, so the tests leave the block there.
 - `examples\` is kept out of git, so the templates are committed in `src\templates` and `make_templates.ps1` is run only when the sample's title blocks change.

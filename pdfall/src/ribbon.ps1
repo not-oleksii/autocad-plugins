@@ -7,6 +7,9 @@ param(
     [string]$Acad = 'C:\Program Files\Autodesk\AutoCAD 2024'
 )
 $ErrorActionPreference = 'Stop'
+# The button texts are in messages.json.
+$messages = (Get-Content (Join-Path $PSScriptRoot 'messages.json') -Raw -Encoding UTF8 | ConvertFrom-Json).messages
+function Msg($key) { $messages.$key }
 # LoadFrom also finds AcCui's own dependencies in AutoCAD's folder.
 [Reflection.Assembly]::LoadFrom((Join-Path $Acad 'AcCui.dll')) | Out-Null
 Add-Type -AssemblyName System.Drawing
@@ -91,12 +94,12 @@ function Add-Panel($text, $idPrefix, $buttons) {
 }
 
 Add-Panel 'PDF' 'PDFALL' @(
-    @{ Name = 'PDFALL'; Help = 'Друкує всі листи та специфікації креслення в PDF і збирає Загальний та Загальний друк' },
-    @{ Name = 'PDFNUM'; Help = 'Заповнює порожні клітинки Аркуш і Аркушів в основних написах' }
+    @{ Name = 'PDFALL'; Help = (Msg 'ribbon.pdfall') },
+    @{ Name = 'PDFNUM'; Help = (Msg 'ribbon.pdfnum') }
 )
-Add-Panel 'Нова рамка' 'PDFFRAME' @(
-    @{ Name = 'PDFLIST'; Text = 'Лист'; Help = 'Вставляє порожню рамку листа (A3) з основним написом і вписує марку' },
-    @{ Name = 'PDFSPEC'; Text = 'Специфікація'; Help = 'Вставляє порожню рамку специфікації (A4) з основним написом і вписує марку' }
+Add-Panel (Msg 'ribbon.frame-panel') 'PDFFRAME' @(
+    @{ Name = 'PDFLIST'; Text = (Msg 'ribbon.list'); Help = (Msg 'ribbon.list-help') },
+    @{ Name = 'PDFSPEC'; Text = (Msg 'ribbon.spec'); Help = (Msg 'ribbon.spec-help') }
 )
 $mg.RibbonRoot.RibbonTabSources.Add($tab)
 
