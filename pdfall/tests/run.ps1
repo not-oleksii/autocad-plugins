@@ -50,6 +50,21 @@ New-Item $plotters -ItemType Directory -Force | Out-Null
 $dxf = Get-ChildItem (Join-Path $PSScriptRoot '..\examples') -Filter '*.dxf' | Select-Object -First 1
 Copy-Item $dxf.FullName (Join-Path $Work 'sample.dxf')
 
+# LISP shared by both drawings: the texts reading some date in Model space, and whether a рамка has
+# the day's date.
+$dateLisp = @"
+(defun date-ents (s / ss i out)
+  (if (setq ss (ssget "_X" (list '(0 . "TEXT") (cons 1 s) '(410 . "Model"))))
+    (repeat (setq i (sslength ss)) (setq out (cons (ssname ss (setq i (1- i))) out))))
+  out)
+(defun date-count (s) (length (date-ents s)))
+(defun dated-p (r / ll ur)
+  (setq ll (pa:get 'll r) ur (pa:get 'ur r))
+  (vl-some '(lambda (e / p) (setq p (cdr (assoc 10 (entget e))))
+              (and (< (car ll) (car p) (car ur)) (< (cadr ll) (cadr p) (cadr ur))))
+           (date-ents (pa:today))))
+"@
+
 # AutoCAD script: forward slashes in paths.
 $w = $Work -replace '\\', '/'
 $c = $Contents -replace '\\', '/'
@@ -60,10 +75,16 @@ $scr = @"
 (setq *pdfall-home* "$($Contents -replace '\\', '\\')")
 (load "$c/pdfall.lsp")
 (setq *pdfall-merge* nil)
+$dateLisp
+;; Counts the рамки that have the day's date while they are plotted.
+(setq pa:plot0 pa:plot dated-plots 0)
+(defun pa:plot (r path) (if (dated-p r) (setq dated-plots (1+ dated-plots))) (pa:plot0 r path))
 PDFNUM
 (princ "SECOND-PDFNUM")
 PDFNUM
+(princ (strcat "\nOLD-BEFORE=" (itoa (date-count "11.09.2026"))))
 PDFALL
+(princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today))) " OLD-AFTER=" (itoa (date-count "11.09.2026"))))
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -88,6 +109,9 @@ Check ($pdfs.Count -eq 34) "34 PDFs on disk (found $($pdfs.Count))"
 Check (Test-Path (Join-Path $plotters 'PDFALL.pc3')) 'PDFALL.pc3 was copied into the Plotters folder'
 Check ($log -notmatch 'відкриється в переглядачі') 'PDFALL.pc3 was used in the same run'
 Check (Test-Path (Join-Path $exported 'К1\К1 лист 1 без заливки.pdf')) 'К1 лист 1 без заливки.pdf exists'
+$oldBefore = if ($log -match 'OLD-BEFORE=(\d+)') { [int]$Matches[1] } else { -1 }
+Check ($log -match 'DATED-PLOTS=34 ' ) 'every one of the 34 PDFs was plotted with the day''s date'
+Check ($oldBefore -gt 0 -and $log -match "TODAY-LEFT=0 OLD-AFTER=$oldBefore\b") "the $oldBefore dates already in the drawing are back as they were, and no new date is left"
 
 Write-Host 'merge.exe on the exported files...'
 $mergeOut = Join-Path $Work 'merge.txt'
@@ -171,6 +195,26 @@ $pasteScr = @"
       (if (and (cadddr c) (nth 4 (cadddr c)))
         (setq d (entget (nth 4 (cadddr c))) nums (1+ nums) mok (if (in-cell-p r d (cdr (assoc 11 d))) (1+ mok) mok)))))
   (princ (strcat "\nNAMES=" (itoa nok) "/" (itoa names) " NUMS=" (itoa mok) "/" (itoa nums))))
+$dateLisp
+(defun dates (/ dated warnings n ok head d)
+  (setq n 0 ok 0)
+  (pa:date-add (car (pa:read-drawing)))
+  (foreach r (car (pa:read-drawing))
+    (setq head (pa:date-head r))
+    (foreach z (pa:get 'zone r)
+      (if (and (= (cadddr z) (pa:today)) (nth 4 z))
+        (progn
+          (setq d (entget (nth 4 z)) n (1+ n))
+          (princ (strcat "\nDATE-AT " (pa:get 'kind r) " " (rtos (car z) 2 1) "," (rtos (cadr z) 2 1) " head " (rtos (car head) 2 1) "," (rtos (cadr head) 2 1)))
+          (if (and (in-cell-p r d (cdr (assoc 11 d)))
+                   (equal (cdr (assoc 40 d)) 2.0 0.001)
+                   (< (abs (- (car z) (car head))) 5.0)
+                   (if (< (cadr head) 15.0) (< (+ (cadr head) 7.5) (cadr z) (+ (cadr head) 12.5)) (< (- (cadr head) 7.5) (cadr z) (- (cadr head) 2.5))))
+            (setq ok (1+ ok)))))))
+  (pa:date-remove)
+  (princ (strcat "\nDATES=" (itoa ok) "/" (itoa n) " DATE-WARNINGS=" (itoa (length warnings)) " LEFT=" (itoa (date-count (pa:today))))))
+(setq pa:plot0 pa:plot dated-plots 0)
+(defun pa:plot (r path) (if (dated-p r) (setq dated-plots (1+ dated-plots))) (pa:plot0 r path))
 (tpaste "PDFLIST" "1ЧП" 2 "PDFALL_list.dwg")
 1000,1000
 1500,1000
@@ -184,10 +228,13 @@ $pasteScr = @"
 PDFNUM
 (slant)
 (centred)
+(dates)
+(princ (strcat "\nTODAY=" (pa:today) "|"))
 (command "_.-LAYER" "_M" "Цвет" "")
 (command "_.SAVEAS" "2018" "$($pasteDir -replace '\\', '/')/paste.dwg")
 PDFALL
-(princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner)))))
+(princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today)))))
+(princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner dated)))))
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -207,7 +254,11 @@ Check ($plog -match 'NAMES=5/5\b') 'the name text fills its cell and is centred 
 Check ($plog -match 'NUMS=4/4\b') 'PDFNUM centres the 4 numbers it wrote in their cells'
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
-Check ($plog -match 'LEAKED=nil') 'the reader keeps its texts and lines to itself'
+Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
+Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
+$today = Get-Date -Format 'dd.MM.yy'
+Check ($plog -match "TODAY=$([regex]::Escape($today))\|") "the date reads dd.mm.yy ($today)"
+Check ($plog -match 'DATED-PLOTS=7 TODAY-LEFT=0') 'all 7 PDFs of the pasted рамки were plotted with the date, and the drawing has none left'
 
 # The real command, ended by Esc (0x1B), which also ends the script.
 $esc = [string][char]27

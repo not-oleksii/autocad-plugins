@@ -46,6 +46,10 @@
     "pdfall.no-merge": "{path} не знайдено, тому нічого не зібрано. Запустіть install.bat ще раз.",
     "pdfall.no-pc3": "{pc3} немає в {plotters}, тож кожен PDF відкриється в переглядачі. Скопіюйте його туди з {home}.",
 
+    "date.no-cell": "{marka}: не знайдено клітинку під заголовком Дата, тому PDF без дати  ({where})",
+    "date.occupied": "{marka}: у клітинці Дата написано '{text}', а не дату, тому PDF без дати  ({where})",
+    "date.in-block": "{marka}: дату в клітинці Дата не замінено, бо вона є частиною блока, тож у PDF стара дата  ({where})",
+
     "pdfnum.sheet": "Аркуш {n}",
     "pdfnum.total": "Аркушів {n}",
     "pdfnum.number-used": "{marka}: Аркуш залишено порожнім, бо інша рамка {kind} вже має {n}  ({where})",
@@ -137,6 +141,7 @@
     "sheet": "Аркуш",
     "total": "Аркушів",
     "corner": "Арк.",
+    "date": "Дата",
     "not-names": ["Аркуш", "Аркушів", "Арк.", "Лист", "Листів", "Масштаб", "Маса", "Літера", "Стадія"],
     "placeholder": "МАРКА",
     "lookalike-latin": "ABCEHIKMOPTXYaceiopxy",
