@@ -50,6 +50,16 @@
         (if (or (null right) (< (car s) right)) (setq right (car s))))))
   (if (and left right) (/ (+ left right) 2.0) x))
 
+(defun pa:cell-y (rows x y / below above)
+  ;; The middle of the title-block cell around y at x, from its edge lines; y if none are found, or
+  ;; if they are too far apart to be one cell.
+  (foreach s rows
+    (if (<= (cadr s) x (caddr s))
+      (if (< (car s) y)
+        (if (or (null below) (> (car s) below)) (setq below (car s)))
+        (if (or (null above) (< (car s) above)) (setq above (car s))))))
+  (if (and below above (< (- above below) 20.0)) (/ (+ below above) 2.0) y))
+
 (defun pa:fill-cell (r cell n style / f z x y d e)
   ;; Writes number n into the empty cell. Returns nil when it can't.
   (setq f (pa:get 'frame r)
@@ -61,12 +71,14 @@
       (progn
         (setq d (entget e))
         (entmod (subst (cons 1 (strcat (cdr (assoc 1 d)) " " (itoa n))) (assoc 1 d) d))))
-    ;; On a специфікація it goes in the cell under the label: 5 mm lower, 7.5 mm in the corner cell.
+    ;; On a специфікація it goes in the middle of the cell under the label, the cell found around
+    ;; the point 5 mm below the label (7.5 mm in the corner cell); at that point if its edges aren't.
     ;; x and y are measured from the рамка's bottom-right corner until the text is made.
     (progn
       (setq y (- (cadr z) (if (= (car cell) 'corner) 7.5 5.0))
-            x (+ (pa:cell-x (pa:get 'cells r) (car z) y) (caddr f))
-            y (+ y (cadr f)))
+            x (pa:cell-x (pa:get 'cells r) (car z) y)
+            y (+ (pa:cell-y (pa:get 'rows r) x y) (cadr f))
+            x (+ x (caddr f)))
       (entmake (append (list '(0 . "TEXT") (list 10 x y 0.0) (list 11 x y 0.0) '(72 . 1) '(73 . 2)
                              (cons 1 (itoa n)))
                        (cond (style) ((pa:label-style z (pa:get 'zone r)))))))))

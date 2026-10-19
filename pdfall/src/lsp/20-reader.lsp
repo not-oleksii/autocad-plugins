@@ -6,10 +6,11 @@
 ;;;
 ;;; A record is one рамка:
 ;;;   ((kind . "list"|"spec") (ll x y 0) (ur x y 0) (frame llx lly urx ury)
-;;;    (marka . s) (sheet . n) (total . n) (zone ...) (counters ...) (cells ...))
+;;;    (marka . s) (sheet . n) (total . n) (zone ...) (counters ...) (cells ...) (rows ...))
 ;;; zone holds the texts of its title block as (x y comparable as-typed owner), counters its
-;;; Аркуш, Аркушів and Арк. cells as pa:title-cells returns them, cells the short vertical lines
-;;; around it as (x y1 y2); x and y are measured from the рамка's bottom-right corner.
+;;; Аркуш, Аркушів and Арк. cells as pa:title-cells returns them, cells the vertical cell edges
+;;; around it as (x y1 y2) and rows the horizontal ones as (y x1 x2); x and y are measured from
+;;; the рамка's bottom-right corner.
 ;;; owner is the TEXT or MTEXT entity when it sits directly in Model space (so PDFNUM can edit it),
 ;;; nil when it is inside a block.
 
@@ -74,7 +75,7 @@
   out)
 
 ;;; ---- Collecting Model space -------------------------------------------------
-;;; Fills hsegs, vsegs, cellsegs and texts, which are local to pa:read-drawing.
+;;; Fills hsegs, vsegs, cellsegs, rowsegs and texts, which are local to pa:read-drawing.
 
 (defun pa:add-seg (p q / dx dy)
   (setq dx (abs (- (car q) (car p))) dy (abs (- (cadr q) (cadr p))))
@@ -83,9 +84,11 @@
      (setq hsegs (cons (list (min (car p) (car q)) (max (car p) (car q)) (cadr p)) hsegs)))
     ((and (< dx *pa-tol*) (pa:near dy 297.0))
      (setq vsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) vsegs)))
-    ;; short vertical lines: the cell edges of title blocks, used by PDFNUM to centre numbers
+    ;; shorter lines: the cell edges of title blocks, used by PDFNUM to centre numbers
     ((and (< dx *pa-tol*) (< 2.0 dy 60.0))
-     (setq cellsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) cellsegs)))))
+     (setq cellsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) cellsegs)))
+    ((and (< dy *pa-tol*) (< 2.0 dx 419.0))
+     (setq rowsegs (cons (list (cadr p) (min (car p) (car q)) (max (car p) (car q))) rowsegs)))))
 
 (defun pa:pt (m p) (pa:apply m (car p) (cadr p)))
 
@@ -217,10 +220,18 @@
   (vl-remove-if '(lambda (z) (> (cadr z) top)) all))
 
 (defun pa:cells (f / out)
-  ;; The cell edges around a рамка's title block, measured like its zone.
+  ;; The vertical cell edges around a рамка's title block, as (x y1 y2) measured like its zone.
   (foreach s cellsegs
     (setq s (list (- (car s) (caddr f)) (- (cadr s) (cadr f)) (- (caddr s) (cadr f))))
     (if (and (<= -222.0 (car s) 30.0) (<= -10.0 (caddr s)) (<= (cadr s) 60.0))
+      (setq out (cons s out))))
+  out)
+
+(defun pa:rows (f / out)
+  ;; The horizontal cell edges around a рамка's title block, as (y x1 x2) measured like its zone.
+  (foreach s rowsegs
+    (setq s (list (- (car s) (cadr f)) (- (cadr s) (caddr f)) (- (caddr s) (caddr f))))
+    (if (and (<= -10.0 (car s) 65.0) (<= -230.0 (caddr s)) (<= (cadr s) 30.0))
       (setq out (cons s out))))
   out)
 
@@ -264,7 +275,7 @@
 (defun pa:get (key r) (cdr (assoc key r)))
 (defun pa:put (key val r) (subst (cons key val) (assoc key r) r))
 
-(defun pa:read-drawing (/ texts hsegs vsegs cellsegs pa-owner frames kind zone counters title names r
+(defun pa:read-drawing (/ texts hsegs vsegs cellsegs rowsegs pa-owner frames kind zone counters title names r
                           records problems)
   ;; Walks Model space and reads every рамка's title block. Returns (records problems): one record
   ;; per рамка with a readable марка, and (message . record) for every рамка without one, in the
@@ -289,7 +300,8 @@
                   (cons 'total (caddr title))
                   (cons 'zone zone)
                   (cons 'counters counters)
-                  (cons 'cells (pa:cells f))))
+                  (cons 'cells (pa:cells f))
+                  (cons 'rows (pa:rows f))))
     (cond
       ((null names) (setq problems (cons (cons (pa:msg "reader.no-marka" nil) r) problems)))
       ((vl-some '(lambda (x) (/= (car x) (caar names))) names)

@@ -148,6 +148,29 @@ $pasteScr = @"
       (setq n (1+ n) up (if (< (abs (cdr (assoc 51 d))) 0.01) (1+ up) up)
             tall (if (< (abs (- (cdr (assoc 40 d)) 9.0)) 0.1) (1+ tall) tall))))
   (princ (strcat "\nNUMBERS=" (itoa n) " UPRIGHT=" (itoa up) " TALL=" (itoa tall))))
+(defun edge (lines v w / lo hi)
+  (foreach s lines
+    (if (<= (cadr s) w (caddr s))
+      (if (< (car s) v) (if (or (null lo) (> (car s) lo)) (setq lo (car s))) (if (or (null hi) (< (car s) hi)) (setq hi (car s))))))
+  (if (and lo hi) (list lo hi)))
+(defun mid-p (v e) (and e (< (abs (- v (/ (+ (car e) (cadr e)) 2.0))) 0.05)))
+(defun in-cell-p (r d p / x y hx vy)
+  (setq x (- (car p) (caddr (pa:get 'frame r))) y (- (cadr p) (cadr (pa:get 'frame r)))
+        hx (edge (pa:get 'cells r) x y) vy (edge (pa:get 'rows r) y x))
+  (cond
+    ((and (mid-p x hx) (mid-p y vy)
+          (or (= (cdr (assoc 0 d)) "TEXT") (and (= (cdr (assoc 71 d)) 5) (< (abs (- (cdr (assoc 41 d)) (- (cadr hx) (car hx)))) 0.05)))))
+    (T (princ (strcat "\nOFF-CENTRE " (pa:get 'kind r) " " (cdr (assoc 0 d)) " at " (rtos x 2 2) "," (rtos y 2 2) " cell x " (vl-princ-to-string hx) " y " (vl-princ-to-string vy) " 71=" (vl-princ-to-string (cdr (assoc 71 d))) " 41=" (vl-princ-to-string (cdr (assoc 41 d))))) nil)))
+(defun centred (/ names nok nums mok d)
+  (setq names 0 nok 0 nums 0 mok 0)
+  (foreach r (car (pa:read-drawing))
+    (foreach z (pa:get 'zone r)
+      (if (and (wcmatch (caddr z) "*Джгут*") (nth 4 z))
+        (setq d (entget (nth 4 z)) names (1+ names) nok (if (in-cell-p r d (cdr (assoc 10 d))) (1+ nok) nok))))
+    (foreach c (pa:get 'counters r)
+      (if (and (cadddr c) (nth 4 (cadddr c)))
+        (setq d (entget (nth 4 (cadddr c))) nums (1+ nums) mok (if (in-cell-p r d (cdr (assoc 11 d))) (1+ mok) mok)))))
+  (princ (strcat "\nNAMES=" (itoa nok) "/" (itoa names) " NUMS=" (itoa mok) "/" (itoa nums))))
 (tpaste "PDFLIST" "1ЧП" 2 "PDFALL_list.dwg")
 1000,1000
 1500,1000
@@ -160,10 +183,11 @@ $pasteScr = @"
 (decoy)
 PDFNUM
 (slant)
+(centred)
 (command "_.-LAYER" "_M" "Цвет" "")
 (command "_.SAVEAS" "2018" "$($pasteDir -replace '\\', '/')/paste.dwg")
 PDFALL
-(princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs pa-owner)))))
+(princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner)))))
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -179,6 +203,8 @@ Check ($plog -match 'К1 специфікація 3: Аркуш 3') 'PDFNUM numb
 Check ($plog -match 'NUMBERS=[1-9]\d* UPRIGHT=0') 'the numbers PDFNUM wrote lean 15 degrees like the title block'
 # A 9 mm "7" under the "Арк." column of a changes table is not a sheet number, so PDFNUM must not copy its look.
 Check ($plog -match 'DECOY=1' -and $plog -match 'TALL=1\b') 'PDFNUM ignores a number in the changes table''s Арк. column'
+Check ($plog -match 'NAMES=5/5\b') 'the name text fills its cell and is centred in it, in all 5 pasted рамки'
+Check ($plog -match 'NUMS=4/4\b') 'PDFNUM centres the 4 numbers it wrote in their cells'
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader keeps its texts and lines to itself'
