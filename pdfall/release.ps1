@@ -56,7 +56,8 @@ function Invoke-Step($what, [scriptblock]$run) {
     & $run
     if ($LASTEXITCODE -ne 0) { throw "$what failed" }
 }
-function Git { $out = & git @args; if ($LASTEXITCODE -ne 0) { throw "git $args failed" }; $out }
+# Named apart from git: PowerShell names ignore case, so a function Git would call itself.
+function Invoke-Git { $out = & git.exe @args; if ($LASTEXITCODE -ne 0) { throw "git $args failed" }; $out }
 
 if ($Prepare) {
     if ($Prepare -notmatch '^\d+\.\d+\.\d+$') { throw "the version must be <major>.<minor>.<patch>, e.g. 1.8.0" }
@@ -86,10 +87,10 @@ Write-Host "Releasing PDFALL $version as $tag$(if ($DryRun) { ' (dry run)' })"
 # 1. Where it is released from: exactly what is on GitHub's main.
 Push-Location $PSScriptRoot
 try {
-    if ((Git rev-parse --abbrev-ref HEAD) -ne 'main') { throw 'switch to main first' }
-    if (Git status --porcelain) { throw 'the working tree has uncommitted changes' }
-    Git fetch --quiet --tags origin | Out-Null
-    if ((Git rev-parse HEAD) -ne (Git rev-parse origin/main)) { throw 'main is not equal to origin/main; pull or push first' }
+    if ((Invoke-Git rev-parse --abbrev-ref HEAD) -ne 'main') { throw 'switch to main first' }
+    if (Invoke-Git status --porcelain) { throw 'the working tree has uncommitted changes' }
+    Invoke-Git fetch --quiet --tags origin | Out-Null
+    if ((Invoke-Git rev-parse HEAD) -ne (Invoke-Git rev-parse origin/main)) { throw 'main is not equal to origin/main; pull or push first' }
     & git rev-parse -q --verify "refs/tags/$tag" | Out-Null
     if ($LASTEXITCODE -eq 0) { throw "tag $tag already exists; raise the version with -Prepare" }
 }
@@ -121,8 +122,8 @@ if ($DryRun) { Write-Host 'Dry run: nothing tagged or published.'; return }
 # 5. Tag, push the tag, publish.
 Push-Location $PSScriptRoot
 try {
-    Git tag -a $tag -m "PDFALL $version" | Out-Null
-    Git push --quiet origin "refs/tags/$tag" | Out-Null
+    Invoke-Git tag -a $tag -m "PDFALL $version" | Out-Null
+    Invoke-Git push --quiet origin "refs/tags/$tag" | Out-Null
 }
 finally { Pop-Location }
 Write-Host "== Tagged and pushed $tag"
