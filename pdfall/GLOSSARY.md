@@ -9,7 +9,7 @@ The code that names one blueprint set, such as 1ЖП, 1П, 2П, К1 or X1A1Р. E
 _Avoid_: blueprint, project, code
 
 **Лист**:
-One numbered drawing sheet of a марка. A sheet with no number in its name is лист 1.
+One numbered drawing sheet of a марка. The file is `<марка> лист NN.pdf`. A file with no number in its name is read as лист 1.
 _Avoid_: page, drawing
 
 **Без заливки**:
@@ -49,9 +49,9 @@ The title block cell that holds the date: in the Дата column, in the row bel
 _Avoid_: date field, date stamp
 
 **Загальний**:
-The combined document of a марка: every filled лист in order, followed by every специфікація in order.
+The combined document of a марка: every filled лист in order, followed by every специфікація in order. Its file is `<марка> загальний.pdf`.
 _Avoid_: merged, combined, full set
 
 **Загальний друк**:
-The combined print document of a марка: every лист без заливки in order, followed by every специфікація in order.
+The combined print document of a марка: every лист без заливки in order, followed by every специфікація in order. Its file is `<марка> загальний друк.pdf`.
 _Avoid_: print set, merged print

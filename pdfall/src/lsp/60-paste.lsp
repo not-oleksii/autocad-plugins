@@ -18,8 +18,11 @@
                                       (pa:msg "paste.marka-last" (list "marka" *pdfall-marka*))
                                       (pa:msg "paste.marka" nil)))))
     (if (and (= s "") *pdfall-marka*) (setq s *pdfall-marka*))
-    (if (not (pa:marka-p s))
-      (progn (princ (strcat "\n  " (pa:msg "paste.marka-bad" nil))) (setq s nil))))
+    (cond
+      ((not (pa:marka-p s))
+       (princ (strcat "\n  " (pa:msg "paste.marka-bad" nil))) (setq s nil))
+      ((pa:bad-char s)
+       (princ (strcat "\n  " (pa:msg "paste.marka-char" (list "char" (pa:bad-char s))))) (setq s nil))))
   (setq *pdfall-marka* s))
 
 (defun pa:paste-start ()
