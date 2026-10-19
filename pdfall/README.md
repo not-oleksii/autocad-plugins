@@ -8,7 +8,7 @@ Works with AutoCAD 2024 and later. No Python or admin rights needed.
 
 1. Close AutoCAD.
 2. Unzip `PDFALL.zip` anywhere and double-click `install.bat`.
-3. Start AutoCAD. The command line shows `PDFALL 1.4.0 завантажено`, and the ribbon has a **PDFALL** tab with PDFALL and PDFNUM buttons and, under *Нова рамка*, Лист and Специфікація buttons.
+3. Start AutoCAD. The command line shows `PDFALL 1.3.0 завантажено`, and the ribbon has a **PDFALL** tab with PDFALL and PDFNUM buttons.
 
 To update, run the new `install.bat` the same way. To remove, run `uninstall.bat`.
 
@@ -28,18 +28,6 @@ The PDFs go next to the drawing:
                                     1ЧП Загальний.pdf
                                     1ЧП Загальний друк.pdf
 ```
-
-## Paste an empty рамка: PDFLIST and PDFSPEC
-
-Click **Лист** or **Специфікація** on the ribbon (or type `PDFLIST` / `PDFSPEC`) to paste an empty рамка with its title block into Model space.
-
-1. Type the марка, exactly as it should read in the title block (e.g. `1ЧП`). Press Enter to reuse the last one.
-2. For a специфікація, choose `Перший` or `Наступний` аркуш. The first has the Аркуш/Аркушів cells, a later one has the small Арк. cell. After a специфікація of the same марка the default is `Наступний`, and within one run every аркуш after the first is a `Наступний`.
-3. Click where the **lower-left corner** of the рамка goes. The рамка follows the cursor, so object snaps work. Click again for the next one, and press Esc when you're done.
-
-The name cell gets `Джгут <марка>` (a лист also `Складальне креслення`). Аркуш and Аркушів stay empty for `PDFNUM`, and `U` undoes the last pasted рамка. The рамка is pasted exploded, on the same layers as the sample drawing, so it is found by `PDFNUM` and `PDFALL` like one drawn by hand. It needs the World UCS and the Model tab.
-
-The templates are `PDFALL_list.dwg`, `PDFALL_spec1.dwg` and `PDFALL_spec2.dwg` in `PDFALL.bundle\Contents`. To change the title block, edit those files in AutoCAD, but keep the `МАРКА` text of the name cell, the рамка's lower-left corner at the DWG's origin, and its 420x297 or 210x297 size.
 
 ## Fill in Аркуш and Аркушів: PDFNUM
 
@@ -76,16 +64,14 @@ The layer states are restored afterwards, and the drawing is saved before plotti
 ## Developing
 
 ```
-src\pdfall.lsp            the PDFALL, PDFNUM, PDFLIST and PDFSPEC commands
+src\pdfall.lsp            the PDFALL and PDFNUM commands
 src\merge_blueprints.py   builds Загальний and Загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle
-src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with AutoCAD's own AcCui.dll
-src\templates\*.dwg       the empty рамки that PDFLIST and PDFSPEC paste
-src\make_templates.ps1    cuts those templates out of examples\*.dxf (only when the sample's title blocks change)
+srcibbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with AutoCAD's own AcCui.dll
 src\install.ps1           what install.bat and uninstall.bat run
 build.bat                 builds dist\PDFALL.zip
-tests\run.ps1             runs the built PDFNUM, PDFALL, merge.exe, PDFLIST and PDFSPEC without opening AutoCAD
+tests\run.ps1             runs the built PDFNUM, PDFALL and merge.exe on examples\ without opening AutoCAD
 tests\install.ps1         tests the installer against a fake copy of the AutoCAD settings
 merge.bat, check.bat      run the Python merge by hand (check.bat only reports problems)
 ```

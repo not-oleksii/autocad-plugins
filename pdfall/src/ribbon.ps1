@@ -1,5 +1,5 @@
-﻿# Builds PDFALL.cuix, the partial menu that adds a "PDFALL" ribbon tab with PDFALL, PDFNUM,
-# PDFLIST and PDFSPEC buttons, and the buttons' icons. It uses AutoCAD's own customization library (AcCui.dll), so
+﻿# Builds PDFALL.cuix, the partial menu that adds a "PDFALL" ribbon tab with PDFALL and PDFNUM
+# buttons, and the buttons' icons. It uses AutoCAD's own customization library (AcCui.dll), so
 # the file is written exactly as AutoCAD's CUI editor would write it.
 # build.bat runs it: powershell -File src\ribbon.ps1 -Out dist\PDFALL.bundle\Contents
 param(
@@ -12,8 +12,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 New-Item $Out -ItemType Directory -Force | Out-Null
 
-# A page with a coloured band and a short label: PDF for PDFALL, 1 2 for PDFNUM, A3 and A4 for
-# PDFLIST and PDFSPEC.
+# A page with a coloured band and a short label: PDF for PDFALL, 1 2 for PDFNUM.
 function New-Icon($name, $size, $label, $color) {
     $bmp = New-Object Drawing.Bitmap $size, $size
     $g = [Drawing.Graphics]::FromImage($bmp)
@@ -43,10 +42,6 @@ New-Icon 'PDFALL_16.png' 16 'PDF' ([Drawing.Color]::FromArgb(200, 40, 40))
 New-Icon 'PDFALL_32.png' 32 'PDF' ([Drawing.Color]::FromArgb(200, 40, 40))
 New-Icon 'PDFNUM_16.png' 16 '1 2' ([Drawing.Color]::FromArgb(40, 90, 180))
 New-Icon 'PDFNUM_32.png' 32 '1 2' ([Drawing.Color]::FromArgb(40, 90, 180))
-New-Icon 'PDFLIST_16.png' 16 'A3' ([Drawing.Color]::FromArgb(40, 140, 70))
-New-Icon 'PDFLIST_32.png' 32 'A3' ([Drawing.Color]::FromArgb(40, 140, 70))
-New-Icon 'PDFSPEC_16.png' 16 'A4' ([Drawing.Color]::FromArgb(210, 120, 30))
-New-Icon 'PDFSPEC_32.png' 32 'A4' ([Drawing.Color]::FromArgb(210, 120, 30))
 
 $C = 'Autodesk.AutoCAD.Customization'
 $cs = New-Object "$C.CustomizationSection"
@@ -55,49 +50,42 @@ $mg = $cs.MenuGroup
 $macros = New-Object "$C.MacroGroup" 'PDFALLMacros', $mg
 if (-not $mg.MacroGroups.Contains($macros)) { $mg.MacroGroups.Add($macros) | Out-Null }
 
+$buttons = @(
+    @{ Name = 'PDFALL'; Help = 'Друкує всі листи та специфікації креслення в PDF і збирає Загальний та Загальний друк' },
+    @{ Name = 'PDFNUM'; Help = 'Заповнює порожні клітинки Аркуш і Аркушів в основних написах' }
+)
+
+$panel = New-Object "$C.RibbonPanelSource" $mg.RibbonRoot
+$panel.Text = 'PDF'
+$panel.Name = 'PDFALL'
+# Fixed IDs, so a rebuilt file is the same tab to AutoCAD and not a new one.
+$panel.ElementID = 'RBN_PDFALL_PANEL'
+$row = New-Object "$C.RibbonRow" $panel
+$row.ElementID = 'RBN_PDFALL_ROW'
+$panel.Items.Add($row)
+foreach ($b in $buttons) {
+    $macro = $macros.CreateMenuMacro($b.Name, "^C^C$($b.Name) ", "ID_$($b.Name)")
+    $macro.macro.HelpString = $b.Help
+    $macro.macro.CLICommand = $b.Name
+    $button = New-Object "$C.RibbonCommandButton" $row
+    $button.Text = $b.Name
+    $button.ElementID = "RBN_$($b.Name)_BUTTON"
+    $button.ButtonStyle = 'LargeWithText'
+    $button.MacroID = $macro.ElementID
+    $button.TooltipTitle = $b.Name
+    $row.Items.Add($button)
+}
+$mg.RibbonRoot.RibbonPanelSources.Add($panel)
+
 $tab = New-Object "$C.RibbonTabSource" $mg.RibbonRoot
 $tab.Text = 'PDFALL'
 $tab.Name = 'PDFALL'
 $tab.ElementID = 'RBN_PDFALL_TAB'
 $tab.KeyTip = 'PD'
-
-# One panel of large buttons on the tab. Fixed IDs, so a rebuilt file is the same tab to AutoCAD
-# and not a new one. A button's Name is its command, Text what it says.
-function Add-Panel($text, $idPrefix, $buttons) {
-    $panel = New-Object "$C.RibbonPanelSource" $mg.RibbonRoot
-    $panel.Text = $text
-    $panel.Name = $idPrefix
-    $panel.ElementID = "RBN_$($idPrefix)_PANEL"
-    $row = New-Object "$C.RibbonRow" $panel
-    $row.ElementID = "RBN_$($idPrefix)_ROW"
-    $panel.Items.Add($row)
-    foreach ($b in $buttons) {
-        $macro = $macros.CreateMenuMacro($b.Name, "^C^C$($b.Name) ", "ID_$($b.Name)")
-        $macro.macro.HelpString = $b.Help
-        $macro.macro.CLICommand = $b.Name
-        $button = New-Object "$C.RibbonCommandButton" $row
-        $button.Text = if ($b.Text) { $b.Text } else { $b.Name }
-        $button.ElementID = "RBN_$($b.Name)_BUTTON"
-        $button.ButtonStyle = 'LargeWithText'
-        $button.MacroID = $macro.ElementID
-        $button.TooltipTitle = $b.Name
-        $row.Items.Add($button)
-    }
-    $mg.RibbonRoot.RibbonPanelSources.Add($panel)
-    $ref = New-Object "$C.RibbonPanelSourceReference" $tab
-    $ref.ElementID = "RBN_$($idPrefix)_PANEL_REF"
-    $ref.PanelId = $panel.ElementID
-    $tab.Items.Add($ref)
-}
-
-Add-Panel 'PDF' 'PDFALL' @(
-    @{ Name = 'PDFALL'; Help = 'Друкує всі листи та специфікації креслення в PDF і збирає Загальний та Загальний друк' },
-    @{ Name = 'PDFNUM'; Help = 'Заповнює порожні клітинки Аркуш і Аркушів в основних написах' }
-)
-Add-Panel 'Нова рамка' 'PDFFRAME' @(
-    @{ Name = 'PDFLIST'; Text = 'Лист'; Help = 'Вставляє порожню рамку листа (A3) з основним написом і вписує марку' },
-    @{ Name = 'PDFSPEC'; Text = 'Специфікація'; Help = 'Вставляє порожню рамку специфікації (A4) з основним написом і вписує марку' }
-)
+$ref = New-Object "$C.RibbonPanelSourceReference" $tab
+$ref.ElementID = 'RBN_PDFALL_PANEL_REF'
+$ref.PanelId = $panel.ElementID
+$tab.Items.Add($ref)
 $mg.RibbonRoot.RibbonTabSources.Add($tab)
 
 $path = Join-Path $Out 'PDFALL.cuix'
