@@ -132,7 +132,7 @@ $pasteScr = @"
   (princ (strcat "\nCLAYER=" (getvar "CLAYER"))))
 (defun decoy (/ r z f p)
   (foreach x (car (pa:read-drawing))
-    (if (= (pa:get 'kind x) "специфікація")
+    (if (= (pa:get 'kind x) "spec")
       (foreach y (pa:get 'zone x)
         (if (and (null z) (equal (pa:words (caddr y)) '("Арк.")) (< (car y) -25.0)) (setq z y r x)))))
   (if z

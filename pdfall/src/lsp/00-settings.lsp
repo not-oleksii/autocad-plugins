@@ -32,7 +32,6 @@
 (setq *pdfall-devices* '("PDFALL.pc3" "AutoCAD PDF (General Documentation).pc3"))
 (setq *pdfall-paper-sheet* "ISO full bleed A3 (420.00 x 297.00 MM)")
 (setq *pdfall-paper-spec* "ISO full bleed A4 (210.00 x 297.00 MM)")
-(setq *pdfall-folder* "exported files")
 
 ;; The folder holding pdfall.lsp, merge.exe and PDFALL.pc3: the installed PDFALL.bundle\Contents.
 ;; Set it before loading this file to run PDFALL from another folder.

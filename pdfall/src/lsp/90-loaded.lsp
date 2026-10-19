@@ -1,5 +1,4 @@
 ;;; ---- Loaded -----------------------------------------------------------------
 
-(princ (strcat "\nPDFALL " *pdfall-version* " завантажено. PDFALL друкує всі листи й специфікації в PDF,"))
-(princ " PDFNUM заповнює порожні клітинки Аркуш/Аркушів, PDFLIST і PDFSPEC вставляють порожню рамку листа й специфікації.")
+(princ (strcat "\n" (pa:msg "loaded" (list "version" *pdfall-version*))))
 (princ)

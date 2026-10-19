@@ -5,7 +5,7 @@
 ;;;   pa:markas pa:of  the марки of the records, and the records of one kind of one марка
 ;;;
 ;;; A record is one рамка:
-;;;   ((kind . "лист"|"специфікація") (ll x y 0) (ur x y 0) (frame llx lly urx ury)
+;;;   ((kind . "list"|"spec") (ll x y 0) (ur x y 0) (frame llx lly urx ury)
 ;;;    (marka . s) (sheet . n) (total . n) (zone ...) (counters ...) (cells ...))
 ;;; zone holds the texts of its title block as (x y comparable as-typed owner), counters its
 ;;; Аркуш, Аркушів and Арк. cells as pa:title-cells returns them, cells the short vertical lines
@@ -209,8 +209,8 @@
     (if (and (<= -192.0 (car v) 0.0) (<= 0.0 (cadr v) 60.0))
       (setq all (cons v all))))
   ;; The title block is 55 mm high on a лист, 40 mm on a первый аркуш специфікації, 15 mm after that.
-  (setq top (cond ((= kind "лист") 60.0)
-                  ((vl-some '(lambda (z) (and (<= (cadr z) 45.0) (= (car (pa:words (caddr z))) "Аркушів")))
+  (setq top (cond ((= kind "list") 60.0)
+                  ((vl-some '(lambda (z) (and (<= (cadr z) 45.0) (= (car (pa:words (caddr z))) (pa:label "total"))))
                             all)
                    45.0)
                   (T 20.0)))
@@ -224,27 +224,26 @@
       (setq out (cons s out))))
   out)
 
-(defun pa:title-cells (zone / w o out)
+(defun pa:title-cells (zone / roles w role o out)
   ;; The counter cells of a title block, as (role label n entry):
   ;;   role   sheet (Аркуш), total (Аркушів) or corner (Арк. on a later аркуш of a специфікація)
   ;;   label  the zone entry of the label
   ;;   n      the number in the cell, nil when it is empty
   ;;   entry  the zone entry of the number when it is written under the label; nil when it follows
   ;;          the label in the same text, as PDFNUM writes it on a лист ("Аркуш 2")
+  (setq roles (list (cons (pa:label "sheet") 'sheet) (cons (pa:label "total") 'total)
+                    (cons (pa:label "corner") 'corner)))
   (foreach z zone
-    (setq w (pa:words (car (pa:split (caddr z) "\n"))))
+    (setq w (pa:words (car (pa:split (caddr z) "\n")))
+          role (cdr (assoc (car w) roles)))
     (cond
-      ((and (member (car w) '("Аркуш" "Аркушів")) (pa:digits-p (cadr w)))
-       (setq out (cons (list (if (= (car w) "Аркуш") 'sheet 'total) z (atoi (cadr w)) nil) out)))
-      ((or (equal w '("Аркуш")) (equal w '("Аркушів"))
-           ;; only the sheet-number cell in the corner, not the "Арк." column of the changes table
-           (and (equal w '("Арк.")) (> (car z) -25.0)))
+      ((and (member role '(sheet total)) (pa:digits-p (cadr w)))
+       (setq out (cons (list role z (atoi (cadr w)) nil) out)))
+      ((and role (null (cdr w))
+            ;; only the sheet-number cell in the corner, not the "Арк." column of the changes table
+            (or (/= role 'corner) (> (car z) -25.0)))
        (setq o (pa:below-entry z zone)
-             out (cons (list (cdr (assoc (car w) '(("Аркуш" . sheet) ("Аркушів" . total) ("Арк." . corner))))
-                             z
-                             (if o (atoi (caddr o)))
-                             o)
-                       out)))))
+             out (cons (list role z (if o (atoi (caddr o))) o) out)))))
   (reverse out))
 
 (defun pa:read-title (zone counters / w names sheet total)
@@ -255,7 +254,7 @@
   (foreach z zone
     (setq w (pa:words (car (pa:split (caddr z) "\n"))))
     (if (and (cadr w)
-             (not (member (car w) '("Аркуш" "Аркушів" "Арк." "Лист" "Листів" "Масштаб" "Маса" "Літера")))
+             (not (member (car w) (pa:label "not-names")))
              (pa:marka-p (cadr w)))
       (setq names (cons (list (cadr w) (cadr (pa:words (car (pa:split (cadddr z) "\n"))))) names))))
   (list names sheet total))
@@ -273,10 +272,9 @@
   (pa:walk-model)
   (setq frames (pa:find-frames))
   (if (null frames)
-    (setq problems
-      (list (cons "у Model space немає жодної рамки (штрихпунктирної межі 420x297 або 210x297)" nil))))
+    (setq problems (list (cons (pa:msg "reader.no-frames" nil) nil))))
   (foreach f frames
-    (setq kind (if (pa:near (- (caddr f) (car f)) 420.0) "лист" "специфікація")
+    (setq kind (if (pa:near (- (caddr f) (car f)) 420.0) "list" "spec")
           zone (pa:title-zone f kind)
           counters (pa:title-cells zone)
           title (pa:read-title zone counters)
@@ -293,11 +291,11 @@
                   (cons 'counters counters)
                   (cons 'cells (pa:cells f))))
     (cond
-      ((null names) (setq problems (cons (cons "в основному написі не знайдено марку" r) problems)))
+      ((null names) (setq problems (cons (cons (pa:msg "reader.no-marka" nil) r) problems)))
       ((vl-some '(lambda (x) (/= (car x) (caar names))) names)
        (setq problems
-         (cons (cons (strcat "в основному написі кілька марок: "
-                             (apply 'strcat (mapcar '(lambda (x) (strcat (cadr x) " ")) names)))
+         (cons (cons (pa:msg "reader.many-markas"
+                             (list "markas" (vl-string-right-trim " " (apply 'strcat (mapcar '(lambda (x) (strcat (cadr x) " ")) names)))))
                      r)
                problems)))
       (T (setq records (cons r records)))))

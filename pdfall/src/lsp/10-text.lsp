@@ -1,10 +1,35 @@
 ;;; ---- Text -------------------------------------------------------------------
 ;;; String helpers that every other file may use:
+;;;   pa:msg pa:label pa:file  the texts of messages.json
 ;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:cyr
+;;;
+;;; build.bat writes messages.json into *pa-messages*, *pa-labels* and *pa-files* just before
+;;; this file, and fails if the code uses a key or {name} that messages.json doesn't have, or a
+;;; Ukrainian string outside 00-settings.lsp. So every key is a literal string, and pa:msg gets
+;;; its values as a literal (list "name" value ...).
+
+(defun pa:msg (key args / s k v p)
+  ;; The message key with each {name} replaced by its value from args, (name value name value ...).
+  ;; Numbers are written as integers.
+  (setq s (cond ((cdr (assoc key *pa-messages*))) ((strcat "{" key "}"))))
+  (while args
+    (setq k (strcat "{" (car args) "}")
+          v (cadr args)
+          v (cond ((= (type v) 'INT) (itoa v)) ((numberp v) (rtos v 2 0)) (v))
+          args (cddr args)
+          p 0)
+    ;; search on after each value, so a value that holds the {name} itself can't loop
+    (while (setq p (vl-string-search k s p))
+      (setq s (strcat (substr s 1 p) v (substr s (+ p 1 (strlen k))))
+            p (+ p (strlen v)))))
+  s)
+
+(defun pa:label (key) (cdr (assoc key *pa-labels*)))
+(defun pa:file (key) (cdr (assoc key *pa-files*)))
 
 (defun pa:cyr (s)
   ;; Latin letters that look identical to Cyrillic ones, turned into the Cyrillic letter.
-  (vl-string-translate "ABCEHIKMOPTXYaceiopxy" "АВСЕНІКМОРТХУасеіорху" s))
+  (vl-string-translate (pa:label "lookalike-latin") (pa:label "lookalike-cyrillic") s))
 
 (defun pa:split (s sep / out p)
   (while (setq p (vl-string-search sep s))

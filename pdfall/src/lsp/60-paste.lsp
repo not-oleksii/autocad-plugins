@@ -7,29 +7,31 @@
 
 (defun pa:subst-marka (s marka / p)
   ;; s with the МАРКА that the template leaves in the name cell replaced by marka.
-  (if (setq p (vl-string-search "МАРКА" s))
-    (strcat (substr s 1 p) marka (substr s (+ p 6)))
+  (if (setq p (vl-string-search (pa:label "placeholder") s))
+    (strcat (substr s 1 p) marka (substr s (+ p 1 (strlen (pa:label "placeholder")))))
     s))
 
 (defun pa:ask-marka (/ s)
   ;; The марка exactly as typed, or the one used last when the user just presses Enter.
   (while (not s)
-    (setq s (getstring (strcat "\nМарка" (if *pdfall-marka* (strcat " <" *pdfall-marka* ">") "") ": ")))
+    (setq s (getstring (strcat "\n" (if *pdfall-marka*
+                                      (pa:msg "paste.marka-last" (list "marka" *pdfall-marka*))
+                                      (pa:msg "paste.marka" nil)))))
     (if (and (= s "") *pdfall-marka*) (setq s *pdfall-marka*))
     (if (not (pa:marka-p s))
-      (progn (princ "\n  Марка має містити літеру й цифру, наприклад 1ЧП.") (setq s nil))))
+      (progn (princ (strcat "\n  " (pa:msg "paste.marka-bad" nil))) (setq s nil))))
   (setq *pdfall-marka* s))
 
 (defun pa:paste-start ()
   (if (/= (getvar "CTAB") "Model")
-    (progn (princ "\nPDFALL: рамки вставляються в Model space. Перейдіть на вкладку Model.") (exit)))
+    (progn (princ (strcat "\n" (pa:msg "paste.not-model" nil))) (exit)))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO")) (cons "CLAYER" (getvar "CLAYER"))))
   (setvar "CMDECHO" 0)
   ;; the name cell is on layer 0, so a pasted рамка must not pick up a hidden or шар заливки layer
   (setvar "CLAYER" "0")
   ;; a рамка is found only when it is square to the world axes
   (if (= 0 (getvar "WORLDUCS"))
-    (progn (princ "\nPDFALL: рамки вставляються у світовій системі координат. Введіть UCS, потім W, і спробуйте ще раз.") (exit))))
+    (progn (princ (strcat "\n" (pa:msg "paste.not-world" nil))) (exit))))
 
 (defun pa:acad-doc ()
   (vla-get-activedocument (vlax-get-acad-object)))
@@ -45,7 +47,7 @@
   ;; its name cell. Returns nil when the user pressed Esc instead.
   (setq path (strcat *pdfall-home* "\\" file))
   (if (not (findfile path))
-    (progn (princ (strcat "\n! " path " не знайдено. Запустіть install.bat ще раз.")) (exit)))
+    (progn (princ (strcat "\n! " (pa:msg "paste.no-template" (list "path" path)))) (exit)))
   (setq last0 (entlast))
   (command "_.UNDO" "_BE")
   (setq undo-open T)
@@ -55,7 +57,7 @@
   (cond
     ((or (vl-catch-all-error-p r) (equal (entlast) last0))
      (if (and (vl-catch-all-error-p r) (not (wcmatch (strcase (vl-catch-all-error-message r)) "*CANCEL*")))
-       (princ (strcat "\n! Не вдалося вставити " file ": " (vl-catch-all-error-message r))))
+       (princ (strcat "\n! " (pa:msg "paste.insert-failed" (list "file" file "msg" (vl-catch-all-error-message r))))))
      (command "_.UNDO" "_E")
      (setq undo-open nil)
      nil)
@@ -69,7 +71,7 @@
      (setq e (if last0 (entnext last0) (entnext)))
      (while e
        (setq d (entget e))
-       (if (and (= (cdr (assoc 0 d)) "MTEXT") (vl-string-search "МАРКА" (cdr (assoc 1 d))))
+       (if (and (= (cdr (assoc 0 d)) "MTEXT") (vl-string-search (pa:label "placeholder") (cdr (assoc 1 d))))
          (entmod (subst (cons 1 (pa:subst-marka (cdr (assoc 1 d)) marka)) (assoc 1 d) d)))
        (setq e (entnext e)))
      (command "_.UNDO" "_E")
@@ -83,49 +85,49 @@
   (setq placed 0)
   (while (progn
            (setq what (apply pick (list placed)))
-           (princ (strcat "\n" cmd ": " (cdr what) ". Вкажіть лівий нижній кут рамки або натисніть Esc, щоб закінчити."))
+           (princ (strcat "\n" (pa:msg "paste.pick" (list "cmd" cmd "what" (cdr what)))))
            (pa:paste-one (car what) marka))
     (setq placed (1+ placed))
-    (princ (strcat "\n  + додано: " (cdr what)))))
+    (princ (strcat "\n  " (pa:msg "paste.added-one" (list "what" (cdr what)))))))
 
 (defun pa:paste-report (cmd marka)
-  (princ (if (and placed (> placed 0))
-           (strcat "\n\n" cmd ": додано рамок: " (itoa placed) " (марка " marka
-                   "). Номери Аркуш/Аркушів заповнить PDFNUM.")
-           (strcat "\n\n" cmd ": нічого не додано."))))
+  (princ (strcat "\n\n" (if (and placed (> placed 0))
+                          (pa:msg "paste.added" (list "cmd" cmd "n" placed "marka" marka))
+                          (pa:msg "paste.nothing" (list "cmd" cmd))))))
 
 (defun pa:paste-failed (cmd msg)
   ;; What the *error* of PDFLIST and PDFSPEC does.
   (pa:paste-cleanup)
-  (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
-    (princ (strcat "\nПомилка " cmd ": " msg)))
+  (pa:report-crash cmd msg)
   (princ))
 
 (defun c:PDFLIST (/ *error* sysvars fill-state undo-open marka placed)
   (defun *error* (msg) (pa:paste-failed "PDFLIST" msg))
   (pa:paste-start)
   (setq marka (pa:ask-marka))
-  (pa:paste-run "PDFLIST" marka '(lambda (i) (cons "PDFALL_list.dwg" "лист (A3)")))
+  (pa:paste-run "PDFLIST" marka '(lambda (i) (cons "PDFALL_list.dwg" (pa:msg "paste.list" nil))))
   (pa:paste-cleanup)
   (pa:paste-report "PDFLIST" marka)
   (princ))
 
-(defun c:PDFSPEC (/ *error* sysvars fill-state undo-open marka placed form dflt)
+(defun c:PDFSPEC (/ *error* sysvars fill-state undo-open marka placed first next form dflt)
   (defun *error* (msg)
     (if (and placed (> placed 0)) (setq *pdfall-spec-marka* marka))
     (pa:paste-failed "PDFSPEC" msg))
   (pa:paste-start)
   (setq marka (pa:ask-marka)
+        first (pa:msg "paste.first" nil)
+        next (pa:msg "paste.next" nil)
         ;; the next специфікація after one of the same марка is usually a later аркуш of it
-        dflt (if (= marka *pdfall-spec-marka*) "Наступний" "Перший"))
-  (initget "Перший Наступний")
-  (setq form (getkword (strcat "\nАркуш специфікації [Перший/Наступний] <" dflt ">: ")))
+        dflt (if (= marka *pdfall-spec-marka*) next first))
+  (initget (strcat first " " next))
+  (setq form (getkword (strcat "\n" (pa:msg "paste.which-spec" (list "first" first "next" next "default" dflt)))))
   (if (null form) (setq form dflt))
   (pa:paste-run "PDFSPEC" marka
     '(lambda (i)
-       (if (and (= i 0) (= form "Перший"))
-         (cons "PDFALL_spec1.dwg" "специфікація, перший аркуш")
-         (cons "PDFALL_spec2.dwg" "специфікація, наступний аркуш"))))
+       (if (and (= i 0) (= form first))
+         (cons "PDFALL_spec1.dwg" (pa:msg "paste.spec-first" nil))
+         (cons "PDFALL_spec2.dwg" (pa:msg "paste.spec-next" nil)))))
   (if (> placed 0) (setq *pdfall-spec-marka* marka))
   (pa:paste-cleanup)
   (pa:paste-report "PDFSPEC" marka)

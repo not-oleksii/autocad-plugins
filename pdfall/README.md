@@ -77,7 +77,8 @@ The layer states are restored afterwards, and the drawing is saved before plotti
 
 ```
 src\lsp\*.lsp             the PDFALL, PDFNUM, PDFLIST and PDFSPEC commands, one module per file
-src\join.ps1              joins src\lsp\*.lsp in name order into the bundle's one pdfall.lsp
+src\messages.json         every text the commands, merge.exe, the installer and the ribbon show or look for
+src\build_lisp.py         checks messages.json against the code, then joins src\lsp\*.lsp and it into the bundle's pdfall.lsp
 src\merge_blueprints.py   builds Загальний and Загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle

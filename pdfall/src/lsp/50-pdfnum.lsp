@@ -14,7 +14,7 @@
   ;; The look of a number someone already wrote in a counter cell of a специфікація, so new numbers
   ;; match it: ((8 . layer) (7 . style) (40 . height) ...), or nil if there is none.
   (foreach r records
-    (if (= (pa:get 'kind r) "специфікація")
+    (if (= (pa:get 'kind r) "spec")
       (foreach c (pa:get 'counters r)
         ;; (nth 4 nil) is an error in AutoLISP, so the entry is checked first
         (if (and (null d)
@@ -55,7 +55,7 @@
   (setq f (pa:get 'frame r)
         z (cdr cell)
         e (nth 4 z))
-  (if (= (pa:get 'kind r) "лист")
+  (if (= (pa:get 'kind r) "list")
     ;; On a лист the number follows the label in the same text: "Аркуш 2".
     (if e
       (progn
@@ -85,46 +85,44 @@
   (foreach r items
     (setq i (1+ i) done nil)
     (foreach cell (pa:empty-cells r)
-      (setq what (if (= (car cell) 'total) (strcat "Аркушів " (itoa n)) (strcat "Аркуш " (itoa i))))
+      (setq what (if (= (car cell) 'total) (pa:msg "pdfnum.total" (list "n" n)) (pa:msg "pdfnum.sheet" (list "n" i))))
       (cond
         ((and (/= (car cell) 'total) (member i used))
-         (pa:warn (strcat marka ": Аркуш залишено порожнім, бо інша рамка " (pa:kind-of kind)
-                          " вже має " (itoa i) "  (" (pa:where r) ")")))
+         (pa:warn (pa:msg "pdfnum.number-used" (list "marka" marka "kind" (pa:kind-of kind) "n" i "where" (pa:where r)))))
         ((pa:fill-cell r cell (if (= (car cell) 'total) n i) style)
          (setq done (cons what done)))
-        (T (pa:warn (strcat marka ": не вдалося записати " what ", бо підпис є частиною блока  ("
-                            (pa:where r) ")")))))
+        (T (pa:warn (pa:msg "pdfnum.in-block" (list "marka" marka "what" what "where" (pa:where r)))))))
     (if done
-      (setq filled (cons (strcat marka " " kind " " (itoa i) ": "
-                                 (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (s) (strcat s ", "))
-                                                                                   (reverse done)))))
+      (setq filled (cons (pa:msg "pdfnum.filled-line"
+                                 (list "marka" marka "kind" (pa:kind-name kind) "n" i
+                                       "what" (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (s) (strcat s ", "))
+                                                                                            (reverse done))))))
                          filled)))))
 
 (defun c:PDFNUM (/ *error* warnings fill-state sysvars drawing records style filled)
   (defun *error* (msg)
     (pa:restore)
-    (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
-      (princ (strcat "\nПомилка PDFNUM: " msg)))
+    (pa:report-crash "PDFNUM" msg)
     (princ))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
   (setvar "CMDECHO" 0)
-  (princ "\nPDFNUM: читаю креслення...")
+  (princ (strcat "\n" (pa:msg "reading" (list "cmd" "PDFNUM"))))
   (setq drawing (pa:read-drawing)
         records (car drawing)
         style (pa:number-style records))
   (command "_.UNDO" "_BE")
   (foreach m (pa:markas records)
-    (pa:number m "лист" (pa:of m "лист" records) style)
-    (pa:number m "специфікація" (pa:of m "специфікація" records) style))
+    (pa:number m "list" (pa:of m "list" records) style)
+    (pa:number m "spec" (pa:of m "spec" records) style))
   (command "_.UNDO" "_E")
   (if filled
     (progn
-      (princ "\n\nPDFNUM заповнив:")
+      (princ (strcat "\n\n" (pa:msg "pdfnum.filled" nil)))
       (foreach s (reverse filled) (princ (strcat "\n  " s)))
-      (princ "\nЩоб скасувати, введіть U."))
-    (princ "\n\nPDFNUM: порожніх клітинок Аркуш/Аркушів немає."))
+      (princ (strcat "\n" (pa:msg "pdfnum.undo" nil))))
+    (princ (strcat "\n\n" (pa:msg "pdfnum.nothing" nil))))
   (foreach e (cadr drawing)
-    (pa:warn (strcat "пропущено: " (car e) (if (cdr e) (strcat "  (" (pa:where (cdr e)) ")") ""))))
+    (pa:warn (pa:msg "pdfnum.skipped" (list "problem" (pa:problem e)))))
   (pa:report-warnings)
   (pa:restore)
   (princ))
