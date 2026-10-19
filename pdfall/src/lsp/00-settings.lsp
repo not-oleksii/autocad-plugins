@@ -11,7 +11,7 @@
 ;;;   2. Reads марка, Аркуш and Аркушів from each рамка's title block.
 ;;;   3. Checks every марка; if anything is wrong, nothing is plotted.
 ;;;   4. Writes "exported files\<марка>\" next to the drawing:
-;;;        <марка> лист N.pdf, <марка> лист N без заливки.pdf, <марка> специфікація лист N.pdf
+;;;        <марка> лист NN.pdf, <марка> лист NN без заливки.pdf, <марка> специфікація NN.pdf
 ;;;   5. Runs merge.exe on "exported files" to build Загальний and Загальний друк.
 ;;;
 ;;; The source is split into src\lsp\*.lsp, which build.bat joins in name order into one pdfall.lsp
@@ -19,7 +19,7 @@
 
 (vl-load-com)
 
-(setq *pdfall-version* "1.6.0")
+(setq *pdfall-version* "1.7.0")
 
 ;;; ---- Settings ---------------------------------------------------------------
 

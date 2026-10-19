@@ -1,4 +1,4 @@
-"""Merge per-sheet AutoCAD PDF plots into one Загальний and one Загальний друк per марка.
+"""Merge per-sheet AutoCAD PDF plots into one загальний and one загальний друк per марка.
 
 Usage:
     py -3 merge_blueprints.py [FOLDER ...]
@@ -80,7 +80,7 @@ class Part:
     marka: str
     kind: str  # "filled", "unfilled", "spec", or "output" for an earlier combined document
     number: int
-    explicit: bool  # the name contains "лист N"
+    explicit: bool  # the name contains the sheet number
     canonical: str  # the file name this part should have
     text: str = ""
     pages: int = 0
@@ -125,22 +125,29 @@ def parse(path):
     if rest[:1] == [SPEC]:
         kind = "spec"
         rest = rest[1:]
-    if kind == "filled" and rest[-2:] == UNFILLED.split():
-        kind = "unfilled"
-        rest = rest[:-2]
-
-    if rest == []:
-        number, explicit = 1, False
-    elif len(rest) == 2 and rest[0] == SHEET and rest[1].isdigit():
-        number, explicit = int(rest[1]), True
+        # earlier versions wrote "специфікація лист N"
+        old_word = rest[:1] == [SHEET]
+        if old_word:
+            rest = rest[1:]
+        if len(rest) == 1 and rest[0].isdigit():
+            number, explicit = int(rest[0]), True
+        elif rest == [] and not old_word:
+            number, explicit = 1, False
+        else:
+            return None
     else:
-        return None
+        if rest[-2:] == UNFILLED.split():
+            kind = "unfilled"
+            rest = rest[:-2]
+        if rest == []:
+            number, explicit = 1, False
+        elif len(rest) == 2 and rest[0] == SHEET and rest[1].isdigit():
+            number, explicit = int(rest[1]), True
+        else:
+            return None
 
-    words_out = [marka]
-    if kind == "spec":
-        words_out.append(SPEC)
-    if explicit:
-        words_out += [SHEET, str(number)]
+    # <марка> <вид> <NN>[ <варіант>].pdf, always numbered, with two digits at least
+    words_out = [marka, SPEC if kind == "spec" else SHEET, f"{number:02d}"]
     if kind == "unfilled":
         words_out.append(UNFILLED)
     return Part(path, marka, kind, number, explicit, " ".join(words_out) + ".pdf")
@@ -443,13 +450,13 @@ def process(entry, root, force, dry_run):
                 specs[part.number] = part
             else:
                 sheets[part.number][part.kind] = part
-        for numbers, label in ((sorted(sheets), SHEET), (sorted(specs), f"{SPEC} {SHEET}")):
+        for numbers, label in ((sorted(sheets), SHEET), (sorted(specs), SPEC)):
             gaps = sorted(set(range(1, max(numbers, default=0) + 1)) - set(numbers))
             if gaps:
                 warnings.append(msg("merge.gaps", marka=marka, label=label, gaps=", ".join(map(str, gaps))))
         drawings = [p for p in by_marka[marka] if p.kind != "spec"]
         warn_sheet_count(marka, drawings, SHEET, sorted(sheets), warnings)
-        warn_sheet_count(marka, list(specs.values()), f"{SPEC} {SHEET}", sorted(specs), warnings)
+        warn_sheet_count(marka, list(specs.values()), SPEC, sorted(specs), warnings)
         warn_duplicate_plots(marka, by_marka[marka], warnings)
         for kind, title in (("filled", GENERAL), ("unfilled", GENERAL_PRINT)):
             build(folder, marka, sheets, specs, kind, title, force, dry_run, report, warnings)
