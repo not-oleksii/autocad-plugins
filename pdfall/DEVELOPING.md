@@ -1,6 +1,6 @@
 # Developing PDFALL
 
-How PDFALL is built, tested and released. What it does for colleagues is in [README.md](README.md) (in Ukrainian), the terms in [GLOSSARY.md](GLOSSARY.md), and why it works this way in [docs/adr](docs/adr).
+How PDFALL is built, tested and released. What it does for colleagues is in the step-by-step guide [src/Instruktsiia.html](src/Instruktsiia.html) and, in short, [README.md](README.md) (both in Ukrainian), the terms in [GLOSSARY.md](GLOSSARY.md), and why it works this way in [docs/adr](docs/adr).
 
 ## Files
 
@@ -16,6 +16,7 @@ src\templates\*.dwg       the empty рамки that PDFLIST and PDFSPEC paste
 src\make_templates.ps1    cuts those templates out of examples\*.dxf (only when the sample's title blocks change)
 src\install.ps1           what install.bat and uninstall.bat run
 src\update.ps1            what update.bat (Start menu: Оновити PDFALL) runs: updates from the GitHub releases
+src\Instruktsiia.html     the step-by-step guide for colleagues: zip root, bundle, Start menu (Інструкція PDFALL)
 build.bat                 builds dist\PDFALL.zip
 release.ps1               raises the version (-Prepare) and publishes a GitHub release
 CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
@@ -74,6 +75,10 @@ The рамки that PDFLIST and PDFSPEC paste are `src\templates\PDFALL_list.dwg
 - the `МАРКА` text in the name cell;
 - that MTEXT anchored Middle Center at the cell's centre, exactly as wide and as high as the cell;
 - no names, dates or other project data in the title block.
+
+## The guide
+
+Colleagues read `src\Instruktsiia.html`, not the Markdown files: it opens in any browser, offline, from the zip (next to `install.bat`) and from the Start menu (**Інструкція PDFALL**, the bundle's copy). Keep it one self-contained file, with no scripts, fonts or images from the internet, and update it in the same pull request as the behaviour it describes. Its name is in Latin letters because the zip `build.bat` makes stores Cyrillic file names in a way Windows Explorer garbles. `README.md` is only the short version for the GitHub page.
 
 ## Building and testing
 

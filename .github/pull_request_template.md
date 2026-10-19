@@ -15,7 +15,7 @@
 
 - [ ] `CHANGELOG.md`: a line under **Невипущене**, in Ukrainian, written for colleagues (skip for "none")
 - [ ] User-facing texts are in `src/messages.json`, in Ukrainian; code and developer docs in English
-- [ ] `README.md` (the Ukrainian guide) and `DEVELOPING.md` describe the change
+- [ ] The colleagues' guide `src/Instruktsiia.html` (plus `README.md` if the basics change) and `DEVELOPING.md` describe the change
 - [ ] A design decision has an ADR in `docs/adr`
 - [ ] No real drawings, PDFs, names or other private data added (`examples/` stays out of git)
 

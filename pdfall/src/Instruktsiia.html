@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Інструкція PDFALL</title>
+<!-- The guide for colleagues. build.bat ships it as Instruktsiia.html next to install.bat and in
+     PDFALL.bundle; the Start menu entry "Інструкція PDFALL" opens the bundle's copy. It must work
+     offline, so everything is in this one file. -->
+<style>
+  :root {
+    --bg: #ffffff; --text: #1d2330; --muted: #5b6475; --line: #dfe3ea; --card: #f5f7fa;
+    --accent: #1f5fbf; --accent-soft: #e5eefb; --warn: #9a5b00; --warn-soft: #fff3df;
+    --ok: #1e7a45; --ok-soft: #e3f4ea; --code: #eef1f6; --console: #0f1720; --console-text: #d8e1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181f; --text: #e6e9ef; --muted: #9aa3b2; --line: #2c3340; --card: #1b2029;
+      --accent: #7fb0ff; --accent-soft: #1d2a40; --warn: #f0b860; --warn-soft: #33281a;
+      --ok: #6fd39a; --ok-soft: #17301f; --code: #232a35; --console: #0b0f14; --console-text: #d8e1ec;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.45rem; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code, kbd {
+    font: 0.92em Consolas, "Cascadia Mono", monospace; background: var(--code);
+    padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere;
+  }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; }
+  .lead { color: var(--muted); font-size: 1.05rem; margin-top: 0; }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 24px 0; }
+  .toc ol { margin: 6px 0 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  .toc li { break-inside: avoid; }
+  @media (max-width: 640px) { .toc ol { columns: 1; } }
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 16px 0; }
+  ol.steps > li {
+    counter-increment: step; position: relative; padding: 0 0 18px 48px; max-width: none;
+  }
+  ol.steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: -2px; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--accent); color: var(--bg); font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ol.steps > li:not(:last-child)::after {
+    content: ""; position: absolute; left: 15px; top: 34px; bottom: 4px; width: 2px; background: var(--line);
+  }
+  ol.steps > li > strong:first-child { display: block; }
+  .note, .warn, .ok {
+    border-radius: 8px; padding: 12px 16px; margin: 16px 0; border-left: 4px solid;
+  }
+  .note { background: var(--accent-soft); border-color: var(--accent); }
+  .warn { background: var(--warn-soft); border-color: var(--warn); }
+  .ok { background: var(--ok-soft); border-color: var(--ok); }
+  .note > :first-child, .warn > :first-child, .ok > :first-child { margin-top: 0; }
+  .note > :last-child, .warn > :last-child, .ok > :last-child { margin-bottom: 0; }
+  pre.console {
+    background: var(--console); color: var(--console-text); border-radius: 8px; padding: 14px 16px;
+    font: 0.88rem/1.5 Consolas, "Cascadia Mono", monospace; overflow-x: auto; white-space: pre;
+  }
+  pre.files { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; overflow-x: auto; font: 0.9rem/1.6 Consolas, monospace; }
+  /* a drawing of the PDFALL ribbon tab */
+  .ribbon { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 16px 0; max-width: 520px; }
+  .ribbon .tabs { display: flex; gap: 2px; background: var(--card); padding: 6px 8px 0; font-size: 0.85rem; flex-wrap: wrap; }
+  .ribbon .tabs span { padding: 4px 10px; color: var(--muted); }
+  .ribbon .tabs .on { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; font-weight: 600; }
+  .ribbon .panels { display: flex; flex-wrap: wrap; border-top: 1px solid var(--line); }
+  .ribbon .panel { flex: 1 1 200px; padding: 10px 10px 0; border-right: 1px solid var(--line); text-align: center; }
+  .ribbon .panel:last-child { border-right: 0; }
+  .ribbon .buttons { display: flex; justify-content: center; gap: 8px; }
+  .ribbon .btn { width: 92px; padding: 6px 4px; border-radius: 6px; font-size: 0.82rem; line-height: 1.25; }
+  .ribbon .btn i { display: block; width: 30px; height: 30px; margin: 0 auto 4px; border-radius: 6px; background: var(--accent-soft); border: 2px solid var(--accent); }
+  .ribbon .btn small { display: block; color: var(--muted); font-size: 0.72rem; }
+  .ribbon .panel-name { font-size: 0.75rem; color: var(--muted); background: var(--card); margin: 8px -10px 0; padding: 2px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--card); }
+  .table-wrap { overflow-x: auto; }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+  @media print {
+    body { font-size: 11pt; }
+    .toc { break-after: page; }
+    h2 { break-before: page; border-top: 0; }
+    pre.console { background: #fff; color: #000; border: 1px solid #999; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Інструкція PDFALL</h1>
+<p class="lead">Плагін для AutoCAD 2024 і новіших. Друкує в PDF усі листи й специфікації креслення одним натисканням, збирає з них загальний і загальний друк для кожної марки, нумерує аркуші й вставляє порожні рамки.</p>
+
+<div class="note">
+  <p>Права адміністратора й Python не потрібні. Для встановлення й оновлення потрібен інтернет лише для того, щоб завантажити файли з GitHub.</p>
+</div>
+
+<nav class="toc" aria-label="Зміст">
+  <strong>Зміст</strong>
+  <ol>
+    <li><a href="#install">Встановлення (перший раз)</a></li>
+    <li><a href="#update">Оновлення</a></li>
+    <li><a href="#ribbon">Кнопки на стрічці</a></li>
+    <li><a href="#pdfall">Друк у PDF (PDFALL)</a></li>
+    <li><a href="#checks">Коли PDFALL зупиняється</a></li>
+    <li><a href="#pdfnum">Номери аркушів (PDFNUM)</a></li>
+    <li><a href="#frames">Нова рамка (PDFLIST і PDFSPEC)</a></li>
+    <li><a href="#merge">Зібрати PDF, експортовані вручну</a></li>
+    <li><a href="#trouble">Якщо щось не так</a></li>
+    <li><a href="#uninstall">Видалення</a></li>
+  </ol>
+</nav>
+
+<h2 id="install">1. Встановлення (перший раз)</h2>
+<p>Це треба зробити один раз на кожному комп'ютері. Далі PDFALL оновлюється через меню Пуск (<a href="#update">розділ 2</a>).</p>
+<ol class="steps">
+  <li><strong>Закрийте AutoCAD.</strong> Усі вікна. Поки AutoCAD відкритий, встановлення не почнеться.</li>
+  <li><strong>Завантажте PDFALL.</strong> Відкрийте сторінку <a href="https://github.com/not-oleksii/autocad-plugins/releases">випусків PDFALL на GitHub</a>. У найновішому випуску, у розділі <em>Assets</em>, клацніть <code>PDFALL-&lt;версія&gt;.zip</code> (наприклад, <code>PDFALL-1.8.0.zip</code>). Якщо вам уже надіслали цей zip, цей крок можна пропустити.</li>
+  <li><strong>Розпакуйте zip.</strong> Клацніть по ньому правою кнопкою миші → <em>Видобути все…</em> (<em>Extract All…</em>) → <em>Видобути</em>. Підійде будь-яка папка, наприклад «Завантаження». Не запускайте файли просто з вікна zip: без розпакування встановлення не знайде своїх файлів.</li>
+  <li><strong>Двічі клацніть <code>install.bat</code></strong> у розпакованій папці. Відкриється чорне вікно. Якщо Windows попередить, що файл завантажено з інтернету, натисніть <em>Запустити</em> (або <em>Докладніше</em> → <em>Однаково запустити</em>).</li>
+  <li><strong>Дочекайтеся повідомлення про успіх</strong> і натисніть будь-яку клавішу, щоб закрити вікно:
+<pre class="console">PDFALL 1.8.0 встановлено в C:\Users\…\AppData\Roaming\Autodesk\ApplicationPlugins\PDFALL.bundle
+Запустіть AutoCAD, відкрийте креслення й натисніть «Друк у PDF» на вкладці PDFALL.
+Щоб пізніше оновити PDFALL, відкрийте меню Пуск і запустіть «Оновити PDFALL».</pre>
+  Якщо замість цього написано «Не виконано: …», дивіться <a href="#trouble">розділ 9</a>.</li>
+  <li><strong>Запустіть AutoCAD.</strong> У command line (командному рядку) з'явиться <code>PDFALL 1.8.0 завантажено…</code>, а на ribbon (стрічці) — вкладка <strong>PDFALL</strong> (<a href="#ribbon">розділ 3</a>).</li>
+</ol>
+<p>Розпаковану папку після цього можна видалити: PDFALL скопійовано в <code>%APPDATA%\Autodesk\ApplicationPlugins\PDFALL.bundle</code>, звідки AutoCAD завантажує його в кожне креслення. У меню Пуск з'являються два пункти: <strong>Оновити PDFALL</strong> і <strong>Інструкція PDFALL</strong> (ця сторінка).</p>
+<div class="note">
+  <p>Встановлення також додає папку PDFALL до <em>Trusted Locations</em> (довірених розташувань), щоб AutoCAD не питав, чи завантажувати плагін, і прибирає старий <code>pdfall.lsp</code> зі <em>Startup Suite</em> (списку автозавантаження), якщо його туди колись додавали вручну.</p>
+</div>
+
+<h2 id="update">2. Оновлення</h2>
+<p>Коли виходить нова версія, оновіть PDFALL так (для версії 1.8.0 і новіших):</p>
+<ol class="steps">
+  <li><strong>Відкрийте меню Пуск і запустіть «Оновити PDFALL».</strong> Можна почати вводити «Оновити» в пошуку меню Пуск. AutoCAD поки можна не закривати.</li>
+  <li><strong>Прочитайте, що змінилося.</strong> Вікно покаже встановлену й найновішу версію та опис кожної новішої версії:
+<pre class="console">Перевіряю, чи є нова версія PDFALL...
+
+Встановлено:   PDFALL 1.8.0
+Найновіша:     PDFALL 1.9.0
+
+Що змінилося:
+
+  PDFALL 1.9.0 (02.11.2026)
+    Додано
+    - …
+
+Оновити PDFALL 1.8.0 до 1.9.0? Enter — так, н — ні:</pre>
+  Якщо у вас уже найновіша версія, вікно так і скаже, і нічого не зміниться.</li>
+  <li><strong>Натисніть <kbd>Enter</kbd>, щоб оновити</strong>, або введіть <kbd>н</kbd> і <kbd>Enter</kbd>, щоб скасувати.</li>
+  <li><strong>Закрийте AutoCAD, якщо він відкритий.</strong> Вікно напише «Закрийте AutoCAD…» і почекає: оновлення почнеться саме, щойно AutoCAD закриється. Збережіть креслення перед тим, як закривати.</li>
+  <li><strong>Дочекайтеся «PDFALL … встановлено»</strong>, натисніть будь-яку клавішу й запустіть AutoCAD.</li>
+</ol>
+<div class="ok">
+  <p>Перед встановленням оновлення звіряє завантажений файл з контрольною сумою з того самого випуску. Пошкоджений або недокачаний файл не встановиться, і у вас лишиться попередня версія.</p>
+</div>
+<div class="warn">
+  <p>У версіях до 1.8.0 немає «Оновити PDFALL». Оновіть такий PDFALL востаннє вручну, як під час <a href="#install">встановлення</a>: старий видаляти не потрібно.</p>
+</div>
+
+<h2 id="ribbon">3. Кнопки на стрічці</h2>
+<p>Усе, що робить PDFALL, є на вкладці <strong>PDFALL</strong> стрічки. Кожну кнопку можна замінити командою в command line: вона вказана під назвою кнопки.</p>
+<div class="ribbon" role="img" aria-label="Вкладка PDFALL: групи «Друк і нумерація» і «Нова рамка»">
+  <div class="tabs"><span>Home</span><span>Insert</span><span>…</span><span class="on">PDFALL</span></div>
+  <div class="panels">
+    <div class="panel">
+      <div class="buttons">
+        <div class="btn"><i></i>Друк у PDF<small>PDFALL</small></div>
+        <div class="btn"><i></i>Номери аркушів<small>PDFNUM</small></div>
+      </div>
+      <div class="panel-name">Друк і нумерація</div>
+    </div>
+    <div class="panel">
+      <div class="buttons">
+        <div class="btn"><i></i>Лист<small>PDFLIST</small></div>
+        <div class="btn"><i></i>Специфікація<small>PDFSPEC</small></div>
+      </div>
+      <div class="panel-name">Нова рамка</div>
+    </div>
+  </div>
+</div>
+<div class="table-wrap"><table>
+  <tr><th>Кнопка</th><th>Команда</th><th>Що робить</th></tr>
+  <tr><td>Друк у PDF</td><td><code>PDFALL</code></td><td>Друкує всі листи й специфікації креслення в PDF і збирає загальний та загальний друк кожної марки.</td></tr>
+  <tr><td>Номери аркушів</td><td><code>PDFNUM</code></td><td>Заповнює порожні клітинки Аркуш і Аркушів в основних написах.</td></tr>
+  <tr><td>Лист</td><td><code>PDFLIST</code></td><td>Вставляє порожню рамку листа (A3) з основним написом і вписує марку.</td></tr>
+  <tr><td>Специфікація</td><td><code>PDFSPEC</code></td><td>Вставляє порожню рамку специфікації (A4) з основним написом і вписує марку.</td></tr>
+</table></div>
+<p>Звичайний порядок роботи: вставити рамки (<a href="#frames">PDFLIST, PDFSPEC</a>) → накреслити → пронумерувати (<a href="#pdfnum">PDFNUM</a>) → надрукувати (<a href="#pdfall">PDFALL</a>).</p>
+
+<h2 id="pdfall">4. Друк у PDF (PDFALL)</h2>
+<ol class="steps">
+  <li><strong>Збережіть креслення.</strong> PDF кладуться поруч із файлом креслення, тож незбережене креслення PDFALL не друкує. Перед друком він ще раз зберігає креслення сам.</li>
+  <li><strong>Натисніть «Друк у PDF»</strong> на вкладці PDFALL або введіть <code>PDFALL</code> і <kbd>Enter</kbd>.</li>
+  <li><strong>Якщо якісь шари вимкнені або заморожені</strong>, PDFALL покаже їхній список і спитає <code>Все одно друкувати? [Так/Ні] &lt;Ні&gt;</code>. Об'єктів цих шарів не буде в жодному PDF. Введіть <kbd>Т</kbd> (Так) і <kbd>Enter</kbd>, щоб друкувати, або натисніть <kbd>Enter</kbd>, щоб спершу ввімкнути шари.</li>
+  <li><strong>Зачекайте.</strong> PDFALL друкує кожну рамку (на великому кресленні це кілька хвилин) і пише в command line <code>PDFALL: 34 PDF у …</code>.</li>
+  <li><strong>Перевірте вікно збирання.</strong> Відкриється чорне вікно, яке збирає загальний і загальний друк і показує, що зібрано. Якщо воно щось питає (наприклад, чи перейменувати старі PDF), введіть <kbd>y</kbd> і <kbd>Enter</kbd>, щоб погодитися. Натисніть <kbd>Enter</kbd>, щоб закрити вікно.</li>
+</ol>
+<p>PDF лежать у папці <code>exported files</code> поруч із кресленням, в окремій папці для кожної марки:</p>
+<pre class="files">&lt;папка креслення&gt;\exported files\1ЧП\1ЧП лист 01.pdf
+                                     1ЧП лист 01 без заливки.pdf
+                                     1ЧП специфікація 01.pdf
+                                     1ЧП загальний.pdf
+                                     1ЧП загальний друк.pdf</pre>
+
+<h3>Назви файлів</h3>
+<p>Назва завжди має вигляд <code>&lt;марка&gt; &lt;вид&gt; &lt;номер&gt;[ &lt;варіант&gt;].pdf</code>:</p>
+<ul>
+  <li><strong>марка</strong> — так, як набрана в основному написі;</li>
+  <li><strong>вид</strong> — <code>лист</code> або <code>специфікація</code>;</li>
+  <li><strong>номер</strong> — номер аркуша, щонайменше дві цифри (<code>01</code>, <code>02</code>, … <code>12</code>), тож файли стоять по порядку;</li>
+  <li><strong>варіант</strong> — <code>без заливки</code>: той самий лист без шару заливки (для друку).</li>
+</ul>
+<p><code>загальний</code> (усі листи й специфікації марки) і <code>загальний друк</code> (листи без заливки) — це зібрані документи марки, вони без номера. Усі слова в назвах пишуться малими літерами.</p>
+<div class="note">
+  <p>PDF зі старими назвами (<code>лист 1</code>, <code>специфікація лист 1</code>, <code>Загальний</code>) PDFALL прибирає перед друком своєї марки, а вікно збирання пропонує перейменувати ті, що лишилися.</p>
+</div>
+
+<h3>Дата в PDF</h3>
+<p>У кожному PDF у клітинці <strong>Дата</strong> стоїть день друку, наприклад <code>19.10.26</code> (дд.мм.рр). PDFALL вписує дату перед друком і прибирає після, тож у самому кресленні нічого не змінюється.</p>
+<ul>
+  <li>На листі й першому аркуші специфікації дата стоїть у рядку під заголовком Дата, на наступних аркушах специфікації — у верхньому рядку тієї самої колонки.</li>
+  <li>Порожня клітинка отримує текст висотою 2 мм тим самим стилем, що й заголовок Дата, по центру клітинки.</li>
+  <li>Дата, яка вже стоїть у клітинці, у PDF замінюється датою друку.</li>
+</ul>
+
+<h2 id="checks">5. Коли PDFALL зупиняється</h2>
+<p>PDFALL спершу перевіряє все креслення. Якщо щось не так, він <strong>нічого не друкує</strong>, показує в command line список проблем і наближає першу рамку з проблемою. Виправте їх і запустіть PDFALL ще раз.</p>
+<div class="table-wrap"><table>
+  <tr><th>Що не так</th><th>Що робити</th></tr>
+  <tr><td>В основному написі не прочитано марку, або там дві різні марки.</td><td>Впишіть одну марку в клітинку назви рамки.</td></tr>
+  <tr><td>Марку набрано різними літерами, наприклад латинське <code>K1</code> в одній рамці й кириличне <code>К1</code> в іншій.</td><td>Наберіть марку однаково в усіх основних написах. Змішані коди на кшталт <code>Х1А1Р</code> — це нормально, якщо вони скрізь однакові.</td></tr>
+  <tr><td>У марці є символ, якого Windows не дозволяє в назві файлу: <code>\ / : * ? " &lt; &gt; |</code></td><td>Приберіть або замініть цей символ в основному написі.</td></tr>
+  <tr><td>Номери Аркуш листів (або специфікацій) марки — не 1, 2, … по порядку: якогось бракує або він повторюється.</td><td>Виправте номери. Порожні клітинки заповнить <a href="#pdfnum">PDFNUM</a>.</td></tr>
+  <tr><td>Клітинка Аркушів порожня або не збігається з кількістю рамок.</td><td>Виправте число або очистіть клітинку й запустіть PDFNUM.</td></tr>
+  <tr><td>Немає шару заливки (<code>Цвет</code> або <code>Колір</code>).</td><td>Шар із заливкою має називатися <code>Цвет</code> або <code>Колір</code>: перейменуйте його. Без нього не вийде варіант «без заливки».</td></tr>
+  <tr><td>Старий PDF, який треба замінити, відкритий в іншій програмі: <code>Закрийте ці файли…</code></td><td>Закрийте ці PDF у переглядачі й запустіть PDFALL ще раз.</td></tr>
+</table></div>
+<p>PDFALL <strong>попереджає, але друкує</strong>, коли:</p>
+<ul>
+  <li>у марки з одним листом порожні клітинки Аркуш і Аркушів (тоді це лист 1; PDFNUM їх заповнить);</li>
+  <li>у <code>exported files</code> є папка марки, якої вже немає в кресленні (її не чіпають);</li>
+  <li>дату не вдалося вписати: клітинку Дата не знайдено, у ній написано щось інше, або стара дата є частиною блока (тоді в PDF лишається стара).</li>
+</ul>
+
+<h2 id="pdfnum">6. Номери аркушів (PDFNUM)</h2>
+<ol class="steps">
+  <li><strong>Натисніть «Номери аркушів»</strong> або введіть <code>PDFNUM</code>. PDFNUM заповнить усі порожні клітинки Аркуш і Аркушів у кресленні.</li>
+  <li><strong>Перевірте результат</strong> у command line і на рамках. Якщо щось не так, <kbd>U</kbd> (Undo) скасовує весь PDFNUM одним кроком.</li>
+  <li><strong>Надрукуйте</strong> <a href="#pdfall">PDFALL</a>.</li>
+</ol>
+<ul>
+  <li>Листи й специфікації кожної марки нумеруються окремо, за розташуванням на кресленні: зліва направо, починаючи з верхнього ряду.</li>
+  <li>Аркушів — це кількість знайдених листів (або специфікацій) цієї марки.</li>
+  <li><strong>Уже написаний номер ніколи не змінюється.</strong> Якщо номер для порожньої клітинки вже стоїть на іншій рамці, клітинка лишається порожньою, і PDFNUM про це скаже.</li>
+</ul>
+
+<h2 id="frames">7. Нова рамка (PDFLIST і PDFSPEC)</h2>
+<p>Вставляє в Model space (простір моделі) порожню рамку з основним написом: <strong>Лист</strong> (A3) або <strong>Специфікація</strong> (A4). Потрібні вкладка Model і World UCS (світова система координат).</p>
+<ol class="steps">
+  <li><strong>Натисніть «Лист» або «Специфікація»</strong> (або введіть <code>PDFLIST</code> чи <code>PDFSPEC</code>).</li>
+  <li><strong>Введіть марку</strong> точно так, як вона має стояти в основному написі (наприклад, <code>1ЧП</code>), і натисніть <kbd>Enter</kbd>. Щоб узяти попередню марку (її показано в дужках &lt; &gt;), просто натисніть <kbd>Enter</kbd>.</li>
+  <li><strong>Для специфікації виберіть аркуш</strong>: <code>Перший</code> (з клітинками Аркуш і Аркушів) або <code>Наступний</code> (з маленькою клітинкою Арк.). Після специфікації тієї самої марки за замовчуванням пропонується <code>Наступний</code>.</li>
+  <li><strong>Клацніть там, де має бути лівий нижній кут рамки.</strong> Рамка рухається за курсором, тож Object Snap (прив'язки) працюють.</li>
+  <li><strong>Клацайте далі</strong>, щоб вставити ще рамки тієї самої марки (у специфікації кожна наступна — аркуш «Наступний»). Коли закінчите, натисніть <kbd>Esc</kbd>.</li>
+</ol>
+<p>У клітинку назви вписується <code>Джгут &lt;марка&gt;</code> (на листі ще й <code>Складальне креслення</code>). Аркуш і Аркушів лишаються порожніми для PDFNUM. <kbd>U</kbd> скасовує останню вставлену рамку. Рамка вставляється розбитою (exploded), тож PDFNUM і PDFALL працюють з нею так само, як з намальованою вручну.</p>
+
+<h2 id="merge">8. Зібрати PDF, експортовані вручну</h2>
+<p>PDFALL збирає загальний і загальний друк сам. Якщо PDF надруковано іншим способом, але названо за <a href="#pdfall">правилами</a>, їх можна зібрати окремо:</p>
+<ol class="steps">
+  <li><strong>Відкрийте папку</strong> <code>%APPDATA%\Autodesk\ApplicationPlugins\PDFALL.bundle\Contents</code> (вставте цей шлях в адресний рядок Провідника).</li>
+  <li><strong>Перетягніть папку з PDF</strong> (наприклад, <code>exported files</code>) на <code>merge.exe</code>.</li>
+  <li><strong>Прочитайте звіт</strong> у вікні, що відкриється, і натисніть <kbd>Enter</kbd>, щоб закрити його.</li>
+</ol>
+
+<h2 id="trouble">9. Якщо щось не так</h2>
+<div class="table-wrap"><table>
+  <tr><th>Що бачите</th><th>Що робити</th></tr>
+  <tr><td><code>AutoCAD відкритий. Закрийте його й запустіть це ще раз.</code></td><td>Закрийте всі вікна AutoCAD (перевірте панель задач) і запустіть <code>install.bat</code> ще раз.</td></tr>
+  <tr><td><code>Поруч з install.bat немає PDFALL.bundle…</code></td><td>Zip не розпаковано. Розпакуйте його (<a href="#install">крок 3</a>) і запускайте <code>install.bat</code> з розпакованої папки.</td></tr>
+  <tr><td>AutoCAD щоразу питає, чи завантажувати PDFALL.</td><td>Закрийте AutoCAD і запустіть <code>install.bat</code> ще раз: він додасть PDFALL до довірених розташувань. Так буває, якщо AutoCAD на цьому комп'ютері ще ні разу не запускали до встановлення.</td></tr>
+  <tr><td>Немає вкладки PDFALL на стрічці.</td><td>Введіть <code>PDFALL</code> у command line. Якщо команда невідома, PDFALL не завантажився: закрийте AutoCAD і встановіть його ще раз.</td></tr>
+  <tr><td>«Оновити PDFALL»: <code>не вдалося зв'язатися з GitHub…</code></td><td>Перевірте інтернет і спробуйте пізніше. Якщо не допоможе, встановіть нову версію вручну (<a href="#install">розділ 1</a>).</td></tr>
+  <tr><td>«Оновити PDFALL»: <code>…не збігається з контрольною сумою…</code></td><td>Файл завантажився з помилкою. Нічого не змінено; спробуйте ще раз пізніше.</td></tr>
+  <tr><td>У меню Пуск немає «Оновити PDFALL».</td><td>Двічі клацніть <code>update.bat</code> у <code>%APPDATA%\Autodesk\ApplicationPlugins\PDFALL.bundle</code>, або встановіть PDFALL ще раз.</td></tr>
+  <tr><td>Під час друку відкриваються десятки вікон переглядача PDF.</td><td>Так не має бути: PDFALL друкує принтером без перегляду. Повідомте розробникові.</td></tr>
+</table></div>
+<p>Якщо проблему не вдалося розв'язати, надішліть розробникові знімок екрана з повідомленням і, якщо можна, креслення.</p>
+
+<h2 id="uninstall">10. Видалення</h2>
+<ol class="steps">
+  <li><strong>Закрийте AutoCAD.</strong></li>
+  <li><strong>Двічі клацніть <code>uninstall.bat</code></strong> у розпакованому zip PDFALL. Якщо zip уже немає, завантажте його знову (<a href="#install">розділ 1</a>, кроки 2–3).</li>
+  <li><strong>Дочекайтеся «PDFALL видалено.»</strong> Зникнуть вкладка PDFALL, команди й пункти в меню Пуск. Креслення й PDF не змінюються.</li>
+</ol>
+
+<footer>
+  <p>Інструкція для PDFALL 1.8.0 і новіших. Що змінилося в кожній версії, показує «Оновити PDFALL» і сторінка <a href="https://github.com/not-oleksii/autocad-plugins/releases">випусків на GitHub</a>.</p>
+</footer>
+
+</main>
+</body>
+</html>
