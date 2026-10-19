@@ -28,6 +28,10 @@ _Avoid_: spec, bill of materials
 The dash-dot (-.-.) border that marks out one лист or специфікація in the drawing. A лист's рамка is A3 landscape, a специфікація's is A4 portrait.
 _Avoid_: frame, layout, format
 
+**Шаблон рамки**:
+An empty рамка with its title block, kept as a DWG (`src\templates`) and pasted by PDFLIST (лист) or PDFSPEC (специфікація, first or later аркуш). Its name cell reads `Джгут <марка>`.
+_Avoid_: blank, stamp
+
 **Orientation**:
 Landscape (лист) or portrait (специфікація). Follows from the рамка, never chosen separately.
 _Avoid_: layout (in AutoCAD a Layout is a paper-space tab, which these drawings do not use)
