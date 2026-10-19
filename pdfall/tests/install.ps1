@@ -13,6 +13,7 @@ $contents = Join-Path $plugins 'PDFALL.bundle\Contents'
 $manifest = Join-Path $plugins 'PDFALL.bundle\PackageContents.xml'
 $messages = (Get-Content (Join-Path $PSScriptRoot '..\src\messages.json') -Raw -Encoding UTF8 | ConvertFrom-Json).messages
 $shortcut = Join-Path $startMenu "$($messages.'install.shortcut').lnk"
+$guideShortcut = Join-Path $startMenu "$($messages.'install.shortcut-guide').lnk"
 $common = @{ AcadKey = $acad; PluginsDir = $plugins; StartMenuDir = $startMenu; IgnoreRunningAutoCAD = $true }
 $failures = @()
 function Check($ok, $what) {
@@ -83,6 +84,13 @@ Set-ItemProperty -LiteralPath $startup 2Startup 'C:\Old plugins\pdfall.lsp'
 Set-ItemProperty -LiteralPath $startup 3Startup 'C:\b.lsp'
 
 try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zipFile = [IO.Compression.ZipFile]::OpenRead((Join-Path $PSScriptRoot '..\dist\PDFALL.zip'))
+    $names = @($zipFile.Entries | ForEach-Object { $_.FullName })
+    $zipFile.Dispose()
+    Check ($names -contains 'Instruktsiia.html' -and $names -contains 'install.bat' -and $names -contains 'PDFALL.bundle/Instruktsiia.html') `
+        'the zip has the guide next to install.bat and in the bundle'
+
     Write-Host 'Install...'
     & $installer @common
     & $installer @common | Out-Null   # a second run must change nothing more
@@ -93,11 +101,13 @@ try {
     $s = Get-ItemProperty -LiteralPath $startup
     Check ($s.NumStartup -eq '2' -and $s.'1Startup' -eq 'C:\a.lsp' -and $s.'2Startup' -eq 'C:\b.lsp' -and -not $s.'3Startup') `
         'the old pdfall.lsp is removed from the Startup Suite, the rest kept in order'
-    Check (@('update.bat', 'update.ps1', 'messages.json' | Where-Object { -not (Test-Path (Join-Path $plugins "PDFALL.bundle\$_")) }).Count -eq 0) `
-        'the updater is in the bundle'
+    Check (@('update.bat', 'update.ps1', 'messages.json', 'Instruktsiia.html' | Where-Object { -not (Test-Path (Join-Path $plugins "PDFALL.bundle\$_")) }).Count -eq 0) `
+        'the updater and the guide are in the bundle'
     $link = if (Test-Path -LiteralPath $shortcut) { (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut) }
     Check ($link -and $link.TargetPath -eq (Join-Path $plugins 'PDFALL.bundle\update.bat') -and $link.WorkingDirectory -eq $env:TEMP) `
         'the Start menu entry runs the bundle''s update.bat from %TEMP%'
+    $link = if (Test-Path -LiteralPath $guideShortcut) { (New-Object -ComObject WScript.Shell).CreateShortcut($guideShortcut) }
+    Check ($link -and $link.TargetPath -eq (Join-Path $plugins 'PDFALL.bundle\Instruktsiia.html')) 'the Start menu has the guide'
     $built = Installed
 
     Write-Host 'Update...'
@@ -126,7 +136,7 @@ try {
     Write-Host 'Uninstall...'
     & $installer -Uninstall @common
     Check (-not (Test-Path (Join-Path $plugins 'PDFALL.bundle'))) 'the bundle was removed'
-    Check (-not (Test-Path -LiteralPath $shortcut)) 'the Start menu entry was removed'
+    Check (-not (Test-Path -LiteralPath $shortcut) -and -not (Test-Path -LiteralPath $guideShortcut)) 'the Start menu entries were removed'
     Check ((Trusted $p24) -eq 'D:\old') 'the trust entry was removed, old paths kept'
 }
 finally {

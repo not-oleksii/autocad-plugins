@@ -28,7 +28,11 @@ function Msg($key, $values = @{}) {
     foreach ($name in $values.Keys) { $text = $text.Replace("{$name}", [string]$values[$name]) }
     $text
 }
-$shortcut = Join-Path $StartMenuDir "$(Msg 'install.shortcut').lnk"
+# The Start menu entries: name, the file in the bundle it opens.
+$shortcuts = @(
+    @{ Name = (Msg 'install.shortcut'); File = 'update.bat' },
+    @{ Name = (Msg 'install.shortcut-guide'); File = 'Instruktsiia.html' })
+function Get-ShortcutPath($s) { Join-Path $StartMenuDir "$($s.Name).lnk" }
 
 # Every AutoCAD R24 (2021) or later profile of this user, e.g. ...\R24.3\ACAD-7101:409\Profiles\<<Unnamed Profile>>
 function Get-AcadProfiles {
@@ -63,21 +67,23 @@ function Remove-StartupCopies($acadProfile) {
     Set-ItemProperty $key NumStartup "$($keep.Count)"
 }
 
-# The Start menu entry that runs the bundle's update.bat. It starts in %TEMP%, because the update
-# replaces the bundle folder and Windows can't delete a folder that a program is working in.
-function Set-Shortcut {
-    try {
-        New-Item $StartMenuDir -ItemType Directory -Force | Out-Null
-        $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
-        $link.TargetPath = Join-Path $dest 'update.bat'
-        $link.WorkingDirectory = $env:TEMP
-        $link.Description = Msg 'install.shortcut'
-        $link.Save()
-        Write-Host (Msg 'install.update-hint' @{ shortcut = (Msg 'install.shortcut') })
+# The Start menu entries for the bundle's update.bat and guide. They start in %TEMP%, because the
+# update replaces the bundle folder and Windows can't delete a folder that a program is working in.
+function Set-Shortcuts {
+    foreach ($s in $shortcuts) {
+        try {
+            New-Item $StartMenuDir -ItemType Directory -Force | Out-Null
+            $link = (New-Object -ComObject WScript.Shell).CreateShortcut((Get-ShortcutPath $s))
+            $link.TargetPath = Join-Path $dest $s.File
+            $link.WorkingDirectory = $env:TEMP
+            $link.Description = $s.Name
+            $link.Save()
+        }
+        catch {
+            Write-Host (Msg 'install.no-shortcut' @{ shortcut = $s.Name; msg = $_.Exception.Message; file = (Join-Path $dest $s.File) })
+        }
     }
-    catch {
-        Write-Host (Msg 'install.no-shortcut' @{ shortcut = (Msg 'install.shortcut'); msg = $_.Exception.Message; file = (Join-Path $dest 'update.bat') })
-    }
+    Write-Host (Msg 'install.update-hint' @{ shortcut = (Msg 'install.shortcut'); guide = (Msg 'install.shortcut-guide') })
 }
 
 try {
@@ -88,7 +94,9 @@ try {
 
     if ($Uninstall) {
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
-        if (Test-Path -LiteralPath $shortcut) { Remove-Item -LiteralPath $shortcut -Force }
+        foreach ($s in $shortcuts) {
+            if (Test-Path -LiteralPath (Get-ShortcutPath $s)) { Remove-Item -LiteralPath (Get-ShortcutPath $s) -Force }
+        }
         foreach ($p in $profiles) { Set-Trusted $p $false }
         Write-Host (Msg 'install.uninstalled')
         return
@@ -110,7 +118,7 @@ try {
     $version = ([xml](Get-Content (Join-Path $dest 'PackageContents.xml') -Encoding UTF8)).ApplicationPackage.AppVersion
     Write-Host (Msg 'install.done' @{ version = $version; folder = $dest })
     Write-Host (Msg 'install.next')
-    Set-Shortcut
+    Set-Shortcuts
 }
 catch {
     Write-Host (Msg 'install.failed' @{ msg = $_.Exception.Message })

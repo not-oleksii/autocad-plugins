@@ -128,9 +128,10 @@
     "install.no-profiles": "Увага: налаштувань AutoCAD 2024 не знайдено. Запустіть AutoCAD один раз, закрийте його й знову запустіть install.bat,\n        інакше AutoCAD щоразу питатиме, чи завантажувати PDFALL.",
     "install.done": "PDFALL {version} встановлено в {folder}",
     "install.next": "Запустіть AutoCAD, відкрийте креслення й натисніть «Друк у PDF» на вкладці PDFALL.",
-    "install.update-hint": "Щоб пізніше оновити PDFALL, відкрийте меню Пуск і запустіть «{shortcut}».",
+    "install.update-hint": "Щоб пізніше оновити PDFALL, відкрийте меню Пуск і запустіть «{shortcut}». Там само є «{guide}».",
     "install.shortcut": "Оновити PDFALL",
-    "install.no-shortcut": "Увага: не вдалося створити «{shortcut}» у меню Пуск ({msg}). Оновлювати можна через {file}.",
+    "install.shortcut-guide": "Інструкція PDFALL",
+    "install.no-shortcut": "Увага: не вдалося створити «{shortcut}» у меню Пуск ({msg}). Той самий файл: {file}",
     "install.failed": "Не виконано: {msg}",
 
     "update.checking": "Перевіряю, чи є нова версія PDFALL...",
@@ -153,7 +154,7 @@
     "update.offline": "не вдалося зв'язатися з GitHub ({msg}). Перевірте інтернет і спробуйте ще раз.",
     "update.failed": "Не оновлено: {msg}",
 
-    "release.footer": "Як отримати цю версію:\n- уже встановлено PDFALL 1.8.0 або новіший: меню Пуск → «Оновити PDFALL» (AutoCAD закрийте);\n- PDFALL ще немає або версія старша за 1.8.0: завантажте {file} нижче, розпакуйте й запустіть install.bat (AutoCAD закрийте).",
+    "release.footer": "Як отримати цю версію:\n- уже встановлено PDFALL 1.8.0 або новіший: меню Пуск → «Оновити PDFALL» (AutoCAD закрийте);\n- PDFALL ще немає або встановлено версію до 1.8.0: завантажте {file} нижче, розпакуйте й запустіть install.bat (AutoCAD закрийте).",
 
     "ribbon.print-panel": "Друк і нумерація",
     "ribbon.pdfall": "Друк у PDF",

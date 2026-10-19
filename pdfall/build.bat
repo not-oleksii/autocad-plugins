@@ -1,6 +1,7 @@
 @echo off
 rem Builds dist\PDFALL.zip to give to colleagues: PDFALL.bundle (pdfall.lsp, merge.exe, PDFALL.pc3,
-rem the frame templates, the ribbon tab, the updater) plus install.bat, uninstall.bat and the messages.json they read.
+rem the frame templates, the ribbon tab, the updater, the guide) plus install.bat, uninstall.bat,
+rem the messages.json they read and the guide Instruktsiia.html.
 rem The same files are left unzipped in dist\.
 rem Needs once: py -3 -m pip install pyinstaller pypdf
 setlocal
@@ -15,8 +16,8 @@ py -3 -m PyInstaller --noconfirm --onefile --console --name merge --distpath "%W
 
 if exist "%DIST%" rmdir /s /q "%DIST%"
 mkdir "%DIST%\PDFALL.bundle\Contents" || goto :fail
-rem The updater rides in the bundle, so update.bat is there for the Start menu entry.
-for %%f in (PackageContents.xml update.bat update.ps1 messages.json) do (
+rem The updater and the guide ride in the bundle too, for their Start menu entries.
+for %%f in (PackageContents.xml update.bat update.ps1 messages.json Instruktsiia.html) do (
   copy /y "%SRC%\%%f" "%DIST%\PDFALL.bundle\" >nul || goto :fail
 )
 for %%f in ("%WORK%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
@@ -24,10 +25,10 @@ for %%f in ("%WORK%\pdfall.lsp" "%SRC%\PDFALL.pc3" "%WORK%\exe\merge.exe") do (
 )
 copy /y "%SRC%\templates\*.dwg" "%DIST%\PDFALL.bundle\Contents\" >nul || goto :fail
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\ribbon.ps1" -Out "%DIST%\PDFALL.bundle\Contents" || goto :fail
-for %%f in (install.bat install.ps1 uninstall.bat messages.json) do (
+for %%f in (install.bat install.ps1 uninstall.bat messages.json Instruktsiia.html) do (
   copy /y "%SRC%\%%f" "%DIST%\" >nul || goto :fail
 )
-tar -a -c -f "%DIST%\PDFALL.zip" -C "%DIST%" PDFALL.bundle install.bat install.ps1 uninstall.bat messages.json || goto :fail
+tar -a -c -f "%DIST%\PDFALL.zip" -C "%DIST%" Instruktsiia.html PDFALL.bundle install.bat install.ps1 uninstall.bat messages.json || goto :fail
 
 echo.
 echo Built %DIST%\PDFALL.zip
