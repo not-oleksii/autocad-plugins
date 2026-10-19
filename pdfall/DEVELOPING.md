@@ -20,13 +20,14 @@ src\Instruktsiia.html     the step-by-step guide for colleagues: zip root, bundl
 build.bat                 builds dist\PDFALL.zip
 release.ps1               raises the version (-Prepare) and publishes a GitHub release
 CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
-tests\run.ps1             runs the built PDFNUM, PDFALL, merge.exe, PDFLIST and PDFSPEC without opening AutoCAD
+tests\run.ps1             runs the built PDFNUM, PDFALL, merge.exe, PDFLIST and PDFSPEC without opening AutoCAD,
+                          on the sample drawing and on the old drawings in examples\old
 tests\install.ps1         tests the installer and the updater against fake AutoCAD settings and a fake release list
 merge.bat, check.bat      run the Python merge by hand (check.bat only reports problems)
 ..\.github                the pull request template and the CI check
 ```
 
-`examples\` (the sample drawing and hand-made PDFs that the tests use) is kept out of git because it contains real drawings. The repository is public: never commit drawings, PDFs, names from title blocks or anything else from real projects. The templates in `src\templates` hold only the empty title-block form.
+`examples\` (the sample drawing, old project drawings in `examples\old`, and hand-made PDFs that the tests use) is kept out of git because it contains real drawings. The repository is public: never commit drawings, PDFs, names from title blocks or anything else from real projects. The templates in `src\templates` hold only the empty title-block form.
 
 ## The LISP modules
 
@@ -65,7 +66,9 @@ A key no code uses is only a warning. The bundle carries no JSON: the LISP texts
 
 ## Settings
 
-Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed.
+Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed. The paper sizes are canonical names, which AutoCAD doesn't translate; never replace them with the names the Plot dialog shows ([ADR 0008](docs/adr/0008-read-old-drawings.md)).
+
+Colleagues get no settings: PDFALL recognises the old and the new title block by itself (ADR 0008), so a drawing that differs in a new way needs a change to the reader, `src\lsp\20-reader.lsp`, and a drawing for `examples\old`.
 
 ## Templates
 

@@ -59,8 +59,10 @@ CORNER_LABEL = label("corner")
 # The title block's name cell reads "<product> <марка>", e.g. "Джгут 1ЧП". These labels
 # also start a title-block line but are never a product.
 LABELS = set(label("not-names"))
-# The title block sits within this many points of the bottom edge on every sheet format.
+# The title block sits within this many points of the bottom edge on every sheet format, and
+# within this many of the right edge (185 mm plus the 5 mm margin, and a little more).
 TITLE_BLOCK_HEIGHT = 130
+TITLE_BLOCK_WIDTH = 570
 
 
 @dataclass
@@ -70,6 +72,7 @@ class TitleBlock:
     marka: str | None = None
     sheet: int | None = None
     total: int | None = None
+    alone: list = field(default_factory=list)  # texts that are only a марка, as old name cells print it
 
 
 @dataclass
@@ -162,7 +165,9 @@ def read_marka(items):
     """The марка printed after the product word in the name cell, which may wrap onto the line below."""
     for x0, y0, text in items:
         product = text.split()[0]
-        if not product.isalpha() or product in LABELS:
+        # A one-letter "product" is a piece of a word split by a font change, as old title blocks
+        # print "Аркушiв" ("Аркуш", "і", "в"), and would read "в1" as the марка.
+        if not product.isalpha() or len(product) < 2 or product in LABELS:
             continue
         line = [(x0, text[len(product):])]
         line += [(x, t) for x, y, t in items if abs(y - y0) < 3 and x0 < x < x0 + 150]
@@ -183,15 +188,27 @@ def number_below(items, label_x, label_y, x_max, depth):
     return int(values[0]) if values else None
 
 
-def read_title_block(items):
+def number_after(items, label_x, label_y, x_max):
+    """The number written as a text of its own after a label in the same row (old title blocks)."""
+    values = [t for x, y, t in items if abs(y - label_y) < 4 and label_x < x < x_max and t.isdigit()]
+    return int(values[0]) if values else None
+
+
+def read_title_block(items, page_width=None):
     """Read марка, sheet number and sheet count from the text items of a page's title block.
 
-    Handles the drawing form ("Аркуш 1  Аркушів 3" in one line), the first specification
-    sheet ("Аркуш" and "Аркушів" labels with values below) and continuation sheets
-    (an "Арк." cell in the bottom-right corner with the value below).
+    With page_width, texts left of the title block are left out: on an A3 page, a caption in the
+    drawing near the bottom edge ("контактів X6") would read as a name cell.
+
+    Handles the drawing form ("Аркуш 1  Аркушів 3" in one line, or in an old title block
+    "Аркуш", "1", "Аркушів", "3" as separate texts), the first specification sheet ("Аркуш"
+    and "Аркушів" labels with values below) and continuation sheets (an "Арк." cell in the
+    bottom-right corner with the value below).
     """
-    items = [i for i in items if i[1] < TITLE_BLOCK_HEIGHT]
+    items = [i for i in items if i[1] < TITLE_BLOCK_HEIGHT
+             and (page_width is None or i[0] > page_width - TITLE_BLOCK_WIDTH)]
     title = TitleBlock(marka=read_marka(items))
+    title.alone = [t.replace(" ", "") for _, _, t in items if is_marka(t.replace(" ", ""))]
     labels = {}
     for x, y, text in items:
         if m := re.fullmatch(rf"{re.escape(SHEET_LABEL)}\s+(\d+)", text):
@@ -205,9 +222,13 @@ def read_title_block(items):
         x, y = labels[SHEET_LABEL]
         x_max = labels[TOTAL_LABEL][0] if TOTAL_LABEL in labels else x + 40
         title.sheet = number_below(items, x, y, x_max, 20)
+        if title.sheet is None:
+            title.sheet = number_after(items, x, y, x_max)
     if title.total is None and TOTAL_LABEL in labels:
         x, y = labels[TOTAL_LABEL]
         title.total = number_below(items, x, y, x + 50, 20)
+        if title.total is None:
+            title.total = number_after(items, x, y, x + 60)
     right_edge = max((x for x, _, _ in items), default=0)
     if title.sheet is None and CORNER_LABEL in labels and labels[CORNER_LABEL][0] > right_edge - 60:
         x, y = labels[CORNER_LABEL]
@@ -234,7 +255,11 @@ def load(part):
     part.text = (pages[0].extract_text(visitor_text=collect) or "") + "".join(
         page.extract_text() or "" for page in pages[1:]
     )
-    part.title = title = read_title_block(items)
+    part.title = title = read_title_block(items, float(pages[0].mediabox.width))
+    # An old name cell prints only the марка ("M1"). Any title-block text could be only a марка, so
+    # such a text confirms the file's марка but never contradicts it.
+    if title.marka is None and any(looks(t) == looks(part.marka) for t in title.alone):
+        title.marka = part.marka
 
     if title.marka is None:
         part.unverified.append(msg("merge.field-marka"))

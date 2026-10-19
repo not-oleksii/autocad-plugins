@@ -1,8 +1,10 @@
 ﻿# End-to-end test of the built PDFALL.bundle without opening AutoCAD:
 #   1. on examples\Креслення приклад.dxf: PDFNUM (to fill the empty counters) and PDFALL in accoreconsole
 #      with a throwaway AutoCAD profile, then merge.exe on the PDFs;
-#   2. in an empty drawing: PDFLIST and PDFSPEC paste рамки, PDFNUM numbers them and PDFALL plots them;
-#   3. the ribbon tab.
+#   2. on the old project drawings in examples\old, if there are any: PDFNUM, PDFALL and merge.exe,
+#      and a paper size AutoCAD refuses;
+#   3. in an empty drawing: PDFLIST and PDFSPEC paste рамки, PDFNUM numbers them and PDFALL plots them;
+#   4. the ribbon tab.
 # Usage: powershell -ExecutionPolicy Bypass -File tests\run.ps1   (run build.bat first)
 param(
     [string]$Contents = (Join-Path $PSScriptRoot '..\dist\PDFALL.bundle\Contents'),
@@ -154,6 +156,97 @@ if (-not $m2.WaitForExit(120000)) { $m2.Kill(); $script:failures += 'merge.exe (
 $oldNow = @(Get-ChildItem $oldDir | Where-Object { $_.Name -cmatch 'лист \d[ .]|специфікація лист' })
 Check ($oldNow.Count -eq 0 -and (Test-Path (Join-Path $oldDir 'К1 лист 01.pdf')) -and (Test-Path (Join-Path $oldDir 'К1 специфікація 01.pdf'))) "merge.exe renamed the $oldCount PDFs under earlier names to the new ones"
 Check ((Test-Path (Join-Path $oldDir 'К1 загальний.pdf')) -and (Test-Path (Join-Path $oldDir 'К1 загальний друк.pdf'))) 'and built загальний and загальний друк from them'
+
+# Old project drawings (examples\old\*.dwg, real drawings kept out of git): the марка alone in the
+# name cell, Аркушів spelled with a Latin i and its number after it in the same row, no шар заливки,
+# and in М5 an A4 лист (a Складальний кресленик) whose рамка is 210x295.
+$oldDwgs = @(Get-ChildItem (Join-Path $PSScriptRoot '..\examples\old') -Filter '*.dwg' -ErrorAction SilentlyContinue)
+if ($oldDwgs.Count -eq 0) { Write-Host '  skip  old drawings: examples\old has no .dwg' }
+foreach ($dwg in $oldDwgs) {
+    $n = $dwg.BaseName -replace '[МM]', 'M'
+    Write-Host "Old drawing $($dwg.Name)..."
+    $dir = Join-Path $Work "old\$n"
+    New-Item $dir -ItemType Directory -Force | Out-Null
+    $copy = Join-Path $dir $dwg.Name
+    Copy-Item -LiteralPath $dwg.FullName $copy
+    $oldScr = @"
+(setvar "SECURELOAD" 0)
+(setenv "PrinterConfigDir" "$($plotters -replace '\\', '\\')")
+(setq *pdfall-home* "$($Contents -replace '\\', '\\')")
+(load "$c/pdfall.lsp")
+(setq *pdfall-merge* nil)
+(defun show (tag / d)
+  (setq d (pa:read-drawing))
+  (foreach r (car d) (princ (strcat "\n" tag " " (pa:get 'kind r) " " (pa:get 'marka r) " " (pa:paper r) " sheet=" (vl-princ-to-string (pa:get 'sheet r)) " total=" (vl-princ-to-string (pa:get 'total r)))))
+  (foreach p (cadr d) (princ (strcat "\n" tag " problem: " (car p)))))
+(show "BEFORE")
+PDFNUM
+(show "AFTER")
+PDFALL
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+    $olog = Invoke-Acad "old$n" $oldScr $copy
+    $a4 = $n -eq 'M5'
+    $paper = if ($a4) { 'a4' } else { 'a3' }
+    $oldPdfs = @(Get-ChildItem (Join-Path $dir 'exported files') -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
+    Check ($olog -match 'END-OF-TEST') "$($dwg.Name): the script ran to the end"
+    Check ($olog -match "BEFORE list $n $paper sheet=nil total=1" -and $olog -notmatch 'BEFORE.*problem') `
+        "$($dwg.Name): one $paper лист of марка $n, Аркуш empty and Аркушів 1 read after its label"
+    Check ($olog -match "AFTER list $n $paper sheet=1 total=1") "$($dwg.Name): PDFNUM writes Аркуш 1 after the label, and PDFALL reads it back"
+    Check ($olog -match 'немає шару заливки' -and $olog -match "PDFALL: 2 PDF у" -and $oldPdfs.Count -eq 2) `
+        "$($dwg.Name): with no шар заливки, the лист and its без заливки copy are plotted (found $($oldPdfs.Count) PDFs)"
+    Check ($olog -notmatch 'Unknown command|Помилка') "$($dwg.Name): no unknown command and no error"
+    Check ($olog -notmatch 'клітинку під заголовком Дата|у клітинці Дата написано') "$($dwg.Name): the date goes in the Дата cell"
+    if ($a4) {
+        Check ($olog -match '210x295 замість 210x297') 'M5: the 210x295 рамка is plotted with a warning'
+        $pdf = Get-ChildItem (Join-Path $dir 'exported files') -Recurse -Filter '*лист 01.pdf' | Select-Object -First 1
+        $box = if ($pdf -and ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($pdf.FullName)) -match '/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)')) { [double]$Matches[1], [double]$Matches[2] }
+        Check ($box -and [math]::Abs($box[0] - 595.3) -lt 2 -and [math]::Abs($box[1] - 841.9) -lt 2) "M5: the A4 лист is plotted on A4 portrait (MediaBox $box)"
+    } else {
+        Check ($olog -notmatch 'замість') "$($dwg.Name): its 420x297 рамка gets no size warning"
+    }
+}
+if ($oldDwgs.Count) {
+    Write-Host 'merge.exe on the old drawings...'
+    $answers = Join-Path $Work 'answers-old.txt'
+    [IO.File]::WriteAllText($answers, "n`nn`nn`nn`n`n", (New-Object Text.UTF8Encoding($false)))
+    $mergeOld = Join-Path $Work 'merge-oldplots.txt'
+    $m3 = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$(Join-Path $Work 'old')`"" -RedirectStandardInput $answers `
+        -RedirectStandardOutput $mergeOld -PassThru -NoNewWindow
+    $null = $m3.Handle
+    if (-not $m3.WaitForExit(120000)) { $m3.Kill(); $script:failures += 'merge.exe (old drawings) timed out' }
+    $mlog = Get-Content $mergeOld -Raw -Encoding UTF8
+    $oldMerged = @(Get-ChildItem (Join-Path $Work 'old') -Recurse -Filter '*загальний*.pdf')
+    Check ($oldMerged.Count -eq 2 * $oldDwgs.Count) "merge.exe builds загальний and загальний друк for each old drawing (found $($oldMerged.Count))"
+    Check ($mlog -notmatch 'Не вдалося звірити|НЕ збігається') 'merge.exe reads the марка and Аркуш of the old title blocks back from the PDFs'
+
+    # A paper size AutoCAD doesn't know, as a Russian AutoCAD didn't know the English names: PDFALL
+    # stops with a message instead of feeding the rest of -PLOT to the command line.
+    $dwg = $oldDwgs[0]
+    $dir = Join-Path $Work 'refused'
+    New-Item $dir -ItemType Directory -Force | Out-Null
+    $copy = Join-Path $dir $dwg.Name
+    Copy-Item -LiteralPath $dwg.FullName $copy
+    $refusedScr = @"
+(setvar "SECURELOAD" 0)
+(setenv "PrinterConfigDir" "$($plotters -replace '\\', '\\')")
+(setq *pdfall-home* "$($Contents -replace '\\', '\\')")
+(load "$c/pdfall.lsp")
+(setq *pdfall-merge* nil *pdfall-paper-a3* "No such paper")
+PDFNUM
+PDFALL
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+    $rlog = Invoke-Acad 'refused' $refusedScr $copy
+    $refusedPdfs = @(Get-ChildItem (Join-Path $dir 'exported files') -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
+    Check ($rlog -match 'END-OF-TEST' -and $rlog -match 'не прийняв розмір паперу No such paper' -and $refusedPdfs.Count -eq 0) `
+        'a paper size AutoCAD refuses stops PDFALL with a message'
+    Check ($rlog -notmatch 'Unknown command') 'and no answer meant for -PLOT runs as a command'
+}
 
 Write-Host 'PDFLIST and PDFSPEC in an empty drawing...'
 $pasteDir = Join-Path $Work 'paste'
