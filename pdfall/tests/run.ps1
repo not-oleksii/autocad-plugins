@@ -359,7 +359,7 @@ PDFNUM
 PDFALL
 (princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today)))))
 (princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner dated)))))
-(princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК")))))
+(princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК") (pa:file-safe "1/2П:")))))
 (princ (strcat "\nSHOWN=" (if (pa:console-p) "console" "full") " " (pa:shown-folder "C:\\x" '("1ЧП")) " " (pa:shown-folder "C:\\x" '("1ЧП" "К1"))))
 (princ (strcat "\nCANCELS=" (vl-princ-to-string (mapcar 'pa:cancelled-p (list "Function cancelled" "Функция прервана" (vl-catch-all-error-message (vl-catch-all-apply 'exit nil)) "bad argument type: numberp: nil")))))
 ;; a марка that Windows can't use in a file name stops PDFALL before it plots anything
@@ -368,8 +368,13 @@ PDFALL
 PDFALL
 Ні
 (princ "\nREFUSED-FORCE")
-;; with a лист copied together with its numbers as well, plot anyway: 1/2П is left out, and the copy
-;; is named by its position
+;; with a лист whose name text was deleted and a лист copied together with its numbers as well, plot
+;; anyway: the first is named Без_марки, 1/2П becomes 1_2П, and the copy is named by its position
+(tpaste "PDFLIST" "Х9" 1 "PDFALL_list_spdbv_A3l.dwg")
+7000,1000
+(foreach r (car (pa:read-drawing))
+  (if (= (pa:get 'marka r) "Х9")
+    (foreach z (pa:get 'zone r) (if (and (nth 4 z) (pa:name-cell-p z "list")) (entdel (nth 4 z))))))
 (foreach r (car (pa:read-drawing))
   (if (and (= (pa:get 'marka r) "1ЧП") (= (pa:get 'sheet r) 2))
     (foreach c (pa:get 'counters r) (if (eq (car c) 'sheet) (pa:set-number c 1)))))
@@ -395,15 +400,18 @@ Check ($plog -match 'NUMS=4/4\b') 'PDFNUM centres the 4 numbers it wrote in thei
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
-Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк\)') 'the name helpers find a forbidden character, pad a number and lower-case Cyrillic'
+Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк 1_2П_\)') 'the name helpers find a forbidden character, pad a number, lower-case Cyrillic and make a марка fit a file name'
 Check ($plog -match 'SHOWN=console C:\\x\\1ЧП C:\\x(\s|"|$)') 'after plotting PDFALL shows the марка''s folder, or all of them when there are several; not in the console AutoCAD'
 Check ($plog -match 'CANCELS=\(T T T nil\)') 'Esc in English or Russian and (exit) are not reported as errors, a real error is'
 $beforeForce, $afterForce = $plog -split 'REFUSED-FORCE', 2
 Check ($beforeForce -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($beforeForce, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots, when the user says no'
 $pasted1 = Join-Path $pasteDir 'exported files\1ЧП'
-Check ($afterForce -match 'Аркуш 1 стоїть на кількох' -and $afterForce -match 'PDFALL друкує попри проблеми' -and $afterForce -match 'PDFALL: 7 PDF у' -and
-       $afterForce -match 'рамок без марки або з недозволеним символом у марці: 1' -and
-       (Test-Path (Join-Path $pasted1 '1ЧП лист 01.pdf')) -and (Test-Path (Join-Path $pasted1 '1ЧП лист 02.pdf'))) 'plotting anyway names a copied лист by its position and leaves out only the рамка it can''t name'
+$pastedOut = Join-Path $pasteDir 'exported files'
+Check ($afterForce -match 'Аркуш 1 стоїть на кількох' -and $afterForce -match 'PDFALL друкує попри проблеми' -and $afterForce -match 'PDFALL: 11 PDF у' -and
+       (Test-Path (Join-Path $pasted1 '1ЧП лист 01.pdf')) -and (Test-Path (Join-Path $pasted1 '1ЧП лист 02.pdf'))) 'plotting anyway names a copied лист by its position and plots every рамка found (11 PDFs)'
+Check ($afterForce -match 'рамку без марки надруковано як «Без_марки»' -and
+       (Test-Path (Join-Path $pastedOut 'Без_марки\Без_марки лист 01.pdf')) -and (Test-Path (Join-Path $pastedOut 'Без_марки\Без_марки лист 01 без заливки.pdf'))) 'plotting anyway plots a рамка without a марка as Без_марки'
+Check ($afterForce -match '1/2П: надруковано як «1_2П»' -and (Test-Path (Join-Path $pastedOut '1_2П\1_2П лист 01.pdf'))) 'plotting anyway plots a марка with a forbidden character with _ in its place'
 Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
 $today = Get-Date -Format 'dd.MM.yy'
 Check ($plog -match "TODAY=$([regex]::Escape($today))\|") "the date reads dd.mm.yy ($today)"

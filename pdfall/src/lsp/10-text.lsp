@@ -3,7 +3,7 @@
 ;;;   pa:msg pa:label pa:file  the texts of messages.json
 ;;;   pa:fill          {name}s of any text filled in, as pa:msg does
 ;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:marka-error pa:cyr
-;;;   pa:lower pa:pad pa:bad-char
+;;;   pa:lower pa:pad pa:bad-char pa:file-safe
 ;;;
 ;;; build.bat writes messages.json into *pa-messages*, *pa-labels* and *pa-files* just before
 ;;; this file, and fails if the code uses a key or {name} that messages.json doesn't have, or a
@@ -48,6 +48,10 @@
   ;; The first character of s that Windows doesn't allow in a file name, or nil.
   (vl-some '(lambda (c) (if (vl-string-position c s) (chr c)))
            (vl-string->list "\\/:*?\"<>|")))
+
+(defun pa:file-safe (s)
+  ;; s with every character Windows doesn't allow in a file name replaced by _.
+  (vl-string-translate "\\/:*?\"<>|" "_________" s))
 
 (defun pa:split (s sep / out p)
   (while (setq p (vl-string-search sep s))

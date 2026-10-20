@@ -1,7 +1,7 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
 ;;; merge.exe. When the check finds problems, the user may plot anyway: the рамки are then numbered
-;;; in the file names as PDFNUM would number them, and only рамки that can't be named are left out.
+;;; in the file names as PDFNUM would number them, and a рамка without a марка is named Без_марки.
 ;;; Defines c:PDFALL; nothing here is called from the other files.
 ;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md; every A size and
 ;;; текстові документи: docs/adr/0009-every-a-size-and-settings-for-pasting.md.
@@ -152,12 +152,27 @@
         nums (pa:sheet-numbers items (length items)))
   (mapcar '(lambda (r k) (pa:put 'sheet k r)) items nums))
 
+(defun pa:force-markas (records / m name)
+  ;; records, each with a марка that can name its files, for plotting despite problems: a рамка
+  ;; without a марка gets Без_марки, and a character Windows forbids in a file name becomes _. Says
+  ;; so in renamed.
+  (mapcar '(lambda (r)
+             (setq m (pa:get 'marka r)
+                   name (if m (pa:file-safe m) (pa:file "no-marka")))
+             (cond
+               ((null m)
+                (setq renamed (cons (pa:msg "pdfall.forced-no-marka" (list "name" name "where" (pa:where r))) renamed)))
+               ((/= m name)
+                (setq renamed (cons (pa:msg "pdfall.forced-renamed" (list "marka" m "name" name "where" (pa:where r))) renamed))))
+             (pa:put 'marka name r))
+          records))
+
 (defun pa:ask-force (/ yes no)
   (setq yes (pa:msg "pdfall.yes" nil) no (pa:msg "pdfall.no" nil))
   (initget (strcat yes " " no))
   (= yes (getkword (strcat "\n\n" (pa:msg "pdfall.force-ask" (list "yes" yes "no" no))))))
 
-(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e skipped shown)
+(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e renamed shown)
   (if (= 0 (getvar "DWGTITLED"))
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
@@ -200,17 +215,15 @@
       (pa:report-errors (pa:msg "pdfall.fix-first" nil))
       (pa:report-warnings)
       (if (not (pa:ask-force)) (exit))
-      ;; Plot anyway: leave out what can't be named, number the rest as PDFNUM would.
-      (setq skipped (+ (length (vl-remove-if-not 'cdr (cadr drawing)))
-                       (length (vl-remove-if-not '(lambda (r) (pa:bad-char (pa:get 'marka r))) records)))
-            markas (vl-remove-if 'pa:bad-char markas)
-            records (vl-remove-if-not '(lambda (r) (member (pa:get 'marka r) markas)) records)
+      ;; Plot anyway: every рамка found, the ones without a марка too, numbered as PDFNUM would.
+      (setq records (pa:force-markas (append records (vl-remove 'nil (mapcar 'cdr (cadr drawing)))))
+            markas (pa:markas records)
             groups (mapcar '(lambda (m) (cons m (mapcar '(lambda (k) (pa:force-numbers k (pa:of m k records))) *pa-kinds*)))
                            markas)
             forced T errors nil warnings nil)
-      (pa:log (list "pdfall: plotting anyway," skipped "frames left out"))
+      (pa:log (list "pdfall: plotting anyway," (length records) "frames as" markas))
       (princ (strcat "\n" (pa:msg "pdfall.forced" nil)))
-      (if (> skipped 0) (pa:warn (pa:msg "pdfall.forced-skipped" (list "n" skipped))))))
+      (foreach w (reverse renamed) (pa:warn w))))
 
   ;; Hidden layers would silently drop objects from every PDF.
   (if (setq hidden (pa:hidden-layers))
