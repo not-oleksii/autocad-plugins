@@ -3,7 +3,7 @@
 ;;;   pa:msg pa:label pa:file  the texts of messages.json
 ;;;   pa:fill          {name}s of any text filled in, as pa:msg does
 ;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:marka-error pa:cyr
-;;;   pa:lower pa:pad pa:bad-char pa:file-safe
+;;;   pa:lower pa:pad pa:bad-char pa:file-safe pa:title-name
 ;;;
 ;;; build.bat writes messages.json into *pa-messages*, *pa-labels* and *pa-files* just before
 ;;; this file, and fails if the code uses a key or {name} that messages.json doesn't have, or a
@@ -52,6 +52,17 @@
 (defun pa:file-safe (s)
   ;; s with every character Windows doesn't allow in a file name replaced by _.
   (vl-string-translate "\\/:*?\"<>|" "_________" s))
+
+(defun pa:title-name (words / s)
+  ;; words as one word that can name a folder and its files, or nil: joined by _, with the characters
+  ;; Windows forbids left out, so ДВНЗ "ПДАБА" becomes ДВНЗ_ПДАБА. One word, since merge.exe reads the
+  ;; марка of a file as the first word of its name.
+  (if words
+    (progn
+      (setq s (pa:file-safe (apply 'strcat (cons (car words) (mapcar '(lambda (w) (strcat "_" w)) (cdr words))))))
+      (while (vl-string-search "__" s) (setq s (vl-string-subst "_" "__" s)))
+      (setq s (vl-string-trim "_" s))
+      (if (/= s "") s))))
 
 (defun pa:split (s sep / out p)
   (while (setq p (vl-string-search sep s))

@@ -5,6 +5,7 @@
 ;;;   pa:markas pa:of  the марки of the records, and the records of one kind of one марка
 ;;;   pa:paper pa:off-size  the paper a рамка is plotted on, and its size when it is a little off
 ;;;   pa:cell-box      the edges of the title-block cell around a point
+;;;   pa:org-title     the words of the organisation cell's top line
 ;;;   pa:text-style pa:label-style  the look of a title-block text, to write new ones like it
 ;;;
 ;;; A record is one рамка:
@@ -375,6 +376,19 @@
   (and (< -125.0 (car z) -55.0) (if (= kind "list") (< 20.0 (cadr z) 45.0) (< (cadr z) 30.0))))
 
 (defun pa:first-line-words (s) (pa:words (car (pa:split s "\n"))))
+
+(defun pa:org-title (r / top)
+  ;; The words of the first line of the topmost text in r's organisation cell, at the bottom right
+  ;; under Аркуш (ДВНЗ "ПДАБА"), or nil. Every лист and first page has it at x -50..0, y 0..20; a
+  ;; later page of a специфікація has only the Арк. cell there, at x -10..0.
+  (if (not (assoc 'corner (pa:get 'counters r)))
+    (foreach z (pa:get 'zone r)
+      (if (and (< -50.0 (car z) -10.0) (< 0.0 (cadr z) 20.0)
+               (pa:first-line-words (caddr z))
+               (not (member (car (pa:first-line-words (caddr z))) (pa:label "not-names")))
+               (or (null top) (> (cadr z) (cadr top))))
+        (setq top z))))
+  (if top (pa:first-line-words (cadddr top))))
 
 (defun pa:read-title (zone counters kind / w i names top sheet total)
   ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every

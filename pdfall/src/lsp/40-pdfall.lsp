@@ -1,7 +1,8 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
 ;;; merge.exe. When the check finds problems, the user may plot anyway: the рамки are then numbered
-;;; in the file names as PDFNUM would number them, and a рамка without a марка is named Без_марки.
+;;; in the file names as PDFNUM would number them, and a рамка without a марка is named after its
+;;; organisation cell, or Без_марки.
 ;;; Defines c:PDFALL; nothing here is called from the other files.
 ;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md; every A size and
 ;;; текстові документи: docs/adr/0009-every-a-size-and-settings-for-pasting.md.
@@ -152,20 +153,53 @@
         nums (pa:sheet-numbers items (length items)))
   (mapcar '(lambda (r k) (pa:put 'sheet k r)) items nums))
 
-(defun pa:force-markas (records / m name)
-  ;; records, each with a марка that can name its files, for plotting despite problems: a рамка
-  ;; without a марка gets Без_марки, and a character Windows forbids in a file name becomes _. Says
-  ;; so in renamed.
-  (mapcar '(lambda (r)
-             (setq m (pa:get 'marka r)
-                   name (if m (pa:file-safe m) (pa:file "no-marka")))
-             (cond
-               ((null m)
-                (setq renamed (cons (pa:msg "pdfall.forced-no-marka" (list "name" name "where" (pa:where r))) renamed)))
-               ((/= m name)
-                (setq renamed (cons (pa:msg "pdfall.forced-renamed" (list "marka" m "name" name "where" (pa:where r))) renamed))))
-             (pa:put 'marka name r))
-          records))
+(defun pa:force-markas (records / m name out by-title key docs n)
+  ;; records, each with a марка that can name its files, for plotting despite problems. A character
+  ;; Windows forbids in a file name becomes _. A рамка without a марка is named after the top line
+  ;; of its organisation cell, or Без_марки when that is empty too; рамки under one such name whose
+  ;; numbers show they are separate documents get _01, _02... Says so in renamed.
+  (foreach r records
+    (setq m (pa:get 'marka r))
+    (cond
+      ((null m)
+       (setq key (pa:title-name (pa:org-title r)))
+       (if (assoc key by-title)
+         (setq by-title (subst (append (assoc key by-title) (list r)) (assoc key by-title) by-title))
+         (setq by-title (append by-title (list (list key r))))))
+      (T
+       (setq name (pa:file-safe m))
+       (if (/= m name)
+         (setq renamed (cons (pa:msg "pdfall.forced-renamed" (list "marka" m "name" name "where" (pa:where r))) renamed)))
+       (setq out (cons (pa:put 'marka name r) out)))))
+  (foreach g by-title
+    (setq docs (pa:split-documents (cdr g)) n 0)
+    (pa:log (list "pdfall: without a marka, title" (car g) "|" (length (cdr g)) "frames in" (length docs) "documents"))
+    (foreach d docs
+      (setq n (1+ n)
+            name (strcat (cond ((car g)) ((pa:file "no-marka"))) (if (cdr docs) (strcat "_" (pa:pad n)) "")))
+      (foreach r d
+        (setq renamed (cons (pa:msg "pdfall.forced-no-marka" (list "name" name "where" (pa:where r))) renamed)
+              out (cons (pa:put 'marka name r) out)))))
+  (reverse out))
+
+(defun pa:split-documents (rs / docs placed)
+  ;; rs, рамки without a марка under one name, as documents: in position order, each joins the first
+  ;; document where no рамка of its kind has the same Аркуш or another Аркушів, else starts a new one.
+  (foreach r (vl-sort rs 'pa:position<)
+    (setq placed nil
+          docs (mapcar '(lambda (d)
+                          (if (or placed (vl-some '(lambda (o) (pa:clash-p r o)) d))
+                            d
+                            (progn (setq placed T) (append d (list r)))))
+                       docs))
+    (if (not placed) (setq docs (append docs (list (list r))))))
+  docs)
+
+(defun pa:clash-p (a b)
+  ;; Whether рамки a and b can't be in one document: same kind, and the same Аркуш or another Аркушів.
+  (and (= (pa:get 'kind a) (pa:get 'kind b))
+       (or (and (pa:get 'sheet a) (= (pa:get 'sheet a) (pa:get 'sheet b)))
+           (and (pa:get 'total a) (pa:get 'total b) (/= (pa:get 'total a) (pa:get 'total b))))))
 
 (defun pa:ask-force (/ yes no)
   (setq yes (pa:msg "pdfall.yes" nil) no (pa:msg "pdfall.no" nil))
