@@ -8,13 +8,14 @@
 ;;;   pa:text-style pa:label-style  the look of a title-block text, to write new ones like it
 ;;;
 ;;; A record is one рамка:
-;;;   ((kind . "list"|"spec") (ll x y 0) (ur x y 0) (frame llx lly urx ury)
+;;;   ((kind . "list"|"spec"|"text") (ll x y 0) (ur x y 0) (frame llx lly urx ury) (size name w h)
 ;;;    (marka . s) (sheet . n) (total . n) (zone ...) (counters ...) (cells ...) (rows ...))
-;;; zone holds the texts of its title block as (x y comparable as-typed owner), counters its
-;;; Аркуш, Аркушів and Арк. cells as pa:title-cells returns them, cells the vertical cell edges
-;;; around it as (x y1 y2) and rows the horizontal ones as (y x1 x2); x and y are measured from
-;;; the рамка's bottom-right corner. kind follows from the title block, not the рамка: an old
-;;; drawing may have an A4 лист (docs/adr/0008-read-old-drawings.md).
+;;; size is the A size of the рамка in its orientation, e.g. ("A3" 420 297). zone holds the texts of
+;;; its title block as (x y comparable as-typed owner), counters its Аркуш, Аркушів and Арк. cells as
+;;; pa:title-cells returns them, cells the vertical cell edges around it as (x y1 y2) and rows the
+;;; horizontal ones as (y x1 x2); x and y are measured from the рамка's bottom-right corner. kind
+;;; follows from the title block, not the рамка's size: a лист may be any A size, and an old drawing
+;;; may have an A4 лист (docs/adr/0008-read-old-drawings.md, 0009-every-a-size-and-settings-for-pasting.md).
 ;;; owner is the TEXT or MTEXT entity when it sits directly in Model space (so PDFNUM can edit it),
 ;;; nil when it is inside a block.
 
@@ -84,12 +85,24 @@
 ;;; ---- Collecting Model space -------------------------------------------------
 ;;; Fills hsegs, vsegs, cellsegs, rowsegs and texts, which are local to pa:read-drawing.
 
+(defun pa:side-p (d)
+  ;; Whether a line d long could be a side of a рамка of any size.
+  (vl-some '(lambda (s) (or (pa:about d (cadr s)) (pa:about d (caddr s)))) *pdfall-sizes*))
+
+(defun pa:size-of (w h)
+  ;; The size of a рамка w wide and h high as (name w h) with its exact sides, w and h in the
+  ;; рамка's orientation; nil when it is no size of *pdfall-sizes*.
+  (vl-some '(lambda (s)
+              (cond ((and (pa:about w (cadr s)) (pa:about h (caddr s))) (list (car s) (cadr s) (caddr s)))
+                    ((and (pa:about w (caddr s)) (pa:about h (cadr s))) (list (car s) (caddr s) (cadr s)))))
+           *pdfall-sizes*))
+
 (defun pa:add-seg (p q / dx dy)
   (setq dx (abs (- (car q) (car p))) dy (abs (- (cadr q) (cadr p))))
   (cond
-    ((and (< dy *pa-tol*) (or (pa:about dx 420.0) (pa:about dx 210.0)))
+    ((and (< dy *pa-tol*) (pa:side-p dx))
      (setq hsegs (cons (list (min (car p) (car q)) (max (car p) (car q)) (cadr p)) hsegs)))
-    ((and (< dx *pa-tol*) (pa:about dy 297.0))
+    ((and (< dx *pa-tol*) (pa:side-p dy))
      (setq vsegs (cons (list (car p) (min (cadr p) (cadr q)) (max (cadr p) (cadr q))) vsegs)))
     ;; shorter lines: the cell edges of title blocks, used by PDFNUM to centre numbers; an old title
     ;; block draws one 63 mm high, past its top
@@ -191,12 +204,13 @@
            vsegs))
 
 (defun pa:find-frames (/ out)
-  ;; Rectangles of about 420x297 or 210x297 with all four sides drawn: (llx lly urx ury).
+  ;; Rectangles of about an A size with all four sides drawn: (llx lly urx ury).
   (foreach b hsegs
     (foreach tp hsegs
       (if (and (pa:near (car tp) (car b))
                (pa:near (cadr tp) (cadr b))
-               (pa:about (- (caddr tp) (caddr b)) 297.0)
+               (> (caddr tp) (caddr b))
+               (pa:size-of (- (cadr b) (car b)) (- (caddr tp) (caddr b)))
                (pa:vseg-p (car b) (caddr b) (caddr tp))
                (pa:vseg-p (cadr b) (caddr b) (caddr tp))
                (not (vl-some '(lambda (f) (and (pa:near (car f) (car b)) (pa:near (cadr f) (caddr b))))
@@ -228,13 +242,41 @@
     (setq v (cons (- (car tx) (caddr f)) (cons (- (cadr tx) (cadr f)) (cddr tx))))
     (if (and (<= -192.0 (car v) 0.0) (<= 0.0 (cadr v) 60.0))
       (setq all (cons v all))))
-  ;; The title block is 55 mm high on a лист, 40 mm on a первый аркуш специфікації, 15 mm after that.
+  ;; The title block is 55 mm high on a лист, 40 mm on the first page of a специфікація or текстовий
+  ;; документ, 15 mm after that.
   (setq top (cond ((= kind "list") 60.0)
                   ((vl-some '(lambda (z) (and (<= (cadr z) 45.0) (= (car (pa:words (caddr z))) (pa:label "total"))))
                             all)
                    45.0)
                   (T 20.0)))
   (vl-remove-if '(lambda (z) (> (cadr z) top)) all))
+
+(defun pa:title-block-p (zone)
+  ;; Whether zone, a рамка's corner as pa:title-zone gives it, holds a title block: one of the labels
+  ;; every form has.
+  (vl-some '(lambda (z) (member (car (pa:words (caddr z)))
+                                (list (pa:label "sheet") (pa:label "total") (pa:label "corner")
+                                      (pa:label "date") (pa:label "scale"))))
+           zone))
+
+(defun pa:frame-kind (f zone / w h)
+  ;; "list", "spec" or "text": what the рамка f holds, from its title block, whose texts up to 60 mm
+  ;; are zone (docs/adr/0009). The Дата head sits 37.5 mm up on every лист's title block, 32.5 mm on a
+  ;; first page and 7.5 mm on a later one; old drawings have Масштаб too. A специфікація has its
+  ;; table head along the рамка's top edge (any of its column heads: a real one may lack some), a
+  ;; текстовий документ doesn't. Only a лист is bigger than A4.
+  (setq w (- (caddr f) (car f)) h (- (cadddr f) (cadr f)))
+  (cond
+    ((> (* w h) (* 1.5 210.0 297.0)) "list")
+    ((vl-some '(lambda (z) (or (= (car (pa:words (caddr z))) (pa:label "scale"))
+                               (and (equal (pa:words (caddr z)) (list (pa:label "date"))) (>= (cadr z) 35.0))))
+              zone)
+     "list")
+    ((vl-some '(lambda (tx) (and (< (car f) (car tx) (caddr f)) (< (- (cadddr f) 20.0) (cadr tx) (cadddr f))
+                                 (member (car (pa:words (caddr tx))) (pa:label "spec-heads"))))
+              texts)
+     "spec")
+    (T "text")))
 
 (defun pa:cells (f / out)
   ;; The vertical cell edges around a рамка's title block, as (x y1 y2) measured like its zone.
@@ -312,38 +354,53 @@
              out (cons (list role z (if o (atoi (caddr o))) o) out)))))
   (reverse out))
 
-(defun pa:read-title (zone counters kind / w names sheet total)
+(defun pa:name-marka (w / i)
+  ;; Where the марка is among the words w of a name-cell line: the first word with a letter and a
+  ;; digit, after a prefix of words without digits ("Джгут", "Джгут живлення" or none), as its
+  ;; position from 0. nil for a title-block label ("Формат А3", "Аркуш 2"), or when a word before it
+  ;; has a digit and no letter (a date, a number).
+  (if (and w (not (member (car w) (pa:label "not-names"))))
+    (progn
+      (setq i 0)
+      (while (and w (not (pa:marka-p (car w))) (not (vl-some 'pa:digit-p (vl-string->list (car w)))))
+        (setq w (cdr w) i (1+ i)))
+      (if (and w (pa:marka-p (car w))) i))))
+
+(defun pa:name-cell-p (z kind)
+  ;; Whether the zone entry z is inside the name cell, wherever the forms have it.
+  (and (< -125.0 (car z) -55.0) (if (= kind "list") (< 20.0 (cadr z) 45.0) (< (cadr z) 30.0))))
+
+(defun pa:read-title (zone counters kind / w i names sheet total)
   ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
-  ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic.
+  ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic. Only texts in the
+  ;; name cell count, so the organisation cell ("ТОВ Енергія-2") or a connector label drawn near the
+  ;; title block isn't taken for the марка.
   (foreach c counters
     (if (caddr c) (if (= (car c) 'total) (setq total (caddr c)) (setq sheet (caddr c)))))
   (foreach z zone
     (setq w (pa:words (car (pa:split (caddr z) "\n"))))
-    (if (and (cadr w)
-             (not (member (car w) (pa:label "not-names")))
-             (pa:marka-p (cadr w)))
-      (setq names (cons (list (cadr w) (cadr (pa:words (car (pa:split (cadddr z) "\n"))))) names))))
-  ;; Old title blocks write only the марка in the name cell ("M1"). Such a text counts only inside
-  ;; the name cell, so a connector label drawn near the title block isn't taken for the марка.
+    (if (and (pa:name-cell-p z kind) (setq i (pa:name-marka w)) (> i 0))
+      (setq names (cons (list (nth i w) (nth i (pa:words (car (pa:split (cadddr z) "\n"))))) names))))
+  ;; A марка with no prefix ("3Р", or an old drawing's "M1") counts only when no text has one with a
+  ;; prefix.
   (if (null names)
     (foreach z zone
       (setq w (pa:words (car (pa:split (caddr z) "\n"))))
-      (if (and w (null (cdr w)) (pa:marka-p (car w))
-               (< -125.0 (car z) -55.0)
-               (if (= kind "list") (< 20.0 (cadr z) 45.0) (< (cadr z) 30.0)))
+      (if (and (pa:name-cell-p z kind) (= 0 (pa:name-marka w)))
         (setq names (cons (list (car w) (car (pa:words (car (pa:split (cadddr z) "\n"))))) names)))))
   (list names sheet total))
 
 (defun pa:paper (r)
-  ;; "a3" or "a4": the paper a рамка is plotted on, by its width.
-  (if (> (- (caddr (pa:get 'frame r)) (car (pa:get 'frame r))) 315.0) "a3" "a4"))
+  ;; The paper a рамка is plotted on: its size as (name width height) in the рамка's orientation,
+  ;; e.g. ("A3" 420 297).
+  (pa:get 'size r))
 
 (defun pa:off-size (r / f w h)
-  ;; The рамка's size as "210x295" when it is off 420x297 or 210x297 by more than a trace; else nil.
+  ;; The рамка's size as "210x295" when it is off its paper size by more than a trace; else nil.
   (setq f (pa:get 'frame r)
         w (- (caddr f) (car f))
         h (- (cadddr f) (cadr f)))
-  (if (or (not (pa:near w (if (= (pa:paper r) "a3") 420.0 210.0))) (not (pa:near h 297.0)))
+  (if (or (not (pa:near w (cadr (pa:paper r)))) (not (pa:near h (caddr (pa:paper r)))))
     (strcat (rtos w 2 0) "x" (rtos h 2 0))))
 
 ;;; ---- Records ----------------------------------------------------------------
@@ -357,16 +414,15 @@
   ;; per рамка with a readable марка, and (message . record) for every рамка without one, in the
   ;; order found; the record is nil when there is no рамка at all.
   (pa:walk-model)
-  (setq frames (pa:find-frames))
+  ;; A rectangle of an A size is a рамка only with a title block in its corner: next to a лист there
+  ;; may be a table or a legend boxed 297x210.
+  (setq frames (vl-remove-if-not '(lambda (f) (pa:title-block-p (pa:title-zone f "list"))) (pa:find-frames)))
   (if (null frames)
     (setq problems (list (cons (pa:msg "reader.no-frames" nil) nil))))
   (foreach f frames
-    ;; The title block decides the kind: an A3 рамка is a лист, and so is an A4 one whose title block
-    ;; is a лист's, with Масштаб (an old Складальний кресленик); an A4 without is a специфікація.
+    ;; The title block decides the kind, not the рамка's size.
     (setq zone (pa:title-zone f "list")
-          kind (if (or (> (- (caddr f) (car f)) 315.0)
-                       (vl-some '(lambda (z) (= (car (pa:words (caddr z))) (pa:label "scale"))) zone))
-                 "list" "spec")
+          kind (pa:frame-kind f zone)
           zone (if (= kind "list") zone (pa:title-zone f kind))
           counters (pa:title-cells zone)
           title (pa:read-title zone counters kind)
@@ -375,6 +431,7 @@
                   (list 'll (car f) (cadr f) 0.0)
                   (list 'ur (caddr f) (cadddr f) 0.0)
                   (cons 'frame f)
+                  (cons 'size (pa:size-of (- (caddr f) (car f)) (- (cadddr f) (cadr f))))
                   ;; the марка exactly as typed: it may mix Latin and Cyrillic letters, like X1A1Р
                   (cons 'marka (cadar names))
                   (cons 'sheet (cadr title))

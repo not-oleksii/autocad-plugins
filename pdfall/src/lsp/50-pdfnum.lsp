@@ -11,10 +11,11 @@
           (vl-remove-if-not '(lambda (c) (= (car c) 'total)) out)))
 
 (defun pa:number-style (records / o e d)
-  ;; The look of a number someone already wrote in a counter cell of a специфікація, so new numbers
-  ;; match it: ((8 . layer) (7 . style) (40 . height) ...), or nil if there is none.
+  ;; The look of a number someone already wrote in a counter cell of a специфікація or текстовий
+  ;; документ, so new numbers match it: ((8 . layer) (7 . style) (40 . height) ...), or nil if there
+  ;; is none.
   (foreach r records
-    (if (= (pa:get 'kind r) "spec")
+    (if (/= (pa:get 'kind r) "list")
       (foreach c (pa:get 'counters r)
         ;; (nth 4 nil) is an error in AutoLISP, so the entry is checked first
         (if (and (null d)
@@ -51,12 +52,19 @@
       (setq z (cadddr c))))
   z)
 
+(defun pa:cell-under (r z / box)
+  ;; The cell under the label z of r as (left bottom right top) when it is one 5 mm row, the number
+  ;; cell a СПДБ лист has under Аркуш and Аркушів; nil under the labels of other листи, where the
+  ;; organisation's cell is.
+  (setq box (pa:cell-box r (car z) (- (cadr z) 5.0)))
+  (if (and box (< (- (cadddr box) (cadr box)) 8.0)) box))
+
 (defun pa:fill-cell (r cell n style / f z x y d e old box)
   ;; Writes number n into the empty cell. Returns nil when it can't.
   (setq f (pa:get 'frame r)
         z (cdr cell)
         e (nth 4 z))
-  (if (= (pa:get 'kind r) "list")
+  (if (and (= (pa:get 'kind r) "list") (not (pa:cell-under r z)))
     (cond
       ((null e) nil)
       ;; On a new лист the number follows the label in the same text: "Аркуш 2".
@@ -72,9 +80,10 @@
        (entmake (append (list '(0 . "TEXT") (list 10 x y 0.0) (list 11 x y 0.0) '(72 . 1) '(73 . 2)
                               (cons 1 (itoa n)))
                         (pa:text-style (entget (if (and old (nth 4 old)) (nth 4 old) e)))))))
-    ;; On a специфікація it goes in the middle of the cell under the label, the cell found around
-    ;; the point 5 mm below the label (7.5 mm in the corner cell); at that point if its edges aren't.
-    ;; x and y are measured from the рамка's bottom-right corner until the text is made.
+    ;; On a специфікація, a текстовий документ and a СПДБ лист it goes in the middle of the cell under
+    ;; the label, the cell found around the point 5 mm below the label (7.5 mm in the corner cell); at
+    ;; that point if its edges aren't. A лист's number takes the look of its label, not of the numbers
+    ;; on специфікації. x and y are measured from the рамка's bottom-right corner until the text is made.
     (progn
       (setq y (- (cadr z) (if (= (car cell) 'corner) 7.5 5.0))
             x (pa:cell-x (pa:get 'cells r) (car z) y)
@@ -82,7 +91,8 @@
             x (+ x (caddr f)))
       (entmake (append (list '(0 . "TEXT") (list 10 x y 0.0) (list 11 x y 0.0) '(72 . 1) '(73 . 2)
                              (cons 1 (itoa n)))
-                       (cond (style) ((pa:label-style z (pa:get 'zone r)))))))))
+                       (cond ((and style (/= (pa:get 'kind r) "list")) style)
+                             ((pa:label-style z (pa:get 'zone r)))))))))
 
 (defun pa:position< (a b / ya yb)
   ;; Upper row first, then left to right.
@@ -125,8 +135,7 @@
         style (pa:number-style records))
   (command "_.UNDO" "_BE")
   (foreach m (pa:markas records)
-    (pa:number m "list" (pa:of m "list" records) style)
-    (pa:number m "spec" (pa:of m "spec" records) style))
+    (foreach k *pa-kinds* (pa:number m k (pa:of m k records) style)))
   (command "_.UNDO" "_E")
   (if filled
     (progn

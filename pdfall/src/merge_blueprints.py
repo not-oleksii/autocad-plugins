@@ -51,18 +51,27 @@ LOOKALIKES = str.maketrans(label("lookalike-latin"), label("lookalike-cyrillic")
 
 SHEET = file_word("sheet")
 SPEC = file_word("spec")
+TEXT = file_word("text")
 UNFILLED = file_word("unfilled")
 
 SHEET_LABEL = label("sheet")
 TOTAL_LABEL = label("total")
 CORNER_LABEL = label("corner")
-# The title block's name cell reads "<product> <марка>", e.g. "Джгут 1ЧП". These labels
-# also start a title-block line but are never a product.
+# The title block's name cell reads "[prefix] <марка>", e.g. "Джгут 1ЧП" or "1ЧП". These labels
+# also start a title-block line but never a name cell.
 LABELS = set(label("not-names"))
 # The title block sits within this many points of the bottom edge on every sheet format, and
 # within this many of the right edge (185 mm plus the 5 mm margin, and a little more).
 TITLE_BLOCK_HEIGHT = 130
 TITLE_BLOCK_WIDTH = 570
+# The name cell lies between these distances from the right edge and below this height on every
+# form, in points (as the LISP reader's pa:name-cell-p, in mm: 55 to 125, under 45). On a later
+# page of a специфікація or текстовий документ it is wider, reaching 15 mm from the edge.
+MM = 72 / 25.4
+NAME_CELL_LEFT = 125 * MM
+NAME_CELL_RIGHT = 55 * MM
+NAME_CELL_RIGHT_LATER = 15 * MM
+NAME_CELL_TOP = 45 * MM
 
 
 @dataclass
@@ -81,7 +90,7 @@ class Part:
 
     path: Path
     marka: str
-    kind: str  # "filled", "unfilled", "spec", or "output" for an earlier combined document
+    kind: str  # "filled", "unfilled", "spec", "text", or "output" for an earlier combined document
     number: int
     explicit: bool  # the name contains the sheet number
     canonical: str  # the file name this part should have
@@ -125,7 +134,16 @@ def parse(path):
             return Part(path, marka, "output", 0, True, f"{marka} {title}.pdf")
 
     kind = "filled"
-    if rest[:1] == [SPEC]:
+    if rest[:len(TEXT.split())] == TEXT.split():
+        kind = "text"
+        rest = rest[len(TEXT.split()):]
+        if len(rest) == 1 and rest[0].isdigit():
+            number, explicit = int(rest[0]), True
+        elif rest == []:
+            number, explicit = 1, False
+        else:
+            return None
+    elif rest[:1] == [SPEC]:
         kind = "spec"
         rest = rest[1:]
         # earlier versions wrote "специфікація лист N"
@@ -150,7 +168,7 @@ def parse(path):
             return None
 
     # <марка> <вид> <NN>[ <варіант>].pdf, always numbered, with two digits at least
-    words_out = [marka, SPEC if kind == "spec" else SHEET, f"{number:02d}"]
+    words_out = [marka, {"spec": SPEC, "text": TEXT}.get(kind, SHEET), f"{number:02d}"]
     if kind == "unfilled":
         words_out.append(UNFILLED)
     return Part(path, marka, kind, number, explicit, " ".join(words_out) + ".pdf")
@@ -161,22 +179,40 @@ def is_marka(text):
     return text.isalnum() and any(c.isdigit() for c in text) and any(c.isalpha() for c in text)
 
 
-def read_marka(items):
-    """The марка printed after the product word in the name cell, which may wrap onto the line below."""
-    for x0, y0, text in items:
-        product = text.split()[0]
-        # A one-letter "product" is a piece of a word split by a font change, as old title blocks
-        # print "Аркушiв" ("Аркуш", "і", "в"), and would read "в1" as the марка.
-        if not product.isalpha() or len(product) < 2 or product in LABELS:
-            continue
-        line = [(x0, text[len(product):])]
-        line += [(x, t) for x, y, t in items if abs(y - y0) < 3 and x0 < x < x0 + 150]
-        if not "".join(t for _, t in line).strip():
-            line = [(x, t) for x, y, t in items if y0 - 30 < y < y0 - 5 and x0 - 5 < x < x0 + 150]
-        marka = "".join(t for _, t in sorted(line)).replace(" ", "").upper()
-        if is_marka(marka):
-            return marka
+def name_marka(words):
+    """The марка among the words of a name cell: the first word with a letter and a digit, after a
+    prefix of words without digits ("Джгут", "Джгут живлення" or none), as the LISP reader's
+    pa:name-marka. None for a title-block label ("Формат А3") or when a word before it has a digit."""
+    if not words or words[0] in LABELS:
+        return None
+    for word in words:
+        if is_marka(word):
+            return word.upper()
+        if any(c.isdigit() for c in word):
+            return None
     return None
+
+
+def read_marka(items, page_width=None, raw=False, right=NAME_CELL_RIGHT):
+    """The марка in the name cell, read line by line from the top: a long prefix or марка may wrap
+    onto the line below. Only texts in the name cell count, so the organisation cell or a caption
+    near the title block is never taken for it.
+
+    A line arrives in pieces wherever the font changes, even inside a word ("Джгут ", "1", "ЧП"),
+    and a piece keeps the space after it. With raw, items are such pieces, joined as they are;
+    otherwise they are whole texts, joined with spaces. right is where the name cell ends."""
+    if page_width is not None:
+        items = [i for i in items
+                 if page_width - NAME_CELL_LEFT < i[0] < page_width - right and i[1] < NAME_CELL_TOP]
+    lines = []
+    for x, y, text in sorted(items, key=lambda i: -i[1]):
+        if lines and abs(lines[-1][0] - y) < 3:
+            lines[-1][1].append((x, text))
+        else:
+            lines.append((y, [(x, text)]))
+    glue = "" if raw else " "
+    words = " ".join(glue.join(t for _, t in sorted(line)) for _, line in lines).split()
+    return name_marka(words)
 
 
 def number_below(items, label_x, label_y, x_max, depth):
@@ -194,11 +230,12 @@ def number_after(items, label_x, label_y, x_max):
     return int(values[0]) if values else None
 
 
-def read_title_block(items, page_width=None):
+def read_title_block(items, page_width=None, pieces=None):
     """Read марка, sheet number and sheet count from the text items of a page's title block.
 
     With page_width, texts left of the title block are left out: on an A3 page, a caption in the
-    drawing near the bottom edge ("контактів X6") would read as a name cell.
+    drawing near the bottom edge ("контактів X6") would read as a name cell. pieces are the same
+    texts as they came, with their spaces, for the name cell (see read_marka).
 
     Handles the drawing form ("Аркуш 1  Аркушів 3" in one line, or in an old title block
     "Аркуш", "1", "Аркушів", "3" as separate texts), the first specification sheet ("Аркуш"
@@ -207,7 +244,7 @@ def read_title_block(items, page_width=None):
     """
     items = [i for i in items if i[1] < TITLE_BLOCK_HEIGHT
              and (page_width is None or i[0] > page_width - TITLE_BLOCK_WIDTH)]
-    title = TitleBlock(marka=read_marka(items))
+    title = TitleBlock()
     title.alone = [t.replace(" ", "") for _, _, t in items if is_marka(t.replace(" ", ""))]
     labels = {}
     for x, y, text in items:
@@ -216,7 +253,9 @@ def read_title_block(items, page_width=None):
         elif m := re.fullmatch(rf"{re.escape(TOTAL_LABEL)}\s+(\d+)", text):
             title.total = int(m.group(1))
         elif text in (SHEET_LABEL, TOTAL_LABEL, CORNER_LABEL):
-            labels[text] = (x, y)
+            # the changes table has an "Арк." column too: the corner cell is the rightmost
+            if text != CORNER_LABEL or text not in labels or x > labels[text][0]:
+                labels[text] = (x, y)
 
     if title.sheet is None and SHEET_LABEL in labels:
         x, y = labels[SHEET_LABEL]
@@ -230,9 +269,13 @@ def read_title_block(items, page_width=None):
         if title.total is None:
             title.total = number_after(items, x, y, x + 60)
     right_edge = max((x for x, _, _ in items), default=0)
-    if title.sheet is None and CORNER_LABEL in labels and labels[CORNER_LABEL][0] > right_edge - 60:
+    later = CORNER_LABEL in labels and labels[CORNER_LABEL][0] > right_edge - 60
+    if title.sheet is None and later:
         x, y = labels[CORNER_LABEL]
         title.sheet = number_below(items, x, y, x + 20, 28)
+    right = NAME_CELL_RIGHT_LATER if later else NAME_CELL_RIGHT
+    title.marka = (read_marka(pieces, page_width, raw=True, right=right) if pieces is not None
+                   else read_marka(items, page_width, right=right))
     return title
 
 
@@ -243,19 +286,19 @@ def load(part):
     """
     pages = PdfReader(part.path).pages
     part.pages = len(pages)
-    items = []
+    items, pieces = [], []
 
     def collect(text, cm, tm, font, size):
-        text = text.strip()
-        if text:
+        if text.strip():
             x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
             y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
-            items.append((x, y, text.translate(LOOKALIKES)))
+            items.append((x, y, text.strip().translate(LOOKALIKES)))
+            pieces.append((x, y, text.translate(LOOKALIKES)))
 
     part.text = (pages[0].extract_text(visitor_text=collect) or "") + "".join(
         page.extract_text() or "" for page in pages[1:]
     )
-    part.title = title = read_title_block(items, float(pages[0].mediabox.width))
+    part.title = title = read_title_block(items, float(pages[0].mediabox.width), pieces)
     # An old name cell prints only the марка ("M1"). Any title-block text could be only a марка, so
     # such a text confirms the file's марка but never contradicts it.
     if title.marka is None and any(looks(t) == looks(part.marka) for t in title.alone):
@@ -338,8 +381,8 @@ def warn_duplicate_plots(marka, parts, warnings):
             warnings.append(msg("merge.same-content", marka=marka, name=part.path.name, first=first.path.name))
 
 
-def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, report, warnings):
-    """Merge the given sheet kind plus specs into '<марка> <title>.pdf'.
+def build(folder, marka, sheets, specs, texts, sheet_kind, title, force, dry_run, report, warnings):
+    """Merge the given sheet kind, then the specs and the text documents, into '<марка> <title>.pdf'.
 
     Skipped when a sheet is missing, or when a title block contradicts its file name and
     the user did not force the build. With dry_run, only reports what it would write.
@@ -352,6 +395,7 @@ def build(folder, marka, sheets, specs, sheet_kind, title, force, dry_run, repor
         return
     sources = [sheets[n][sheet_kind] for n in sorted(sheets)]
     sources += [specs[n] for n in sorted(specs)]
+    sources += [texts[n] for n in sorted(texts)]
     if not sources:
         return
     target = folder / f"{marka} {title}.pdf"
@@ -469,22 +513,25 @@ def process(entry, root, force, dry_run):
     report = []
     for marka in sorted(by_marka):
         sheets = defaultdict(dict)
-        specs = {}
+        specs, texts = {}, {}
         for part in by_marka[marka]:
             if part.kind == "spec":
                 specs[part.number] = part
+            elif part.kind == "text":
+                texts[part.number] = part
             else:
                 sheets[part.number][part.kind] = part
-        for numbers, label in ((sorted(sheets), SHEET), (sorted(specs), SPEC)):
+        for numbers, label in ((sorted(sheets), SHEET), (sorted(specs), SPEC), (sorted(texts), TEXT)):
             gaps = sorted(set(range(1, max(numbers, default=0) + 1)) - set(numbers))
             if gaps:
                 warnings.append(msg("merge.gaps", marka=marka, label=label, gaps=", ".join(map(str, gaps))))
-        drawings = [p for p in by_marka[marka] if p.kind != "spec"]
+        drawings = [p for p in by_marka[marka] if p.kind in ("filled", "unfilled")]
         warn_sheet_count(marka, drawings, SHEET, sorted(sheets), warnings)
         warn_sheet_count(marka, list(specs.values()), SPEC, sorted(specs), warnings)
+        warn_sheet_count(marka, list(texts.values()), TEXT, sorted(texts), warnings)
         warn_duplicate_plots(marka, by_marka[marka], warnings)
         for kind, title in (("filled", GENERAL), ("unfilled", GENERAL_PRINT)):
-            build(folder, marka, sheets, specs, kind, title, force, dry_run, report, warnings)
+            build(folder, marka, sheets, specs, texts, kind, title, force, dry_run, report, warnings)
 
     print("\n" + (msg("merge.will-build") if dry_run else msg("merge.built")))
     for line in report or [msg("merge.nothing")]:

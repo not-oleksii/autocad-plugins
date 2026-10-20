@@ -1,15 +1,10 @@
-;;; ---- PDFLIST and PDFSPEC ----------------------------------------------------
-;;; Paste an empty рамка with its title block: PDFLIST a лист (A3), PDFSPEC a специфікація (A4).
-;;; The templates are the DWGs that make_templates.ps1 cuts out of a real drawing. A template is
+;;; ---- PDFLIST, PDFSPEC and PDFTEXT --------------------------------------------
+;;; Paste an empty рамка with its title block: PDFLIST a лист in the format chosen in the settings,
+;;; PDFSPEC a специфікація, PDFTEXT a текстовий документ in the chosen standard.
+;;; The templates are the DWGs that make_templates.ps1 makes from the company's forms. A template is
 ;;; pasted exploded, so PDFNUM and PDFALL treat it like a рамка drawn by hand.
-;;; Defines c:PDFLIST and c:PDFSPEC; tests/run.ps1 also drives pa:paste-start, pa:paste-run and
-;;; pa:paste-cleanup, because a run ends with Esc, which would stop the test script too.
-
-(defun pa:subst-marka (s marka / p)
-  ;; s with the МАРКА that the template leaves in the name cell replaced by marka.
-  (if (setq p (vl-string-search (pa:label "placeholder") s))
-    (strcat (substr s 1 p) marka (substr s (+ p 1 (strlen (pa:label "placeholder")))))
-    s))
+;;; Defines c:PDFLIST, c:PDFSPEC and c:PDFTEXT; tests/run.ps1 also drives pa:paste-start,
+;;; pa:paste-run and pa:paste-cleanup, because a run ends with Esc, which would stop the test script too.
 
 (defun pa:ask-marka (/ s)
   ;; The марка exactly as typed, or the one used last when the user just presses Enter.
@@ -45,9 +40,10 @@
     (progn (vl-catch-all-apply '(lambda () (command "_.UNDO" "_E"))) (setq undo-open nil)))
   (pa:restore))
 
-(defun pa:paste-one (file marka / path last0 r e d)
-  ;; Pastes the template file where the user picks its lower-left corner and writes marka into
-  ;; its name cell. Returns nil when the user pressed Esc instead.
+(defun pa:paste-one (file name / path last0 r e d)
+  ;; Pastes the template file where the user picks its lower-left corner and writes name, the
+  ;; MTEXT contents of pa:name-text, into its name cell, which says МАРКА in the template. Returns
+  ;; nil when the user pressed Esc instead.
   (setq path (strcat *pdfall-home* "\\" file))
   (if (not (findfile path))
     (progn (princ (strcat "\n! " (pa:msg "paste.no-template" (list "path" path)))) (exit)))
@@ -75,21 +71,21 @@
      (while e
        (setq d (entget e))
        (if (and (= (cdr (assoc 0 d)) "MTEXT") (vl-string-search (pa:label "placeholder") (cdr (assoc 1 d))))
-         (entmod (subst (cons 1 (pa:subst-marka (cdr (assoc 1 d)) marka)) (assoc 1 d) d)))
+         (entmod (subst (cons 1 name) (assoc 1 d) d)))
        (setq e (entnext e)))
      (command "_.UNDO" "_E")
      (setq undo-open nil)
      T)))
 
-(defun pa:paste-run (cmd marka pick / what)
-  ;; Pastes рамки one after another; the user ends it with Esc (Enter is not accepted at the
-  ;; insertion point prompt). (apply pick (list i)) gives the template file and a description
+(defun pa:paste-run (cmd marka kind pick / what name)
+  ;; Pastes рамки of kind one after another; the user ends it with Esc (Enter is not accepted at
+  ;; the insertion point prompt). (apply pick (list i)) gives the template file and a description
   ;; for the i-th рамка of this run, counting from 0. The caller's placed counts them.
-  (setq placed 0)
+  (setq placed 0 name (pa:name-text kind marka))
   (while (progn
            (setq what (apply pick (list placed)))
            (princ (strcat "\n" (pa:msg "paste.pick" (list "cmd" cmd "what" (cdr what)))))
-           (pa:paste-one (car what) marka))
+           (pa:paste-one (car what) name))
     (setq placed (1+ placed))
     (princ (strcat "\n  " (pa:msg "paste.added-one" (list "what" (cdr what)))))))
 
@@ -99,39 +95,65 @@
                           (pa:msg "paste.nothing" (list "cmd" cmd))))))
 
 (defun pa:paste-failed (cmd msg)
-  ;; What the *error* of PDFLIST and PDFSPEC does.
+  ;; What the *error* of PDFLIST, PDFSPEC and PDFTEXT does.
   (pa:paste-cleanup)
   (pa:report-crash cmd msg)
   (princ))
 
-(defun c:PDFLIST (/ *error* sysvars fill-state undo-open marka placed)
+(defun c:PDFLIST (/ *error* sysvars fill-state undo-open marka placed file)
   (defun *error* (msg) (pa:paste-failed "PDFLIST" msg))
   (pa:paste-start)
-  (setq marka (pa:ask-marka))
-  (pa:paste-run "PDFLIST" marka '(lambda (i) (cons "PDFALL_list.dwg" (pa:msg "paste.list" nil))))
+  (setq marka (pa:ask-marka)
+        file (pa:list-file))
+  (pa:paste-run "PDFLIST" marka "list" '(lambda (i) (cons file (pa:msg "paste.list" (list "form" (pa:form-name file))))))
   (pa:paste-cleanup)
   (pa:paste-report "PDFLIST" marka)
   (princ))
 
-(defun c:PDFSPEC (/ *error* sysvars fill-state undo-open marka placed first next form dflt)
+(defun pa:paste-pages (cmd kind last-var question pick / first next form dflt)
+  ;; The run of PDFSPEC or PDFTEXT: asks whether it starts on the first page, then pastes the first
+  ;; page's template (if so) and later pages' after it. (apply pick (list page)) gives the template
+  ;; file and description of page "1" or "2", (apply question (list first next default)) the
+  ;; question. last-var names the variable that keeps the марка of the last run, after which the
+  ;; next run is usually a later page of the same марка.
+  (setq first (pa:msg "paste.first" nil)
+        next (pa:msg "paste.next" nil)
+        dflt (if (= marka (eval last-var)) next first))
+  (initget (strcat first " " next))
+  (setq form (getkword (strcat "\n" (apply question (list first next dflt)))))
+  (if (null form) (setq form dflt))
+  (pa:paste-run cmd marka kind
+    '(lambda (i) (apply pick (list (if (and (= i 0) (= form first)) "1" "2")))))
+  (if (> placed 0) (set last-var marka)))
+
+(defun c:PDFSPEC (/ *error* sysvars fill-state undo-open marka placed)
   (defun *error* (msg)
     (if (and placed (> placed 0)) (setq *pdfall-spec-marka* marka))
     (pa:paste-failed "PDFSPEC" msg))
   (pa:paste-start)
-  (setq marka (pa:ask-marka)
-        first (pa:msg "paste.first" nil)
-        next (pa:msg "paste.next" nil)
-        ;; the next специфікація after one of the same марка is usually a later аркуш of it
-        dflt (if (= marka *pdfall-spec-marka*) next first))
-  (initget (strcat first " " next))
-  (setq form (getkword (strcat "\n" (pa:msg "paste.which-spec" (list "first" first "next" next "default" dflt)))))
-  (if (null form) (setq form dflt))
-  (pa:paste-run "PDFSPEC" marka
-    '(lambda (i)
-       (if (and (= i 0) (= form first))
+  (setq marka (pa:ask-marka))
+  (pa:paste-pages "PDFSPEC" "spec" '*pdfall-spec-marka*
+    '(lambda (f n d) (pa:msg "paste.which-spec" (list "first" f "next" n "default" d)))
+    '(lambda (page)
+       (if (= page "1")
          (cons "PDFALL_spec1.dwg" (pa:msg "paste.spec-first" nil))
          (cons "PDFALL_spec2.dwg" (pa:msg "paste.spec-next" nil)))))
-  (if (> placed 0) (setq *pdfall-spec-marka* marka))
   (pa:paste-cleanup)
   (pa:paste-report "PDFSPEC" marka)
+  (princ))
+
+(defun c:PDFTEXT (/ *error* sysvars fill-state undo-open marka placed)
+  (defun *error* (msg)
+    (if (and placed (> placed 0)) (setq *pdfall-text-marka* marka))
+    (pa:paste-failed "PDFTEXT" msg))
+  (pa:paste-start)
+  (setq marka (pa:ask-marka))
+  (pa:paste-pages "PDFTEXT" "text" '*pdfall-text-marka*
+    '(lambda (f n d) (pa:msg "paste.which-text" (list "first" f "next" n "default" d)))
+    '(lambda (page)
+       (if (= page "1")
+         (cons (pa:text-file "1") (pa:msg "paste.text-first" nil))
+         (cons (pa:text-file "2") (pa:msg "paste.text-next" nil)))))
+  (pa:paste-cleanup)
+  (pa:paste-report "PDFTEXT" marka)
   (princ))

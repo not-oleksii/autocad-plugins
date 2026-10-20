@@ -18,9 +18,15 @@
 
 ;; A kind as it reads on its own ("лист"), after "рамка" (of one: "листа") and after "рамок" (of
 ;; many: "листів").
-(defun pa:kind-name (kind) (if (= kind "list") (pa:msg "kind.list" nil) (pa:msg "kind.spec" nil)))
-(defun pa:kind-of (kind) (if (= kind "list") (pa:msg "kind.list.of" nil) (pa:msg "kind.spec.of" nil)))
-(defun pa:kind-pl (kind) (if (= kind "list") (pa:msg "kind.list.pl" nil) (pa:msg "kind.spec.pl" nil)))
+(defun pa:kind-name (kind)
+  (cond ((= kind "list") (pa:msg "kind.list" nil)) ((= kind "spec") (pa:msg "kind.spec" nil)) ((pa:msg "kind.text" nil))))
+(defun pa:kind-of (kind)
+  (cond ((= kind "list") (pa:msg "kind.list.of" nil)) ((= kind "spec") (pa:msg "kind.spec.of" nil)) ((pa:msg "kind.text.of" nil))))
+(defun pa:kind-pl (kind)
+  (cond ((= kind "list") (pa:msg "kind.list.pl" nil)) ((= kind "spec") (pa:msg "kind.spec.pl" nil)) ((pa:msg "kind.text.pl" nil))))
+
+;; The kinds of рамка in the order they are plotted, numbered and merged.
+(setq *pa-kinds* '("list" "spec" "text"))
 
 (defun pa:err (msg r) (setq errors (cons (cons msg r) errors)))
 (defun pa:warn (msg) (setq warnings (cons msg warnings)))

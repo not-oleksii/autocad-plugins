@@ -1,6 +1,7 @@
 ;;; ---- Text -------------------------------------------------------------------
 ;;; String helpers that every other file may use:
 ;;;   pa:msg pa:label pa:file  the texts of messages.json
+;;;   pa:fill          {name}s of any text filled in, as pa:msg does
 ;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:cyr
 ;;;   pa:lower pa:pad pa:bad-char
 ;;;
@@ -9,10 +10,13 @@
 ;;; Ukrainian string outside 00-settings.lsp. So every key is a literal string, and pa:msg gets
 ;;; its values as a literal (list "name" value ...).
 
-(defun pa:msg (key args / s k v p)
+(defun pa:msg (key args)
   ;; The message key with each {name} replaced by its value from args, (name value name value ...).
   ;; Numbers are written as integers.
-  (setq s (cond ((cdr (assoc key *pa-messages*))) ((strcat "{" key "}"))))
+  (pa:fill (cond ((cdr (assoc key *pa-messages*))) ((strcat "{" key "}"))) args))
+
+(defun pa:fill (s args / k v p)
+  ;; s with each {name} replaced by its value from args, as for pa:msg.
   (while args
     (setq k (strcat "{" (car args) "}")
           v (cadr args)

@@ -1,7 +1,8 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
 ;;; merge.exe. Defines c:PDFALL; nothing here is called from the other files.
-;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md.
+;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md; every A size and
+;;; текстові документи: docs/adr/0009-every-a-size-and-settings-for-pasting.md.
 
 ;;; ---- Checks -----------------------------------------------------------------
 
@@ -29,7 +30,7 @@
     (if (and (not (member k nums)) (= (length nums) n))
       (pa:err (pa:msg "check.sheet-missing" (list "marka" marka "kind" (pa:kind-of kind) "sheet" k)) (car items)))
     (setq k (1+ k)))
-  ;; Аркушів: on every лист; on a специфікація only on its first аркуш.
+  ;; Аркушів: on every лист; on a специфікація or текстовий документ only on its first аркуш.
   (foreach r items
     (cond
       ((and (pa:get 'total r) (/= (pa:get 'total r) n))
@@ -42,9 +43,14 @@
 
 ;;; ---- Files ------------------------------------------------------------------
 
+(defun pa:kind-file (kind)
+  ;; The word of a kind in the PDF names.
+  (cond ((= kind "list") (pa:file "sheet")) ((= kind "spec") (pa:file "spec")) ((pa:file "text"))))
+
 (defun pa:file-name (marka r unfilled)
-  ;; <марка> лист NN.pdf, <марка> лист NN без заливки.pdf or <марка> специфікація NN.pdf
-  (strcat marka " " (if (= (pa:get 'kind r) "list") (pa:file "sheet") (pa:file "spec")) " " (pa:pad (pa:get 'sheet r))
+  ;; <марка> лист NN.pdf, <марка> лист NN без заливки.pdf, <марка> специфікація NN.pdf or
+  ;; <марка> текстовий документ NN.pdf
+  (strcat marka " " (pa:kind-file (pa:get 'kind r)) " " (pa:pad (pa:get 'sheet r))
           (if unfilled (strcat " " (pa:file "unfilled")) "")
           ".pdf"))
 
@@ -62,7 +68,9 @@
                (or (null (cddr w)) (equal (cddr w) (pa:words (pa:file "unfilled")))))
           (and (= (car w) (pa:file "spec"))
                (setq w (if (= (cadr w) (pa:file "sheet")) (cddr w) (cdr w)))
-               (pa:digits-p (car w)) (null (cdr w)))))))
+               (pa:digits-p (car w)) (null (cdr w)))
+          (and (equal (reverse (cdr (reverse w))) (pa:words (pa:file "text")))
+               (pa:digits-p (last w)))))))
 
 (defun pa:escape (s / out)
   ;; s with wildcard characters escaped for ssget and wcmatch.
@@ -71,12 +79,17 @@
     (setq out (strcat out (if (member c (vl-string->list "#@.*?~[]-,`")) "`" "") (chr c))))
   out)
 
-(defun pa:plot (r path / a3 paper p1 p2)
-  ;; Plots one рамка at 1:1 on its paper size and orientation, which follow from the рамка, not
-  ;; from its kind: a лист may be A4 portrait. After the first plot AutoCAD refuses, nothing more is
-  ;; plotted (refused, local to c:PDFALL).
-  (setq a3 (= (pa:paper r) "a3")
-        paper (if a3 *pdfall-paper-a3* *pdfall-paper-a4*)
+(defun pa:paper-name (size)
+  ;; The canonical name of the paper of size (name width height), e.g.
+  ;; ISO_full_bleed_A3_(420.00_x_297.00_MM).
+  (pa:fill *pdfall-paper* (list "size" (car size) "w" (itoa (cadr size)) "h" (itoa (caddr size)))))
+
+(defun pa:plot (r path / size paper p1 p2)
+  ;; Plots one рамка at 1:1 on paper of exactly its size and orientation, which follow from the
+  ;; рамка, not from its kind: a лист may be any A size. After the first plot AutoCAD refuses,
+  ;; nothing more is plotted (refused, local to c:PDFALL).
+  (setq size (pa:paper r)
+        paper (pa:paper-name size)
         p1 (trans (pa:get 'll r) 0 1)
         p2 (trans (pa:get 'ur r) 0 1))
   (if (not refused)
@@ -87,7 +100,7 @@
       ;; -PLOT quits on a paper size the device doesn't know, and every answer after it would run as
       ;; a command ("Неизвестная команда M"). CMDNAMES holds English command names in any language.
       (if (wcmatch (strcase (getvar "CMDNAMES")) "*PLOT*")
-        (command "_M" (if a3 "_L" "_P") "_N" "_W" p1 p2
+        (command "_M" (if (> (cadr size) (caddr size)) "_L" "_P") "_N" "_W" p1 p2
                  "1=1" "_C" "_N" "." "_Y" "_A" path "_N" "_Y")
         (progn
           (setq refused T)
@@ -144,12 +157,9 @@
     (if (pa:bad-char m)
       (pa:err (pa:msg "check.bad-char" (list "marka" m "char" (pa:bad-char m)))
               (vl-some '(lambda (r) (if (= (pa:get 'marka r) m) r)) records))))
+  ;; groups: (марка листи специфікації текстові-документи), each kind numbered and checked.
   (foreach m markas
-    (setq groups
-      (cons (list m
-                  (pa:check m "list" (pa:of m "list" records))
-                  (pa:check m "spec" (pa:of m "spec" records)))
-            groups)))
+    (setq groups (cons (cons m (mapcar '(lambda (k) (pa:check m k (pa:of m k records))) *pa-kinds*)) groups)))
   (setq groups (reverse groups))
 
   ;; Old drawings have no шар заливки: their листи без заливки come out the same as the filled ones.
@@ -160,7 +170,7 @@
   (foreach r records
     (if (pa:off-size r)
       (pa:warn (pa:msg "pdfall.off-size" (list "marka" (pa:get 'marka r) "size" (pa:off-size r)
-                                               "nominal" (if (= (pa:paper r) "a3") "420x297" "210x297")
+                                               "nominal" (strcat (itoa (cadr (pa:paper r))) "x" (itoa (caddr (pa:paper r))))
                                                "where" (pa:where r))))))
   (if errors
     (progn
@@ -212,8 +222,8 @@
   (pa:date-add records)
   (pa:set-fill T)
   (foreach g groups
-    (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil))))
-    (foreach r (caddr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil)))))
+    (foreach items (cdr g)
+      (foreach r items (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil))))))
   (pa:set-fill nil)
   (foreach g groups
     (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r T)))))
