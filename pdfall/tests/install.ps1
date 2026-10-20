@@ -143,20 +143,20 @@ try {
 
     Write-Host 'Pick a version...'
     $u = Invoke-Update 'DownArrow,Enter'
-    Check ($u.Code -eq 0 -and $u.Text -match "встановлено[\s\S]*> PDFALL 1\.7\.5" -and $u.Text -match 'Що зникне, якщо повернутися до PDFALL 1\.7\.5' -and
+    Check ($u.Code -eq 0 -and $u.Text -match "встановлено[\s\S]*> PDFALL 1\.7\.5" -and $u.Text -match 'NOTES-BETWEEN' -and
            $u.Text -match 'NOTES-NEW' -and $u.Text -match 'Enter — повернутися до 1\.7\.5' -and $u.Text -match 'Завантажую PDFALL-1\.7\.5\.zip') `
-        'with the newest installed, the arrow down picks the older version, shows what goes away and installs it'
+        'with the newest installed, the arrow down picks the older version, shows its notes and installs it'
     if ($u.Code -ne 0) { Write-Host $u.Text }
 
     Set-Installed '1.7.0'
     $u = Invoke-Update 'DownArrow,DownArrow,DownArrow,UpArrow,Escape'
     Check ($u.Code -eq 0 -and (Installed) -eq '1.7.0' -and $u.Text -match 'Скасовано' -and $u.Text -notmatch 'Завантажую' -and
-           $u.Text -match 'У PDFALL 1\.6\.0 ще немає «Оновити PDFALL»' -and $u.Text -match "Що з'явиться, якщо встановити PDFALL $([regex]::Escape($built))") `
-        'the picker starts at the newest version, warns that 1.6.0 has no updater, stops at the oldest, and Esc changes nothing'
+           $u.Text -match 'У PDFALL 1\.6\.0 ще немає «Оновити PDFALL»' -and $u.Text -match 'NOTES-OLD') `
+        'the picker starts at the newest version, shows the notes of 1.6.0 and warns it has no updater, stops at the oldest, and Esc changes nothing'
 
     $u = Invoke-Update 'Enter'
     Check ($u.Code -eq 0 -and (Installed) -eq $built -and $u.Text -match "Завантажую PDFALL-$([regex]::Escape($built))\.zip" -and
-           $u.Text -match 'NOTES-NEW' -and $u.Text -match 'NOTES-BETWEEN') "Enter in the picker installs the newest version ($built) over 1.7.0"
+           $u.Text -match 'NOTES-NEW' -and $u.Text -notmatch 'NOTES-BETWEEN') "Enter in the picker shows only the newest version's notes and installs it ($built) over 1.7.0"
 
     Write-Host 'Uninstall...'
     & $installer -Uninstall @common
