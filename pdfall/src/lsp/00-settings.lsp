@@ -19,7 +19,7 @@
 
 (vl-load-com)
 
-(setq *pdfall-version* "1.8.1")
+(setq *pdfall-version* "1.8.2")
 
 ;;; ---- Settings ---------------------------------------------------------------
 
@@ -34,6 +34,11 @@
 ;; doesn't know "ISO full bleed A3 (420.00 x 297.00 MM)", the English name (docs/adr/0008).
 (setq *pdfall-paper-a3* "ISO_full_bleed_A3_(420.00_x_297.00_MM)")
 (setq *pdfall-paper-a4* "ISO_full_bleed_A4_(210.00_x_297.00_MM)")
+
+;; How AutoCAD words Esc ("Function cancelled") in a language other than English, as a wcmatch
+;; pattern. LISP can't make AutoCAD say it, so add the wording when a new language shows
+;; "Помилка ...: <it>" after Esc.
+(setq *pdfall-cancel-words* "*рерван*")
 
 ;; The folder holding pdfall.lsp, merge.exe and PDFALL.pc3: the installed PDFALL.bundle\Contents.
 ;; Set it before loading this file to run PDFALL from another folder.

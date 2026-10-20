@@ -357,6 +357,7 @@ PDFALL
 (princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today)))))
 (princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner dated)))))
 (princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК")))))
+(princ (strcat "\nCANCELS=" (vl-princ-to-string (mapcar 'pa:cancelled-p (list "Function cancelled" "Функция прервана" (vl-catch-all-error-message (vl-catch-all-apply 'exit nil)) "bad argument type: numberp: nil")))))
 ;; a марка that Windows can't use in a file name stops PDFALL before it plots anything
 (tpaste "PDFLIST" "1/2П" 1 "PDFALL_list.dwg")
 5000,1000
@@ -382,6 +383,7 @@ Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted �
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
 Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк\)') 'the name helpers find a forbidden character, pad a number and lower-case Cyrillic'
+Check ($plog -match 'CANCELS=\(T T T nil\)') 'Esc in English or Russian and (exit) are not reported as errors, a real error is'
 Check ($plog -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($plog, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots'
 Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
 $today = Get-Date -Format 'dd.MM.yy'

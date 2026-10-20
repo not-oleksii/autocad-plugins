@@ -59,7 +59,7 @@
   (if (vl-catch-all-error-p r) (command))
   (cond
     ((or (vl-catch-all-error-p r) (equal (entlast) last0))
-     (if (and (vl-catch-all-error-p r) (not (wcmatch (strcase (vl-catch-all-error-message r)) "*CANCEL*")))
+     (if (and (vl-catch-all-error-p r) (not (pa:cancelled-p (vl-catch-all-error-message r))))
        (princ (strcat "\n! " (pa:msg "paste.insert-failed" (list "file" file "msg" (vl-catch-all-error-message r))))))
      (command "_.UNDO" "_E")
      (setq undo-open nil)

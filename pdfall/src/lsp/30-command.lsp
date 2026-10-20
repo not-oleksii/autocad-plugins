@@ -4,6 +4,7 @@
 ;;;   pa:where pa:problem  how a рамка, and a problem found on one, read in a message
 ;;;   pa:kind-name pa:kind-of pa:kind-pl  a record's kind as it reads in a message
 ;;;   pa:report-errors pa:report-warnings pa:report-crash
+;;;   pa:cancelled-p     whether an error message means Esc, in any AutoCAD language
 ;;;   pa:layer pa:layer-set pa:restore  put layers and system variables back
 ;;; A command that uses them declares errors, warnings, fill-state and sysvars among its locals.
 
@@ -39,9 +40,19 @@
       (princ (strcat "\n\n" (pa:msg "warnings" nil)))
       (foreach w (reverse warnings) (princ (strcat "\n  ! " w))))))
 
+;; What (exit) says in this AutoCAD's language ("quit / exit abort" in English), read once here.
+(setq *pa-exit-msg* (vl-catch-all-error-message (vl-catch-all-apply 'exit nil)))
+
+(defun pa:cancelled-p (msg)
+  ;; T when an error message means the user pressed Esc, or a command stopped itself with (exit)
+  ;; after saying why. AutoCAD words both in its own language (Russian: "Функция прервана").
+  (or (= msg *pa-exit-msg*)
+      (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*")
+      (wcmatch msg *pdfall-cancel-words*)))
+
 (defun pa:report-crash (cmd msg)
   ;; What a command's *error* says, unless the user cancelled.
-  (if (not (wcmatch (strcase msg) "*CANCEL*,*QUIT*,*EXIT*"))
+  (if (not (pa:cancelled-p msg))
     (princ (strcat "\n" (pa:msg "command-error" (list "cmd" cmd "msg" msg))))))
 
 ;;; ---- Layers -----------------------------------------------------------------

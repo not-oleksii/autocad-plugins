@@ -66,7 +66,7 @@ A key no code uses is only a warning. The bundle carries no JSON: the LISP texts
 
 ## Settings
 
-Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed. The paper sizes are canonical names, which AutoCAD doesn't translate; never replace them with the names the Plot dialog shows ([ADR 0008](docs/adr/0008-read-old-drawings.md)).
+Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed. The paper sizes are canonical names, which AutoCAD doesn't translate; never replace them with the names the Plot dialog shows ([ADR 0008](docs/adr/0008-read-old-drawings.md)). `*pdfall-cancel-words*` is how AutoCAD words Esc in languages other than English (Russian: «Функция прервана»); if Esc in some other language prints `Помилка <команда>: …`, add that wording there.
 
 Colleagues get no settings: PDFALL recognises the old and the new title block by itself (ADR 0008), so a drawing that differs in a new way needs a change to the reader, `src\lsp\20-reader.lsp`, and a drawing for `examples\old`.
 
