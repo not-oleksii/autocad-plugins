@@ -96,6 +96,7 @@
     (progn
       (if (findfile path) (vl-file-delete path))
       (princ (strcat "\n  " (vl-filename-base path) "..."))
+      (pa:log (list "plot:" path "| device" device "| paper" paper "| window" p1 p2))
       (command "_.-PLOT" "_Y" "Model" device paper)
       ;; -PLOT quits on a paper size the device doesn't know, and every answer after it would run as
       ;; a command ("Неизвестная команда M"). CMDNAMES holds English command names in any language.
@@ -103,12 +104,13 @@
         (command "_M" (if (> (cadr size) (caddr size)) "_L" "_P") "_N" "_W" p1 p2
                  "1=1" "_C" "_N" "." "_Y" "_A" path "_N" "_Y")
         (progn
+          (pa:log (list "plot: -PLOT quit after the paper size; CMDNAMES" (getvar "CMDNAMES")))
           (setq refused T)
           (pa:err (pa:msg "pdfall.paper-refused" (list "paper" paper "device" device)) r)))
       (cond
         (refused)
-        ((findfile path) (setq plotted (1+ plotted)))
-        (T (pa:err (pa:msg "pdfall.cannot-write" (list "path" path)) r))))))
+        ((findfile path) (setq plotted (1+ plotted)) (pa:log "plot: written"))
+        (T (pa:log "plot: no file written") (pa:err (pa:msg "pdfall.cannot-write" (list "path" path)) r))))))
 
 ;;; ---- Layers -----------------------------------------------------------------
 
@@ -140,6 +142,7 @@
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
   (princ (strcat "\n" (pa:msg "reading" (list "cmd" "PDFALL"))))
+  (pa:log (list "pdfall: fill layers" fills "| device" device "| plotters" (pa:plotters) "| merge" *pdfall-merge*))
   (setq drawing (pa:read-drawing)
         records (car drawing)
         markas (pa:markas records))
@@ -237,6 +240,7 @@
     ((null *pdfall-merge*))
     ((findfile *pdfall-merge*)
      (princ (strcat "\n" (pa:msg "pdfall.merging" nil)))
+     (pa:log (list "pdfall: merging" base))
      (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"\"")))
     (T (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))))
 
@@ -267,6 +271,7 @@
     (pa:warn (pa:msg "pdfall.no-pc3" (list "pc3" (car *pdfall-devices*) "plotters" (pa:plotters) "home" *pdfall-home*))))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
   (setvar "CMDECHO" 0)
+  (pa:log-start "PDFALL")
   (pa:run)
   (pa:restore)
   (princ))

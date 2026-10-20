@@ -109,6 +109,7 @@
     (setq i (1+ i) done nil)
     (foreach cell (pa:empty-cells r)
       (setq what (if (= (car cell) 'total) (pa:msg "pdfnum.total" (list "n" n)) (pa:msg "pdfnum.sheet" (list "n" i))))
+      (pa:log (list "pdfnum:" marka kind "sheet" i "of" n "empty cell" (car cell) "label at" (car (cdr cell)) (cadr (cdr cell))))
       (cond
         ((and (/= (car cell) 'total) (member i used))
          (pa:warn (pa:msg "pdfnum.number-used" (list "marka" marka "kind" (pa:kind-of kind) "n" i "where" (pa:where r)))))
@@ -129,6 +130,7 @@
     (princ))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
   (setvar "CMDECHO" 0)
+  (pa:log-start "PDFNUM")
   (princ (strcat "\n" (pa:msg "reading" (list "cmd" "PDFNUM"))))
   (setq drawing (pa:read-drawing)
         records (car drawing)
@@ -137,6 +139,7 @@
   (foreach m (pa:markas records)
     (foreach k *pa-kinds* (pa:number m k (pa:of m k records) style)))
   (command "_.UNDO" "_E")
+  (pa:log (list "pdfnum: filled" (reverse filled)))
   (if filled
     (progn
       (princ (strcat "\n\n" (pa:msg "pdfnum.filled" nil)))

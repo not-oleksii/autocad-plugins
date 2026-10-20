@@ -541,6 +541,54 @@ $esc
 $elog = Invoke-Acad 'esc' $escScr $null
 Check ($elog -match 'PDFLIST: додано рамок: 1 \(марка 1ЧП\)') 'PDFLIST reports what it added when Esc ends it'
 
+# The real PDFLIST and PDFSPEC, down to the run of pages, with pasting itself replaced by a stand-in
+# that "pastes" 3 рамки and then ends the run as Esc would. The debug log is on.
+Write-Host 'Runs of pages and the debug log...'
+$pagesDwg = Join-Path $Work 'pages.dwg'
+Copy-Item (Join-Path $pasteDir 'paste.dwg') $pagesDwg -Force
+$debugLog = Join-Path $env:TEMP 'PDFALL-debug.log'
+$pagesScr = @"
+(setvar "SECURELOAD" 0)
+(setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
+(load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
+PDFDEBUG
+Увімкнути
+(defun pa:paste-one (file name) (if (< (length pasted) 3) (progn (setq pasted (cons file pasted)) T)))
+(setq pasted nil)
+(pa:set-setting "Paste" "text_skd")
+PDFLIST
+Лорем
+Перший
+(princ (strcat "\nTEXT-PAGES=" (vl-princ-to-string (reverse pasted))))
+(setq pasted nil)
+PDFSPEC
+Лорем
+Наступний
+(princ (strcat "\nSPEC-PAGES=" (vl-princ-to-string (reverse pasted))))
+(setq pasted nil)
+(pa:set-setting "Paste" "list_skd_A3l")
+PDFLIST
+Лорем
+(princ (strcat "\nLIST-PAGES=" (vl-princ-to-string (reverse pasted))))
+PDFNUM
+PDFDEBUG
+Вимкнути
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+$glog = Invoke-Acad 'pages' $pagesScr $pagesDwg
+Check ($glog -match 'END-OF-TEST' -and $glog -notmatch 'Hard error|Помилка') 'PDFLIST and PDFSPEC run through their pages without an error'
+Check ($glog -match 'TEXT-PAGES=\(PDFALL_text_skd_1\.dwg PDFALL_text_skd_2\.dwg PDFALL_text_skd_2\.dwg\)') 'PDFLIST pastes a текстовий документ''s first page, then later ones'
+Check ($glog -match 'SPEC-PAGES=\(PDFALL_spec2\.dwg PDFALL_spec2\.dwg PDFALL_spec2\.dwg\)') 'PDFSPEC pastes only later pages when asked to start on one'
+Check ($glog -match 'LIST-PAGES=\(PDFALL_list_skd_A3l\.dwg PDFALL_list_skd_A3l\.dwg PDFALL_list_skd_A3l\.dwg\)') 'PDFLIST pastes the лист chosen in the settings'
+Check ($glog -match 'журнал увімкнено' -and $glog -match 'журнал вимкнено') 'PDFDEBUG turns the debug log on and off'
+$dlog = if (Test-Path $debugLog) { Get-Content $debugLog -Raw -Encoding UTF8 } else { '' }
+Check ($dlog -match '==== PDFLIST \| PDFALL' -and $dlog -match 'paste: pages of text starting on' -and $dlog -match 'paste: template "?PDFALL_spec2') 'the debug log follows PDFLIST and PDFSPEC step by step'
+Check ($dlog -match '==== PDFNUM' -and $dlog -match 'reader: frame at' -and $dlog -match 'kind (list|spec)' -and $dlog -match '\[name cell\]' -and $dlog -match 'pdfnum: filled') 'the debug log shows each рамка''s kind and title-block texts, with the name cell marked'
+Check ($dlog -match 'log turned off') 'turning the log off is the last thing logged'
+
 Write-Host 'Ribbon tab...'
 [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path $Acad) 'AcCui.dll')) | Out-Null
 $cs = New-Object Autodesk.AutoCAD.Customization.CustomizationSection((Join-Path $Contents 'PDFALL.cuix'))

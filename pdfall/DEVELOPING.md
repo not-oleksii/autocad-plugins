@@ -38,6 +38,7 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 00-settings.lsp   version, settings, *pdfall-home*   (opens the joined file)
                   <- messages.json goes here, as *pa-messages*, *pa-labels* and *pa-files*
 10-text.lsp       pa:msg, pa:label, pa:file and the string helpers
+12-log.lsp        the debug log (pa:log) and c:PDFDEBUG
 20-reader.lsp     Model space -> records: pa:read-drawing; title-block cells and the look of their texts
 30-command.lsp    errors, warnings, reports, restoring layers and system variables
 35-date.lsp       the export date PDFALL writes into the Дата cell while it plots
@@ -51,6 +52,10 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 ```
 
 `pa:read-drawing` is the one way to read a drawing. It returns `(records problems)`: a record for every рамка with a readable марка, carrying its title-block texts (`zone`), its Аркуш/Аркушів/Арк. cells (`counters`) and its cell edges (`cells`, `rows`), all measured from the рамка's bottom-right corner. The lines and texts it collects stay inside it.
+
+### The debug log
+
+When something works here but not on a colleague's PC, ask them to run `PDFDEBUG` → `Увімкнути`, repeat what fails, then `PDFDEBUG` → `Показати` and send `%TEMP%\PDFALL-debug.log`. The log has the AutoCAD version, language and code pages, the settings, every rectangle the reader considered and why it was or wasn't a рамка, each рамка's kind and why, all its title-block texts with their positions (the name cell marked), the марка, and each step of pasting, numbering and plotting. Add a `(pa:log (list ...))` wherever a new decision is made; it costs nothing while the log is off. Each line is flushed at once, so the last line before a hard error ("internal stack limit reached") shows where it happened. Log lines are English, so they never need messages.json.
 
 ## Texts: messages.json
 

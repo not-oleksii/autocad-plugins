@@ -19,7 +19,7 @@
     "loaded": "PDFALL {version} завантажено. PDFALL друкує всі листи, специфікації й текстові документи в PDF, PDFNUM заповнює порожні клітинки Аркуш/Аркушів, PDFLIST вставляє порожню рамку листа чи текстового документа, PDFSPEC — специфікації, PDFSETTINGS налаштовує, що саме вставляє PDFLIST.",
 
     "reader.no-frames": "у Model space немає жодної рамки (штрихпунктирної межі аркуша A0–A5, наприклад 420x297 або 210x297)",
-    "reader.no-marka": "в основному написі не знайдено марку",
+    "reader.no-marka": "в основному написі не знайдено марку: у клітинці назви немає тексту",
     "reader.many-markas": "в основному написі кілька марок: {markas}",
 
     "check.single-empty": "{marka} {kind}: клітинки Аркуш/Аркушів порожні, тому це лист 1. Заповніть їх командою PDFNUM.",
@@ -117,6 +117,15 @@
     "settings.no-dialog": "PDFSETTINGS: не вдалося відкрити вікно налаштувань.",
     "settings.saved": "PDFSETTINGS: збережено. «Лист» вставлятиме: {form}, назва: {name}",
     "settings.unchanged": "PDFSETTINGS: нічого не змінено.",
+
+    "log.turn-on": "Увімкнути",
+    "log.turn-off": "Вимкнути",
+    "log.show": "Показати",
+    "log.ask": "Докладний журнал PDFALL [{on}/{off}/{show}] <{default}>: ",
+    "log.started": "PDFDEBUG: журнал увімкнено. Повторіть те, що не працює, потім PDFDEBUG → Показати і надішліть файл {path}",
+    "log.stopped": "PDFDEBUG: журнал вимкнено. Файл лишився: {path}",
+    "log.none": "PDFDEBUG: журналу ще немає. Увімкніть його й повторіть команду.",
+    "log.on": "(докладний журнал увімкнено: {path}; вимкнути — PDFDEBUG)",
 
     "merge.title-marka": "в основному написі марка '{marka}'",
     "merge.title-sheet": "в основному написі Аркуш {sheet}",

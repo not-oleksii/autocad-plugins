@@ -34,6 +34,7 @@
 (defun pa:report-errors (header / e)
   (princ (strcat "\n\nPDFALL: " header))
   (foreach e (reverse errors)
+    (pa:log (list "error:" (pa:problem e)))
     (princ (strcat "\n  X " (pa:problem e))))
   (if (setq e (vl-some 'cdr (reverse errors)))
     (progn
@@ -44,7 +45,7 @@
   (if warnings
     (progn
       (princ (strcat "\n\n" (pa:msg "warnings" nil)))
-      (foreach w (reverse warnings) (princ (strcat "\n  ! " w))))))
+      (foreach w (reverse warnings) (pa:log (list "warning:" w)) (princ (strcat "\n  ! " w))))))
 
 ;; What (exit) says in this AutoCAD's language ("quit / exit abort" in English), read once here.
 (setq *pa-exit-msg* (vl-catch-all-error-message (vl-catch-all-apply 'exit nil)))
@@ -58,6 +59,7 @@
 
 (defun pa:report-crash (cmd msg)
   ;; What a command's *error* says, unless the user cancelled.
+  (pa:log (list cmd "stopped:" msg (if (pa:cancelled-p msg) "(cancelled)" "(error)")))
   (if (not (pa:cancelled-p msg))
     (princ (strcat "\n" (pa:msg "command-error" (list "cmd" cmd "msg" msg))))))
 

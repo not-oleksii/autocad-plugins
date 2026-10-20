@@ -9,13 +9,14 @@
   <Components Description="PDFALL">
     <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.0" SupportPath="./Contents" />
     <ComponentEntry AppName="PDFALL" ModuleName="./Contents/pdfall.lsp"
-                    AppDescription="PDFALL, PDFNUM, PDFLIST, PDFSPEC and PDFSETTINGS commands" LoadOnAutoCADStartup="True" PerDocument="True">
+                    AppDescription="PDFALL, PDFNUM, PDFLIST, PDFSPEC, PDFSETTINGS and PDFDEBUG commands" LoadOnAutoCADStartup="True" PerDocument="True">
       <Commands GroupName="PDFALL">
         <Command Local="PDFALL" Global="PDFALL" />
         <Command Local="PDFNUM" Global="PDFNUM" />
         <Command Local="PDFLIST" Global="PDFLIST" />
         <Command Local="PDFSPEC" Global="PDFSPEC" />
         <Command Local="PDFSETTINGS" Global="PDFSETTINGS" />
+        <Command Local="PDFDEBUG" Global="PDFDEBUG" />
       </Commands>
     </ComponentEntry>
     <!-- The PDFALL ribbon tab, built by src\ribbon.ps1. -->

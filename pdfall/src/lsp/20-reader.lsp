@@ -267,16 +267,20 @@
   ;; текстовий документ doesn't. Only a лист is bigger than A4.
   (setq w (- (caddr f) (car f)) h (- (cadddr f) (cadr f)))
   (cond
-    ((> (* w h) (* 1.5 210.0 297.0)) "list")
-    ((vl-some '(lambda (z) (or (= (car (pa:words (caddr z))) (pa:label "scale"))
-                               (and (equal (pa:words (caddr z)) (list (pa:label "date"))) (>= (cadr z) 35.0))))
-              zone)
+    ((> (* w h) (* 1.5 210.0 297.0)) (pa:log "  kind list: bigger than A4") "list")
+    ((setq w (vl-some '(lambda (z) (if (or (= (car (pa:words (caddr z))) (pa:label "scale"))
+                                          (and (equal (pa:words (caddr z)) (list (pa:label "date"))) (>= (cadr z) 35.0)))
+                                      z))
+                      zone))
+     (pa:log (list "  kind list: title-block label" (cadddr w) "at" (car w) (cadr w)))
      "list")
-    ((vl-some '(lambda (tx) (and (< (car f) (car tx) (caddr f)) (< (- (cadddr f) 20.0) (cadr tx) (cadddr f))
-                                 (member (car (pa:words (caddr tx))) (pa:label "spec-heads"))))
-              texts)
+    ((setq w (vl-some '(lambda (tx) (if (and (< (car f) (car tx) (caddr f)) (< (- (cadddr f) 20.0) (cadr tx) (cadddr f))
+                                            (member (car (pa:words (caddr tx))) (pa:label "spec-heads")))
+                                       tx))
+                      texts))
+     (pa:log (list "  kind spec: table head" (cadddr w) "at the top"))
      "spec")
-    (T "text")))
+    (T (pa:log "  kind text: no scale label, date head below 35 mm, no table head at the top") "text")))
 
 (defun pa:cells (f / out)
   ;; The vertical cell edges around a рамка's title block, as (x y1 y2) measured like its zone.
@@ -400,7 +404,9 @@
                  (or (null top) (> (cadr z) (cadr top))))
           (setq top z)))
       (if top
-        (setq names (list (list (last (pa:first-line-words (caddr top))) (last (pa:first-line-words (cadddr top)))))))))
+        (setq names (list (list (last (pa:first-line-words (caddr top))) (last (pa:first-line-words (cadddr top)))))))
+      (pa:log (if top (list "  marka without a digit: last word of the top name-cell text" (cadddr top))
+                  "  marka: the name cell has no text"))))
   (list names sheet total))
 
 (defun pa:paper (r)
@@ -421,19 +427,36 @@
 (defun pa:get (key r) (cdr (assoc key r)))
 (defun pa:put (key val r) (subst (cons key val) (assoc key r) r))
 
+(defun pa:log-zone (f zone kind)
+  ;; Every text of a рамка's title block, as the reader sees it, for the debug log.
+  (foreach z (vl-sort zone '(lambda (a b) (if (pa:near (cadr a) (cadr b)) (< (car a) (car b)) (> (cadr a) (cadr b)))))
+    (pa:log (list "    text" (car z) (cadr z) (if (pa:name-cell-p z kind) "[name cell]" "")
+                  (if (nth 4 z) (cdr (assoc 0 (entget (nth 4 z)))) "in-block") (vl-string-translate "\n" "|" (cadddr z))))))
+
 (defun pa:read-drawing (/ texts hsegs vsegs cellsegs rowsegs pa-owner frames kind zone counters title names r
                           records problems)
   ;; Walks Model space and reads every рамка's title block. Returns (records problems): one record
   ;; per рамка with a readable марка, and (message . record) for every рамка without one, in the
   ;; order found; the record is nil when there is no рамка at all.
   (pa:walk-model)
+  (pa:log (list "reader: lines" (length hsegs) "horizontal and" (length vsegs) "vertical of a frame's length,"
+                (length cellsegs) "+" (length rowsegs) "cell edges," (length texts) "texts"))
   ;; A rectangle of an A size is a рамка only with a title block in its corner: next to a лист there
   ;; may be a table or a legend boxed 297x210.
-  (setq frames (vl-remove-if-not '(lambda (f) (pa:title-block-p (pa:title-zone f "list"))) (pa:find-frames)))
+  (setq frames (vl-remove-if-not
+                 '(lambda (f / ok)
+                    (setq ok (pa:title-block-p (pa:title-zone f "list")))
+                    (pa:log (list "reader: rectangle" (car f) (cadr f) "-" (caddr f) (cadddr f)
+                                  (car (pa:size-of (- (caddr f) (car f)) (- (cadddr f) (cadr f))))
+                                  (if ok "has a title block" "skipped: no title-block label in its corner")))
+                    (if (and (not ok) (pa:log-on-p)) (pa:log-zone f (pa:title-zone f "list") "list"))
+                    ok)
+                 (pa:find-frames)))
   (if (null frames)
     (setq problems (list (cons (pa:msg "reader.no-frames" nil) nil))))
   (foreach f frames
     ;; The title block decides the kind, not the рамка's size.
+    (pa:log (list "reader: frame at" (car f) (cadr f)))
     (setq zone (pa:title-zone f "list")
           kind (pa:frame-kind f zone)
           zone (if (= kind "list") zone (pa:title-zone f kind))
@@ -453,6 +476,12 @@
                   (cons 'counters counters)
                   (cons 'cells (pa:cells f))
                   (cons 'rows (pa:rows f))))
+    (if (pa:log-on-p)
+      (progn
+        (pa:log-zone f zone kind)
+        (pa:log (list "  size" (pa:get 'size r) "marka" (pa:get 'marka r) "candidates" (mapcar 'cadr names)
+                      "sheet" (pa:get 'sheet r) "total" (pa:get 'total r)
+                      "counters" (mapcar '(lambda (c) (list (car c) (cadddr (cadr c)) (caddr c))) counters)))))
     (cond
       ((null names) (setq problems (cons (cons (pa:msg "reader.no-marka" nil) r) problems)))
       ((vl-some '(lambda (x) (/= (car x) (caar names))) names)
@@ -462,6 +491,7 @@
                      r)
                problems)))
       (T (setq records (cons r records)))))
+  (pa:log (list "reader:" (length records) "frames read," (length problems) "problems:" (mapcar 'car problems)))
   (list records (reverse problems)))
 
 (defun pa:markas (records / out)

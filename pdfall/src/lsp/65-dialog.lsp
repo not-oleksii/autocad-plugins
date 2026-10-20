@@ -5,13 +5,15 @@
 ;;; Defines c:PDFSETTINGS; tests/run.ps1 also calls pa:preview-lines, since the console AutoCAD the
 ;;; tests run in has no dialogs.
 ;;;
-;;; The DCL is written to a temporary file when the dialog opens. It holds no Ukrainian: every text
-;;; is put in with set_tile and add_list, so the file's encoding never matters. The «Вставити»
-;;; button's label in the DCL is only there in case AutoCAD doesn't take one from set_tile.
+;;; The DCL is written to a temporary file when the dialog opens. Every text is put in with set_tile
+;;; and add_list, except the «Вставити» button's label and the title, which set_tile can't change:
+;;; they are written into the file in the PC's code page, which AutoCAD reads it in, when that code
+;;; page can hold them (pa:code-page-p), and in English otherwise.
 
 (setq *pa-dcl* '(
   "pdfall_settings : dialog {"
   "  key = \"dialog\";"
+  "  label = @title@;"
   "  : text { key = \"note\"; width = 92; }"
   "  spacer;"
   "  : row {"
@@ -45,13 +47,38 @@
   "  : row {"
   "    fixed_width = true;"
   "    alignment = centered;"
-  "    : button { key = \"paste\"; label = \"Paste\"; width = 16; }"
+  "    : button { key = \"paste\"; label = @paste@; width = 16; }"
   "    : spacer { width = 2; }"
   "    ok_button;"
   "    : spacer { width = 2; }"
   "    cancel_button;"
   "  }"
   "}"))
+
+(defun pa:code-page-p (s / path f back)
+  ;; Whether a text file written here keeps s as it is: the PC's code page has its letters.
+  (setq path (vl-filename-mktemp "pdfall.txt") f (open path "w"))
+  (write-line s f)
+  (close f)
+  (setq f (open path "r") back (read-line f))
+  (close f)
+  (vl-file-delete path)
+  (= back s))
+
+(defun pa:dcl-string (s / out)
+  ;; s as a DCL string, in quotes.
+  (setq out "")
+  (foreach c (vl-string->list s)
+    (setq out (strcat out (if (member c '(34 92)) "\\" "") (chr c))))
+  (strcat "\"" out "\""))
+
+(defun pa:dcl-lines (/ paste title)
+  ;; *pa-dcl* with the button's label and the title put in.
+  (setq paste (pa:msg "settings.paste" nil) title (pa:msg "settings.title" nil))
+  (if (not (pa:code-page-p (strcat paste title))) (setq paste "Paste" title "PDFALL"))
+  (pa:log (list "dialog: labels" paste "|" title "| SYSCODEPAGE" (getvar "SYSCODEPAGE")))
+  (mapcar '(lambda (l) (vl-string-subst (pa:dcl-string title) "@title@" (vl-string-subst (pa:dcl-string paste) "@paste@" l)))
+          *pa-dcl*))
 
 (defun pa:preview-lines (file wpx hpx / tp w h k dx dy c lines out px py)
   ;; The template file drawn into an image tile wpx by hpx pixels: (x1 y1 x2 y2 colour) per line,
@@ -144,11 +171,14 @@
 
   (setq dcl (vl-filename-mktemp "pdfall.dcl")
         f (open dcl "w"))
-  (foreach l *pa-dcl* (write-line l f))
+  (foreach l (pa:dcl-lines) (write-line l f))
   (close f)
   (setq id (load_dialog dcl))
+  (pa:log (list "dialog:" dcl "load_dialog" id))
   (if (not (new_dialog "pdfall_settings" id))
-    (progn (unload_dialog id) (vl-file-delete dcl) (princ (strcat "\n" (pa:msg "settings.no-dialog" nil))) (exit)))
+    (progn
+      (pa:log "dialog: new_dialog failed")
+      (unload_dialog id) (vl-file-delete dcl) (princ (strcat "\n" (pa:msg "settings.no-dialog" nil))) (exit)))
   (set_tile "dialog" (pa:msg "settings.title" nil))
   (set_tile "note" (pa:msg "settings.note" nil))
   (set_tile "h_doc" (pa:msg "settings.doc" nil))
@@ -156,7 +186,6 @@
   (set_tile "h_prefix" (pa:msg "settings.prefix" nil))
   (set_tile "h_line2" (pa:msg "settings.line2" nil))
   (set_tile "h_name" (pa:msg "settings.name" nil))
-  (set_tile "paste" (pa:msg "settings.paste" nil))
   (pa:dlg-list "doc" (mapcar 'pa:doc-name docs) (pa:dlg-index doc docs))
   (pa:dlg-list "prefix" (list (pa:label "prefix") (pa:msg "settings.custom" nil) (pa:msg "settings.no-prefix" nil))
                (pa:dlg-index prefix choices))
@@ -178,6 +207,8 @@
   (action_tile "accept" "(check 1)")
   (action_tile "paste" "(check 2)")
   (setq result (start_dialog))
+  (pa:log (list "dialog: closed with" result "| document" (pa:doc-id doc size orient) "| marka" marka
+                "| prefix" prefix prefix-text "| line2" line2 line2-text))
   (unload_dialog id)
   (vl-file-delete dcl)
   (if (member result '(1 2))
@@ -193,6 +224,7 @@
 
 (defun c:PDFSETTINGS (/ *error* sysvars fill-state undo-open marka placed result)
   (defun *error* (msg) (pa:list-failed "PDFSETTINGS" msg))
+  (pa:log-start "PDFSETTINGS")
   (setq result (pa:settings-dialog))
   (cond
     ((= result 2)

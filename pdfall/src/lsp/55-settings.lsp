@@ -19,11 +19,12 @@
 ;;;   PrefixText  the custom prefix, kept when another choice is made
 ;;;   Line2       std (the label "list-line2", Складальне креслення), custom or none
 ;;;   Line2Text   the custom second line
+;;;   Debug       1 while PDFDEBUG has the debug log on (12-log.lsp)
 ;;; A document is list_<standard> or text_<standard>.
 
 (setq *pa-setting-defaults*
   '(("Paste" . "list_spdbv_A3l") ("Marka" . "") ("Prefix" . "std") ("PrefixText" . "")
-    ("Line2" . "std") ("Line2Text" . "")))
+    ("Line2" . "std") ("Line2Text" . "") ("Debug" . "0")))
 
 (defun pa:setting (key / v)
   (setq v (getenv (strcat "PDFALL_" key)))
@@ -32,6 +33,8 @@
 (defun pa:set-setting (key value)
   ;; An empty value would read back as the default, so it is stored as a single space.
   (setenv (strcat "PDFALL_" key) (if (= value "") " " value)))
+
+(setq *pa-log-on* (= (pa:setting "Debug") "1"))
 
 ;;; ---- Templates --------------------------------------------------------------
 

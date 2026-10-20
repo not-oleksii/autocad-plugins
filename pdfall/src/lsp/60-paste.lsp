@@ -40,7 +40,7 @@
     (progn (vl-catch-all-apply '(lambda () (command "_.UNDO" "_E"))) (setq undo-open nil)))
   (pa:restore))
 
-(defun pa:paste-one (file name / path last0 r e d)
+(defun pa:paste-one (file name / path last0 r e d n named)
   ;; Pastes the template file where the user picks its lower-left corner and writes name, the
   ;; MTEXT contents of pa:name-text, into its name cell, which says МАРКА in the template. Returns
   ;; nil when the user pressed Esc instead.
@@ -53,6 +53,8 @@
   ;; Esc at the insertion point is how a run ends, so it is caught here instead of reaching *error*
   (setq r (vl-catch-all-apply '(lambda () (command "_.-INSERT" path "_S" 1.0 "_R" 0.0 pause))))
   (if (vl-catch-all-error-p r) (command))
+  (pa:log (list "paste: inserted" path "->" (if (vl-catch-all-error-p r) (vl-catch-all-error-message r) "ok")
+                (if (equal (entlast) last0) "nothing added" (cdr (assoc 10 (entget (entlast)))))))
   (cond
     ((or (vl-catch-all-error-p r) (equal (entlast) last0))
      (if (and (vl-catch-all-error-p r) (not (pa:cancelled-p (vl-catch-all-error-message r))))
@@ -67,12 +69,13 @@
      (vl-catch-all-apply
        '(lambda ()
           (vla-delete (vla-item (vla-get-blocks (pa:acad-doc)) (vl-filename-base file)))))
-     (setq e (if last0 (entnext last0) (entnext)))
+     (setq e (if last0 (entnext last0) (entnext)) n 0 named 0)
      (while e
-       (setq d (entget e))
+       (setq d (entget e) n (1+ n))
        (if (and (= (cdr (assoc 0 d)) "MTEXT") (vl-string-search (pa:label "placeholder") (cdr (assoc 1 d))))
-         (entmod (subst (cons 1 name) (assoc 1 d) d)))
+         (progn (entmod (subst (cons 1 name) (assoc 1 d) d)) (setq named (1+ named))))
        (setq e (entnext e)))
+     (pa:log (list "paste: exploded into" n "objects, name cells written" named))
      (command "_.UNDO" "_E")
      (setq undo-open nil)
      T)))
@@ -82,8 +85,11 @@
   ;; the insertion point prompt). (apply pick (list i)) gives the template file and a description
   ;; for the i-th рамка of this run, counting from 0. The caller's placed counts them.
   (setq placed 0 name (pa:name-text kind marka))
+  (pa:log (list cmd "pastes" kind "marka" marka "name cell" name))
   (while (progn
+           (pa:log (list "paste: choosing template" placed))
            (setq what (apply pick (list placed)))
+           (pa:log (list "paste: template" (car what)))
            (princ (strcat "\n" (pa:msg "paste.pick" (list "cmd" cmd "what" (cdr what)))))
            (pa:paste-one (car what) name))
     (setq placed (1+ placed))
@@ -122,6 +128,7 @@
 
 (defun c:PDFLIST (/ *error* sysvars fill-state undo-open marka placed)
   (defun *error* (msg) (pa:list-failed "PDFLIST" msg))
+  (pa:log-start "PDFLIST")
   (pa:paste-start)
   (setq marka (pa:ask-marka))
   (pa:list-run "PDFLIST" marka)
@@ -129,26 +136,30 @@
   (pa:paste-report "PDFLIST" marka)
   (princ))
 
-(defun pa:paste-pages (cmd kind last-var question pick / first next form dflt)
+(defun pa:paste-pages (cmd kind last-var question page-pick / first next form dflt)
   ;; The run of PDFSPEC, or of PDFLIST for a текстовий документ: asks whether it starts on the first page, then pastes the first
-  ;; page's template (if so) and later pages' after it. (apply pick (list page)) gives the template
-  ;; file and description of page "1" or "2", (apply question (list first next default)) the
-  ;; question. last-var names the variable that keeps the марка of the last run, after which the
-  ;; next run is usually a later page of the same марка.
+  ;; page's template (if so) and later pages' after it. (apply page-pick (list page)) gives the
+  ;; template file and description of page "1" or "2", (apply question (list first next default))
+  ;; the question. last-var names the variable that keeps the марка of the last run, after which
+  ;; the next run is usually a later page of the same марка.
+  ;; AutoLISP looks names up where a function is called, not where it was written: named pick, as
+  ;; pa:paste-run's own argument is, the lambda below would call itself until LISP's stack ran out.
   (setq first (pa:msg "paste.first" nil)
         next (pa:msg "paste.next" nil)
         dflt (if (= marka (eval last-var)) next first))
   (initget (strcat first " " next))
   (setq form (getkword (strcat "\n" (apply question (list first next dflt)))))
   (if (null form) (setq form dflt))
+  (pa:log (list "paste: pages of" kind "starting on" form))
   (pa:paste-run cmd marka kind
-    '(lambda (i) (apply pick (list (if (and (= i 0) (= form first)) "1" "2")))))
+    '(lambda (i) (apply page-pick (list (if (and (= i 0) (= form first)) "1" "2")))))
   (if (> placed 0) (set last-var marka)))
 
 (defun c:PDFSPEC (/ *error* sysvars fill-state undo-open marka placed)
   (defun *error* (msg)
     (if (and placed (> placed 0)) (setq *pdfall-spec-marka* marka))
     (pa:paste-failed "PDFSPEC" msg))
+  (pa:log-start "PDFSPEC")
   (pa:paste-start)
   (setq marka (pa:ask-marka))
   (pa:paste-pages "PDFSPEC" "spec" '*pdfall-spec-marka*
