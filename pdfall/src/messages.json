@@ -58,12 +58,13 @@
 
     "pdfnum.sheet": "Аркуш {n}",
     "pdfnum.total": "Аркушів {n}",
-    "pdfnum.number-used": "{marka}: Аркуш залишено порожнім, бо інша рамка {kind} вже має {n}  ({where})",
+    "pdfnum.sheet-changed": "Аркуш {old} → {n}",
+    "pdfnum.total-changed": "Аркушів {old} → {n}",
     "pdfnum.in-block": "{marka}: не вдалося записати {what}, бо підпис є частиною блока  ({where})",
     "pdfnum.filled-line": "{marka} {kind} {n}: {what}",
-    "pdfnum.filled": "PDFNUM заповнив:",
+    "pdfnum.filled": "PDFNUM записав номери:",
     "pdfnum.undo": "Щоб скасувати, введіть U.",
-    "pdfnum.nothing": "PDFNUM: порожніх клітинок Аркуш/Аркушів немає.",
+    "pdfnum.nothing": "PDFNUM: усі номери Аркуш/Аркушів уже правильні.",
     "pdfnum.skipped": "пропущено: {problem}",
 
     "paste.marka": "Марка: ",

@@ -107,11 +107,11 @@ $exported = Join-Path $Work 'exported files'
 $pdfs = @(Get-ChildItem $exported -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
 $first, $second = $log -split 'SECOND-PDFNUM', 2
 Check ($log -match 'END-OF-TEST') 'the script ran to the end'
-Check ($first -match 'PDFNUM заповнив:') 'PDFNUM filled in the empty counters'
+Check ($first -match 'PDFNUM записав номери:') 'PDFNUM filled in the empty counters'
 Check ($first -match 'К1 специфікація 2: Аркуш 2') 'К1 специфікація 2 got Аркуш 2'
 Check ($first -match '1П лист 1: Аркуш 1, Аркушів 1') '1П лист 1 got Аркуш 1, Аркушів 1'
 Check ($first -notmatch 'К1 лист') 'К1 листи, already numbered, were left alone'
-Check ($second -match 'PDFNUM: порожніх клітинок') 'a second PDFNUM finds nothing left to fill'
+Check ($second -match 'PDFNUM: усі номери') 'a second PDFNUM finds nothing left to fill or fix'
 Check ($log -notmatch 'клітинк[аи] Аркуш\S* порожн') 'PDFALL finds no empty counters'
 Check ($log -match 'PDFALL: 34 PDF у') 'PDFALL reports 34 PDFs'
 Check ($pdfs.Count -eq 34) "34 PDFs on disk (found $($pdfs.Count))"
@@ -571,6 +571,9 @@ PDFSPEC
 PDFLIST
 Лорем
 (princ (strcat "\nLIST-PAGES=" (vl-princ-to-string (reverse pasted))))
+(foreach r (car (pa:read-drawing))
+  (if (and (= (pa:get 'marka r) "1ЧП") (= (pa:get 'kind r) "list") (= (pa:get 'sheet r) 2))
+    (foreach c (pa:get 'counters r) (pa:set-number c (if (eq (car c) 'total) 5 1)))))
 PDFNUM
 PDFDEBUG
 Вимкнути
@@ -584,6 +587,7 @@ Check ($glog -match 'TEXT-PAGES=\(PDFALL_text_skd_1\.dwg PDFALL_text_skd_2\.dwg 
 Check ($glog -match 'SPEC-PAGES=\(PDFALL_spec2\.dwg PDFALL_spec2\.dwg PDFALL_spec2\.dwg\)') 'PDFSPEC pastes only later pages when asked to start on one'
 Check ($glog -match 'LIST-PAGES=\(PDFALL_list_skd_A3l\.dwg PDFALL_list_skd_A3l\.dwg PDFALL_list_skd_A3l\.dwg\)') 'PDFLIST pastes the лист chosen in the settings'
 Check ($glog -match 'журнал увімкнено' -and $glog -match 'журнал вимкнено') 'PDFDEBUG turns the debug log on and off'
+Check ($glog -match '1ЧП лист 2: Аркуш 1 → 2, Аркушів 5 → 2' -and $glog -notmatch '1ЧП лист 1:') 'PDFNUM fixes a лист copied with the number of another, and leaves the right ones alone'
 $dlog = if (Test-Path $debugLog) { Get-Content $debugLog -Raw -Encoding UTF8 } else { '' }
 Check ($dlog -match '==== PDFLIST \| PDFALL' -and $dlog -match 'paste: pages of text starting on' -and $dlog -match 'paste: template "?PDFALL_spec2') 'the debug log follows PDFLIST and PDFSPEC step by step'
 Check ($dlog -match '==== PDFNUM' -and $dlog -match 'reader: frame at' -and $dlog -match 'kind (list|spec)' -and $dlog -match '\[name cell\]' -and $dlog -match 'pdfnum: filled') 'the debug log shows each рамка''s kind and title-block texts, with the name cell marked'

@@ -43,7 +43,7 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 30-command.lsp    errors, warnings, reports, restoring layers and system variables
 35-date.lsp       the export date PDFALL writes into the Дата cell while it plots
 40-pdfall.lsp     c:PDFALL: марка checks, PDF names, layers, plotting, merge.exe
-50-pdfnum.lsp     c:PDFNUM
+50-pdfnum.lsp     c:PDFNUM: fills and fixes Аркуш/Аркушів (ADR 0010)
 55-settings.lsp   the user's settings: which templates to paste, what goes in the name cell
 60-paste.lsp      c:PDFLIST, c:PDFSPEC
 62-previews.lsp   every template and its outline (made by make_templates.ps1, not edited by hand)
