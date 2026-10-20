@@ -1,7 +1,11 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
-;;; merge.exe. Defines c:PDFALL; nothing here is called from the other files.
-;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md.
+;;; merge.exe. When the check finds problems, the user may plot anyway: the рамки are then numbered
+;;; in the file names as PDFNUM would number them, and a рамка without a марка is named after its
+;;; organisation cell, or Без_марки.
+;;; Defines c:PDFALL; nothing here is called from the other files.
+;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md; every A size and
+;;; текстові документи: docs/adr/0009-every-a-size-and-settings-for-pasting.md.
 
 ;;; ---- Checks -----------------------------------------------------------------
 
@@ -16,7 +20,10 @@
       (if (null (pa:get 'sheet r)) (setq items (list (pa:put 'sheet 1 r))))))
   (foreach r items
     (if (null (pa:get 'sheet r))
-      (pa:err (pa:msg "check.sheet-empty" (list "marka" marka "kinds" (pa:kind-pl kind) "n" n)) r)))
+      (pa:err (if (pa:sheet-cell-p r)
+                (pa:msg "check.sheet-empty" (list "marka" marka "kinds" (pa:kind-pl kind) "n" n))
+                (pa:msg "check.no-label" (list "marka" marka "label" (pa:label "sheet"))))
+              r)))
   (setq nums (vl-remove nil (mapcar '(lambda (r) (pa:get 'sheet r)) items)))
   (foreach r items
     (setq k (pa:get 'sheet r))
@@ -29,7 +36,7 @@
     (if (and (not (member k nums)) (= (length nums) n))
       (pa:err (pa:msg "check.sheet-missing" (list "marka" marka "kind" (pa:kind-of kind) "sheet" k)) (car items)))
     (setq k (1+ k)))
-  ;; Аркушів: on every лист; on a специфікація only on its first аркуш.
+  ;; Аркушів: on every лист; on a специфікація or текстовий документ only on its first аркуш.
   (foreach r items
     (cond
       ((and (pa:get 'total r) (/= (pa:get 'total r) n))
@@ -37,14 +44,22 @@
                r))
       ((and (null (pa:get 'total r)) (> n 1)
             (or (= kind "list") (= (pa:get 'sheet r) 1)))
-       (pa:err (pa:msg "check.total-empty" (list "marka" marka)) r))))
+       (pa:err (if (or (pa:total-cell-p r) (/= kind "list"))
+                 (pa:msg "check.total-empty" (list "marka" marka))
+                 (pa:msg "check.no-label" (list "marka" marka "label" (pa:label "total"))))
+               r))))
   (vl-sort items '(lambda (a b) (< (cond ((pa:get 'sheet a)) (0)) (cond ((pa:get 'sheet b)) (0))))))
 
 ;;; ---- Files ------------------------------------------------------------------
 
+(defun pa:kind-file (kind)
+  ;; The word of a kind in the PDF names.
+  (cond ((= kind "list") (pa:file "sheet")) ((= kind "spec") (pa:file "spec")) ((pa:file "text"))))
+
 (defun pa:file-name (marka r unfilled)
-  ;; <марка> лист NN.pdf, <марка> лист NN без заливки.pdf or <марка> специфікація NN.pdf
-  (strcat marka " " (if (= (pa:get 'kind r) "list") (pa:file "sheet") (pa:file "spec")) " " (pa:pad (pa:get 'sheet r))
+  ;; <марка> лист NN.pdf, <марка> лист NN без заливки.pdf, <марка> специфікація NN.pdf or
+  ;; <марка> текстовий документ NN.pdf
+  (strcat marka " " (pa:kind-file (pa:get 'kind r)) " " (pa:pad (pa:get 'sheet r))
           (if unfilled (strcat " " (pa:file "unfilled")) "")
           ".pdf"))
 
@@ -62,7 +77,9 @@
                (or (null (cddr w)) (equal (cddr w) (pa:words (pa:file "unfilled")))))
           (and (= (car w) (pa:file "spec"))
                (setq w (if (= (cadr w) (pa:file "sheet")) (cddr w) (cdr w)))
-               (pa:digits-p (car w)) (null (cdr w)))))))
+               (pa:digits-p (car w)) (null (cdr w)))
+          (and (equal (reverse (cdr (reverse w))) (pa:words (pa:file "text")))
+               (pa:digits-p (last w)))))))
 
 (defun pa:escape (s / out)
   ;; s with wildcard characters escaped for ssget and wcmatch.
@@ -71,31 +88,38 @@
     (setq out (strcat out (if (member c (vl-string->list "#@.*?~[]-,`")) "`" "") (chr c))))
   out)
 
-(defun pa:plot (r path / a3 paper p1 p2)
-  ;; Plots one рамка at 1:1 on its paper size and orientation, which follow from the рамка, not
-  ;; from its kind: a лист may be A4 portrait. After the first plot AutoCAD refuses, nothing more is
-  ;; plotted (refused, local to c:PDFALL).
-  (setq a3 (= (pa:paper r) "a3")
-        paper (if a3 *pdfall-paper-a3* *pdfall-paper-a4*)
+(defun pa:paper-name (size)
+  ;; The canonical name of the paper of size (name width height), e.g.
+  ;; ISO_full_bleed_A3_(420.00_x_297.00_MM).
+  (pa:fill *pdfall-paper* (list "size" (car size) "w" (itoa (cadr size)) "h" (itoa (caddr size)))))
+
+(defun pa:plot (r path / size paper p1 p2)
+  ;; Plots one рамка at 1:1 on paper of exactly its size and orientation, which follow from the
+  ;; рамка, not from its kind: a лист may be any A size. After the first plot AutoCAD refuses,
+  ;; nothing more is plotted (refused, local to c:PDFALL).
+  (setq size (pa:paper r)
+        paper (pa:paper-name size)
         p1 (trans (pa:get 'll r) 0 1)
         p2 (trans (pa:get 'ur r) 0 1))
   (if (not refused)
     (progn
       (if (findfile path) (vl-file-delete path))
       (princ (strcat "\n  " (vl-filename-base path) "..."))
+      (pa:log (list "plot:" path "| device" device "| paper" paper "| window" p1 p2))
       (command "_.-PLOT" "_Y" "Model" device paper)
       ;; -PLOT quits on a paper size the device doesn't know, and every answer after it would run as
       ;; a command ("Неизвестная команда M"). CMDNAMES holds English command names in any language.
       (if (wcmatch (strcase (getvar "CMDNAMES")) "*PLOT*")
-        (command "_M" (if a3 "_L" "_P") "_N" "_W" p1 p2
+        (command "_M" (if (> (cadr size) (caddr size)) "_L" "_P") "_N" "_W" p1 p2
                  "1=1" "_C" "_N" "." "_Y" "_A" path "_N" "_Y")
         (progn
+          (pa:log (list "plot: -PLOT quit after the paper size; CMDNAMES" (getvar "CMDNAMES")))
           (setq refused T)
           (pa:err (pa:msg "pdfall.paper-refused" (list "paper" paper "device" device)) r)))
       (cond
         (refused)
-        ((findfile path) (setq plotted (1+ plotted)))
-        (T (pa:err (pa:msg "pdfall.cannot-write" (list "path" path)) r))))))
+        ((findfile path) (setq plotted (1+ plotted)) (pa:log "plot: written"))
+        (T (pa:log "plot: no file written") (pa:err (pa:msg "pdfall.cannot-write" (list "path" path)) r))))))
 
 ;;; ---- Layers -----------------------------------------------------------------
 
@@ -122,11 +146,72 @@
 
 ;;; ---- The command ------------------------------------------------------------
 
-(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e)
+(defun pa:force-numbers (kind items / nums)
+  ;; items in the order PDFNUM numbers them, each with the Аркуш it would get, for plotting despite
+  ;; wrong numbers: only the file names follow them, the drawing is left as it is.
+  (setq items (pa:in-order kind items)
+        nums (pa:sheet-numbers items (length items)))
+  (mapcar '(lambda (r k) (pa:put 'sheet k r)) items nums))
+
+(defun pa:force-markas (records / m name out by-title key docs n)
+  ;; records, each with a марка that can name its files, for plotting despite problems. A character
+  ;; Windows forbids in a file name becomes _. A рамка without a марка is named after the top line
+  ;; of its organisation cell, or Без_марки when that is empty too; рамки under one such name whose
+  ;; numbers show they are separate documents get _01, _02... Says so in renamed.
+  (foreach r records
+    (setq m (pa:get 'marka r))
+    (cond
+      ((null m)
+       (setq key (pa:title-name (pa:org-title r)))
+       (if (assoc key by-title)
+         (setq by-title (subst (append (assoc key by-title) (list r)) (assoc key by-title) by-title))
+         (setq by-title (append by-title (list (list key r))))))
+      (T
+       (setq name (pa:file-safe m))
+       (if (/= m name)
+         (setq renamed (cons (pa:msg "pdfall.forced-renamed" (list "marka" m "name" name "where" (pa:where r))) renamed)))
+       (setq out (cons (pa:put 'marka name r) out)))))
+  (foreach g by-title
+    (setq docs (pa:split-documents (cdr g)) n 0)
+    (pa:log (list "pdfall: without a marka, title" (car g) "|" (length (cdr g)) "frames in" (length docs) "documents"))
+    (foreach d docs
+      (setq n (1+ n)
+            name (strcat (cond ((car g)) ((pa:file "no-marka"))) (if (cdr docs) (strcat "_" (pa:pad n)) "")))
+      (foreach r d
+        (setq renamed (cons (pa:msg "pdfall.forced-no-marka" (list "name" name "where" (pa:where r))) renamed)
+              out (cons (pa:put 'marka name r) out)))))
+  (reverse out))
+
+(defun pa:split-documents (rs / docs placed)
+  ;; rs, рамки without a марка under one name, as documents: in position order, each joins the first
+  ;; document where no рамка of its kind has the same Аркуш or another Аркушів, else starts a new one.
+  (foreach r (vl-sort rs 'pa:position<)
+    (setq placed nil
+          docs (mapcar '(lambda (d)
+                          (if (or placed (vl-some '(lambda (o) (pa:clash-p r o)) d))
+                            d
+                            (progn (setq placed T) (append d (list r)))))
+                       docs))
+    (if (not placed) (setq docs (append docs (list (list r))))))
+  docs)
+
+(defun pa:clash-p (a b)
+  ;; Whether рамки a and b can't be in one document: same kind, and the same Аркуш or another Аркушів.
+  (and (= (pa:get 'kind a) (pa:get 'kind b))
+       (or (and (pa:get 'sheet a) (= (pa:get 'sheet a) (pa:get 'sheet b)))
+           (and (pa:get 'total a) (pa:get 'total b) (/= (pa:get 'total a) (pa:get 'total b))))))
+
+(defun pa:ask-force (/ yes no)
+  (setq yes (pa:msg "pdfall.yes" nil) no (pa:msg "pdfall.no" nil))
+  (initget (strcat yes " " no))
+  (= yes (getkword (strcat "\n\n" (pa:msg "pdfall.force-ask" (list "yes" yes "no" no))))))
+
+(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e renamed shown)
   (if (= 0 (getvar "DWGTITLED"))
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
   (princ (strcat "\n" (pa:msg "reading" (list "cmd" "PDFALL"))))
+  (pa:log (list "pdfall: fill layers" fills "| device" device "| plotters" (pa:plotters) "| merge" *pdfall-merge*))
   (setq drawing (pa:read-drawing)
         records (car drawing)
         markas (pa:markas records))
@@ -144,12 +229,9 @@
     (if (pa:bad-char m)
       (pa:err (pa:msg "check.bad-char" (list "marka" m "char" (pa:bad-char m)))
               (vl-some '(lambda (r) (if (= (pa:get 'marka r) m) r)) records))))
+  ;; groups: (марка листи специфікації текстові-документи), each kind numbered and checked.
   (foreach m markas
-    (setq groups
-      (cons (list m
-                  (pa:check m "list" (pa:of m "list" records))
-                  (pa:check m "spec" (pa:of m "spec" records)))
-            groups)))
+    (setq groups (cons (cons m (mapcar '(lambda (k) (pa:check m k (pa:of m k records))) *pa-kinds*)) groups)))
   (setq groups (reverse groups))
 
   ;; Old drawings have no шар заливки: their листи без заливки come out the same as the filled ones.
@@ -160,13 +242,22 @@
   (foreach r records
     (if (pa:off-size r)
       (pa:warn (pa:msg "pdfall.off-size" (list "marka" (pa:get 'marka r) "size" (pa:off-size r)
-                                               "nominal" (if (= (pa:paper r) "a3") "420x297" "210x297")
+                                               "nominal" (strcat (itoa (cadr (pa:paper r))) "x" (itoa (caddr (pa:paper r))))
                                                "where" (pa:where r))))))
   (if errors
     (progn
       (pa:report-errors (pa:msg "pdfall.fix-first" nil))
       (pa:report-warnings)
-      (exit)))
+      (if (not (pa:ask-force)) (exit))
+      ;; Plot anyway: every рамка found, the ones without a марка too, numbered as PDFNUM would.
+      (setq records (pa:force-markas (append records (vl-remove 'nil (mapcar 'cdr (cadr drawing)))))
+            markas (pa:markas records)
+            groups (mapcar '(lambda (m) (cons m (mapcar '(lambda (k) (pa:force-numbers k (pa:of m k records))) *pa-kinds*)))
+                           markas)
+            forced T errors nil warnings nil)
+      (pa:log (list "pdfall: plotting anyway," (length records) "frames as" markas))
+      (princ (strcat "\n" (pa:msg "pdfall.forced" nil)))
+      (foreach w (reverse renamed) (pa:warn w))))
 
   ;; Hidden layers would silently drop objects from every PDF.
   (if (setq hidden (pa:hidden-layers))
@@ -212,8 +303,8 @@
   (pa:date-add records)
   (pa:set-fill T)
   (foreach g groups
-    (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil))))
-    (foreach r (caddr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil)))))
+    (foreach items (cdr g)
+      (foreach r items (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r nil))))))
   (pa:set-fill nil)
   (foreach g groups
     (foreach r (cadr g) (pa:plot r (strcat base "\\" (car g) "\\" (pa:file-name (car g) r T)))))
@@ -223,12 +314,31 @@
   (princ (strcat "\n\n" (pa:msg "pdfall.plotted" (list "n" plotted "folder" base))))
   (if errors (pa:report-errors (pa:msg "pdfall.not-plotted" nil)))
   (pa:report-warnings)
+  ;; The folder to show once it is done: the марка's own when there is one, else all of them. Nobody
+  ;; watches the console AutoCAD the tests run in, so it shows nothing.
+  (setq shown (if (and (> plotted 0) (not (pa:console-p))) (pa:shown-folder base markas)))
+  (pa:log (list "pdfall: folder to open" shown))
   (cond
-    ((null *pdfall-merge*))
-    ((findfile *pdfall-merge*)
+    ((pa:console-p) (pa:log "pdfall: console AutoCAD, merge.exe not started"))
+    ((and *pdfall-merge* (findfile *pdfall-merge*))
      (princ (strcat "\n" (pa:msg "pdfall.merging" nil)))
-     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"\"")))
-    (T (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))))
+     (pa:log (list "pdfall: merging" base))
+     ;; --force: the user already chose to go on despite the numbers, so merge.exe needn't ask again;
+     ;; --open: merge.exe opens the folder once the combined files are in it
+     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"" (if forced " --force" "")
+                                 (if shown (strcat " --open \"" shown "\"") "") "\"")))
+    (T
+     (if *pdfall-merge* (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))
+     (if shown (startapp "explorer.exe" (strcat "\"" shown "\""))))))
+
+(defun pa:shown-folder (base markas)
+  ;; The folder PDFALL opens after a run: the марка's folder when one марка was plotted, else base.
+  (if (= (length markas) 1) (strcat base "\\" (car markas)) base))
+
+(defun pa:console-p ()
+  ;; Whether this is the console AutoCAD (accoreconsole), which can't start programs: it has no
+  ;; startapp.
+  (null startapp))
 
 ;; AutoCAD's Plotters folder (the first one, if several are set).
 (defun pa:plotters ()
@@ -241,7 +351,7 @@
            (findfile (strcat *pdfall-home* "\\" name)))
     (vl-file-copy (strcat *pdfall-home* "\\" name) (strcat (pa:plotters) "\\" name))))
 
-(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device refused)
+(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device refused forced)
   (defun *error* (msg)
     (pa:date-remove)
     (pa:restore)
@@ -257,6 +367,7 @@
     (pa:warn (pa:msg "pdfall.no-pc3" (list "pc3" (car *pdfall-devices*) "plotters" (pa:plotters) "home" *pdfall-home*))))
   (setq sysvars (list (cons "CMDECHO" (getvar "CMDECHO"))))
   (setvar "CMDECHO" 0)
+  (pa:log-start "PDFALL")
   (pa:run)
   (pa:restore)
   (princ))

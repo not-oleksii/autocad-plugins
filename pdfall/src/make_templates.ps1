@@ -1,162 +1,114 @@
-﻿# Cuts the three empty рамка templates that PDFLIST and PDFSPEC paste out of the sample drawing:
-#   PDFALL_list.dwg    a лист (A3 landscape) with its title block
-#   PDFALL_spec1.dwg   the first аркуш of a специфікація (A4 portrait, 40 mm title block + table)
-#   PDFALL_spec2.dwg   a later аркуш of a специфікація (15 mm title block + table)
-# Each holds the рамка, the title block form and the name cell (with МАРКА where the марка goes,
-# made as wide and high as its cell and centred in it), but none of the drawing, dates or table
-# contents that happen to be in the sample.
-# The result is committed in src\templates, so this only has to run when the sample's title blocks
-# change. It needs AutoCAD 2024 and examples\*.dxf (kept out of git).
+﻿# Makes the рамка templates that PDFLIST and PDFSPEC paste from the company's forms in
+# examples\formats (kept out of git), one per form:
+#   PDFALL_list_<standard>_<size><orientation>.dwg   a лист: skd, spdb or spdbv (СПДБ «Вироби»);
+#                                                    A1..A5; p (portrait) or l (landscape)
+#   PDFALL_spec1.dwg, PDFALL_spec2.dwg                the first and a later page of a специфікація
+#   PDFALL_text_<standard>_1.dwg, ..._2.dwg           the same of a текстовий документ
+# Each keeps the form as it is, without its placeholders, and gets МАРКА in its name cell, as wide and
+# high as the cell and centred in it (make_templates.lsp). It also writes src\lsp\62-previews.lsp, the
+# outline of every template for the settings dialog (docs/adr/0009).
+# The result is committed, so this only has to run when the forms change. It needs AutoCAD 2024 and a
+# built dist\PDFALL.bundle (build.bat), whose reader finds each form's рамка.
 # Usage: powershell -ExecutionPolicy Bypass -File src\make_templates.ps1
 param(
-    [string]$Dxf = (Get-ChildItem (Join-Path $PSScriptRoot '..\examples') -Filter '*.dxf' | Select-Object -First 1).FullName,
+    [string]$Formats = (Join-Path $PSScriptRoot '..\examples\formats'),
     [string]$Out = (Join-Path $PSScriptRoot 'templates'),
     [string]$Acad = 'C:\Program Files\Autodesk\AutoCAD 2024\accoreconsole.exe',
-    [int]$Seconds = 180
+    [int]$Seconds = 60
 )
 $ErrorActionPreference = 'Stop'
+$lsp = Join-Path $PSScriptRoot '..\dist\PDFALL.bundle\Contents\pdfall.lsp'
+if (-not (Test-Path $lsp)) { throw "run build.bat first: $lsp is missing" }
+$lsp = (Resolve-Path $lsp).Path -replace '\\', '/'
+$make = (Join-Path $PSScriptRoot 'make_templates.lsp') -replace '\\', '/'
 New-Item $Out -ItemType Directory -Force | Out-Null
 $Out = (Resolve-Path $Out).Path
 $work = Join-Path $env:TEMP 'pdfall-templates'
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item $work -ItemType Directory | Out-Null
-Copy-Item $Dxf (Join-Path $work 'sample.dxf')
-foreach ($n in 'list', 'spec1', 'spec2') { Remove-Item (Join-Path $Out "PDFALL_$n.dwg") -ErrorAction SilentlyContinue }
+Get-ChildItem $Out -Filter 'PDFALL_*.dwg' | Remove-Item
 
-# AutoCAD script lines can't hold a blank line, so the work is done by a loaded .lsp file.
-# Both are UTF-8 with BOM so the Cyrillic survives.
-$o = $Out -replace '\\', '/'
-$lisp = @"
-;; Model space is searched whole (a window pick would depend on the sample's current view and layout).
-;; The layers and the window pick the form; texts that are content (not the form's own labels) are dropped.
-(defun in-window (d llx lly w / ok)
-  (setq ok T)
-  (foreach k (if (= (cdr (assoc 0 d)) "LINE") '(10 11) '(10))
-    (if (and ok (assoc k d))
-      (setq ok (and (<= (- llx 0.5) (cadr (assoc k d)) (+ llx w 0.5))
-                    (<= (- lly 0.5) (caddr (assoc k d)) (+ lly 297.5))))))
-  ok)
-
-;; The form's own labels are in the style основная надпись (the dates written in it are smaller) and
-;; the table's column heads in стиль1 at 3.5 mm; everything else in стиль1 is what a specification says.
-(defun form-text-p (d / style h)
-  (setq style (cdr (assoc 7 d)) h (cdr (assoc 40 d)))
-  (or (and (= style "основная надпись") (>= h 3.0))
-      (and (= style "стиль1") (>= h 3.5))))
-
-;; (x1 y1 x2 y2) of every LINE and LWPOLYLINE segment in ss.
-(defun segs (ss / i d out pts)
-  (setq i (sslength ss))
-  (while (> i 0)
-    (setq i (1- i) d (entget (ssname ss i)))
-    (cond
-      ((= (cdr (assoc 0 d)) "LINE")
-       (setq out (cons (list (cadr (assoc 10 d)) (caddr (assoc 10 d)) (cadr (assoc 11 d)) (caddr (assoc 11 d))) out)))
-      ((= (cdr (assoc 0 d)) "LWPOLYLINE")
-       (setq pts nil)
-       (foreach g d (if (= (car g) 10) (setq pts (cons (cdr g) pts))))
-       (setq pts (reverse pts))
-       (if (= 1 (logand 1 (cdr (assoc 70 d)))) (setq pts (append pts (list (car pts)))))
-       (while (cadr pts)
-         (setq out (cons (list (caar pts) (cadar pts) (caadr pts) (cadadr pts)) out) pts (cdr pts))))))
-  out)
-
-;; The cell around the point (px py): (left bottom right top) from the nearest lines on each side.
-(defun cell (segs px py / left right bottom top)
-  (foreach s segs
-    (cond
-      ((and (< (abs (- (car s) (caddr s))) 0.01) (<= (min (cadr s) (cadddr s)) py (max (cadr s) (cadddr s))))
-       (if (< (car s) px)
-         (if (or (null left) (> (car s) left)) (setq left (car s)))
-         (if (or (null right) (< (car s) right)) (setq right (car s)))))
-      ((and (< (abs (- (cadr s) (cadddr s))) 0.01) (<= (min (car s) (caddr s)) px (max (car s) (caddr s))))
-       (if (< (cadr s) py)
-         (if (or (null bottom) (> (cadr s) bottom)) (setq bottom (cadr s)))
-         (if (or (null top) (< (cadr s) top)) (setq top (cadr s)))))))
-  (if (and left right bottom top) (list left bottom right top)))
-
-;; The name MTEXT made to fill its cell: anchored at the cell's centre (attachment 5), as wide and as
-;; high as the cell, so it stays on one line and wraps only when the марка is too long for the cell.
-(defun fit (d segs name / w h at col row c)
-  (setq w (cond ((/= 0.0 (cdr (assoc 41 d))) (cdr (assoc 41 d))) ((cdr (assoc 42 d))))
-        h (cond ((cdr (assoc 43 d))) (0.0))
-        at (cdr (assoc 71 d)) col (rem (1- at) 3) row (/ (1- at) 3)
-        c (cell segs (+ (cadr (assoc 10 d)) (* w (- 0.5 (* 0.5 col)))) (+ (caddr (assoc 10 d)) (* h (- (* 0.5 row) 0.5)))))
-  (if (null c) (progn (princ (strcat "\nTEMPLATE-FAIL " name ": no cell around the name")) (exit)))
-  (princ (strcat "\nTEMPLATE " name ": name cell " (rtos (- (caddr c) (car c)) 2 2) " x " (rtos (- (cadddr c) (cadr c)) 2 2)))
-  (setq d (subst (cons 71 5) (assoc 71 d) d)
-        d (subst (list 10 (/ (+ (car c) (caddr c)) 2.0) (/ (+ (cadr c) (cadddr c)) 2.0) 0.0) (assoc 10 d) d)
-        d (subst (cons 41 (- (caddr c) (car c))) (assoc 41 d) d))
-  ;; An MTEXT with columns (the лист's name cell in the sample has them, though entget doesn't show
-  ;; them) takes its width from the column width, so the columns are turned off (75 = 0).
-  (setq d (if (assoc 75 d) (subst (cons 75 0) (assoc 75 d) d) (append d (list (cons 75 0)))))
-  (if (assoc 46 d)
-    (subst (cons 46 (- (cadddr c) (cadr c))) (assoc 46 d) d)
-    (append d (list (cons 46 (- (cadddr c) (cadr c)))))))
-
-(defun mk (name llx lly w / all ss i d keep s a b)
-  (setq all (ssget "_X" (list '(410 . "Model") (cons 8 "Формат чертежа,Defpoints"))) ss (ssadd) i (sslength all))
-  (while (> i 0)
-    (setq i (1- i) d (entget (ssname all i)))
-    (if (and (in-window d llx lly w)
-             (not (and (= (cdr (assoc 0 d)) "TEXT") (not (form-text-p d)))))
-      (ssadd (ssname all i) ss)))
-  (if (= 0 (sslength ss)) (progn (princ (strcat "\nTEMPLATE-FAIL " name ": nothing in the window")) (exit)))
-  ;; the name cell: the MTEXT "Джгут <марка>" in the title block's corner
-  (setq all (ssget "_X" '((410 . "Model") (0 . "MTEXT") (8 . "0"))) i (sslength all) keep nil)
-  (while (> i 0)
-    (setq i (1- i) d (entget (ssname all i)) s (cdr (assoc 1 d)))
-    (if (and (vl-string-search "Джгут " s)
-             (<= (- (+ llx w) 195.0) (cadr (assoc 10 d)) (+ llx w))
-             (<= lly (caddr (assoc 10 d)) (+ lly 60.0)))
-      (setq keep (cons (cons (ssname all i) d) keep))))
-  (if (/= (length keep) 1) (progn (princ (strcat "\nTEMPLATE-FAIL " name ": name cells " (itoa (length keep)))) (exit)))
-  (setq d (cdar keep) s (cdr (assoc 1 d))
-        a (+ (vl-string-search "Джгут " s) 6)
-        b (vl-string-search "\\P" s a))
-  (entmod (fit (subst (cons 1 (strcat (substr s 1 a) "МАРКА" (if b (substr s (1+ b)) ""))) (assoc 1 d) d)
-               (segs ss) name))
-  (ssadd (caar keep) ss)
-  (princ (strcat "\nTEMPLATE " name ": " (itoa (sslength ss)) " objects"))
-  (command "_.-WBLOCK" (strcat "$o/" name ".dwg") "" (list llx lly 0.0) ss ""))
-"@
-$lispPath = Join-Path $work 'make.lsp'
-[IO.File]::WriteAllText($lispPath, $lisp, (New-Object Text.UTF8Encoding($true)))
-
-# The lower-left corners of the sample's рамки that make the cleanest templates.
-$lp = $lispPath -replace '\\', '/'
-$scr = @"
-(setvar "FILEDIA" 0)
-(setvar "CMDECHO" 0)
-(setvar "INSUNITS" 0)
-(load "$lp")
-(mk "PDFALL_list" 1823.210660030745 2110.720724986636 420.0)
-(mk "PDFALL_spec1" 2267.449286520352 2110.720724986636 210.0)
-(mk "PDFALL_spec2" 2934.880218674831 1476.600519115046 210.0)
-(princ "\nEND-OF-TEMPLATES")
-QUIT
-Y
-"@
-$scrPath = Join-Path $work 'make.scr'
-[IO.File]::WriteAllText($scrPath, $scr, (New-Object Text.UTF8Encoding($true)))
-
-$outTxt = Join-Path $work 'acad.txt'
-$acadArgs = "/i `"$(Join-Path $work 'sample.dxf')`" /s `"$scrPath`" /l en-US /isolate pdfalltemplates `"$(Join-Path $work 'user')`""
-$p = Start-Process $Acad -ArgumentList $acadArgs -WorkingDirectory $work -RedirectStandardOutput $outTxt -PassThru -NoNewWindow
-$deadline = (Get-Date).AddSeconds($Seconds)
-while (-not $p.WaitForExit(2000)) {
-    $sofar = try {
-        $fs = [IO.File]::Open($outTxt, 'Open', 'Read', 'ReadWrite')
-        try { (New-Object IO.StreamReader($fs, [Text.Encoding]::Unicode)).ReadToEnd() } finally { $fs.Close() }
-    } catch { '' }
-    if ($sofar -match 'Command: QUIT') { Start-Sleep 5; if (-not $p.HasExited) { $p.Kill() }; break }
-    if ((Get-Date) -gt $deadline) { $p.Kill(); throw 'accoreconsole timed out' }
+# The template a form becomes, from its file name ("СПДБ._А3._Горизонтал_ний._Вироби..dwg"):
+# @(id, form), form being where its name cell is (see make_templates.lsp).
+function Get-Template($name) {
+    $std = if ($name -match '^СПДБ') { 'spdb' } elseif ($name -match '^СКД') { 'skd' } else { return $null }
+    $page = if ($name -match 'Перш') { '1' } elseif ($name -match 'Наступн') { '2' } else { $null }
+    $form = if ($page -eq '1') { 'first' } elseif ($page -eq '2') { 'next' } else { 'list' }
+    if ($name -match 'Специф') { return @("PDFALL_spec$page", $form) }
+    if ($name -match 'Текстов') { return @("PDFALL_text_$($std)_$page", $form) }
+    # -notmatch would leave $Matches unset
+    if (-not ($name -match '[АA](\d)')) { return $null }
+    $size = "A$($Matches[1])"
+    if ($name -match 'Вироби') { $std = 'spdbv' }
+    # The orientation comes from the рамка itself (the A5 form is named portrait but drawn landscape),
+    # so it is filled in after the run: ? for now.
+    return @("PDFALL_list_$($std)_$($size)?", $form)
 }
-Start-Sleep -Milliseconds 300
-$log = [IO.File]::ReadAllText($outTxt, [Text.Encoding]::Unicode)
-$log -split "`r?`n" | Where-Object { $_ -match 'TEMPLATE|error' } | ForEach-Object { Write-Host $_ }
-foreach ($n in 'list', 'spec1', 'spec2') {
-    $f = Join-Path $Out "PDFALL_$n.dwg"
-    if (-not (Test-Path $f)) { throw "PDFALL_$n.dwg was not written; see $outTxt" }
+
+$made = @()
+foreach ($f in Get-ChildItem $Formats -Filter '*.dwg' | Sort-Object Name) {
+    $t = Get-Template $f.Name
+    if (-not $t) { Write-Host "skipped: $($f.Name)"; continue }
+    $id = $t[0] -replace '\?', ''
+    $dwg = Join-Path $work "$id.dwg"
+    Copy-Item -LiteralPath $f.FullName $dwg
+    $w = $work -replace '\\', '/'
+    $scr = "(setvar `"SECURELOAD`" 0)`r`n(setvar `"FILEDIA`" 0)`r`n(setvar `"CMDECHO`" 0)`r`n(load `"$lsp`")`r`n(load `"$make`")`r`n" +
+           "(pdfall-template `"$id`" `"$($t[1])`" `"$w/out`")`r`nQUIT`r`nY`r`n"
+    New-Item (Join-Path $work 'out') -ItemType Directory -Force | Out-Null
+    $scrPath = Join-Path $work "$id.scr"
+    [IO.File]::WriteAllText($scrPath, $scr, (New-Object Text.UTF8Encoding($true)))
+    $log = Join-Path $work "$id.log"
+    $p = Start-Process $Acad -ArgumentList "/i `"$dwg`" /s `"$scrPath`" /l en-US" -RedirectStandardOutput $log -NoNewWindow -PassThru
+    # accoreconsole may hang after QUIT, so it is stopped once the log says the template is done.
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    $text = ''
+    while (-not $p.HasExited) {
+        Start-Sleep -Milliseconds 500
+        $text = try {
+            $fs = [IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
+            try { (New-Object IO.StreamReader($fs, [Text.Encoding]::Unicode)).ReadToEnd() } finally { $fs.Close() }
+        } catch { '' }
+        if ($text -match 'TEMPLATE-DONE|TEMPLATE-FAIL|; error') { Start-Sleep 2; break }
+        if ((Get-Date) -gt $deadline) { break }
+    }
+    if (-not $p.HasExited) { $p.Kill() }
+    Start-Sleep -Milliseconds 300
+    $text = [IO.File]::ReadAllText($log, [Text.Encoding]::Unicode)
+    $text -split "`r?`n" | Where-Object { $_ -match '^TEMPLATE [^"]*$|TEMPLATE-FAIL|; error' } | ForEach-Object { Write-Host $_.Trim() }
+    $outline = Join-Path $work "out\$id.txt"
+    if (-not (Test-Path (Join-Path $work "out\$id.dwg")) -or -not (Test-Path $outline)) { throw "$id was not made; see $log" }
+    # The orientation, from the рамка's width and height (the outline's first line).
+    $wh = (Get-Content $outline -TotalCount 1).Split(' ') | ForEach-Object { [double]$_ }
+    $final = if ($t[0] -match '\?$') { $id + $(if ($wh[0] -gt $wh[1]) { 'l' } else { 'p' }) } else { $id }
+    Move-Item (Join-Path $work "out\$id.dwg") (Join-Path $Out "$final.dwg") -Force
+    $made += [pscustomobject]@{ Id = $final; Outline = Get-Content $outline }
 }
-Write-Host "Templates written to $Out"
+
+# 62-previews.lsp: (id kind standard size page w h (name cell) (x1 y1 x2 y2 ...)) per template.
+$rows = foreach ($m in $made | Sort-Object Id) {
+    $parts = $m.Id -split '_'
+    $kind, $std, $size, $page = switch -Regex ($m.Id) {
+        '^PDFALL_list_' { 'list', $parts[2], ($parts[3] -replace '[pl]$', ''), 'nil' }
+        '^PDFALL_spec(\d)$' { 'spec', 'skd', 'A4', "`"$($Matches[1])`"" }
+        '^PDFALL_text_' { 'text', $parts[2], 'A4', "`"$($parts[3])`"" }
+    }
+    $wh = $m.Outline[0]
+    $cell = $m.Outline[1]
+    $lines = ($m.Outline | Select-Object -Skip 2) -join ' '
+    "  (`"$($m.Id)`" `"$kind`" `"$std`" `"$size`" $page $wh ($cell)`r`n   ($lines))"
+}
+$previews = @"
+;;; ---- Templates --------------------------------------------------------------
+;;; Made by src\make_templates.ps1 from examples\formats; run it again instead of editing this.
+;;; Every template PDFLIST and PDFSPEC can paste, as
+;;;   (file kind standard size page width height (name cell: x1 y1 x2 y2) (lines: x1 y1 x2 y2 ...))
+;;; in mm from the рамка's lower-left corner. page is "1" or "2" for the first and a later page of a
+;;; специфікація or текстовий документ, nil for a лист. The settings dialog draws the lines as its preview.
+
+(setq *pa-templates* '(
+$($rows -join "`r`n")))
+"@
+$previewPath = Join-Path $PSScriptRoot 'lsp\62-previews.lsp'
+[IO.File]::WriteAllText($previewPath, $previews, (New-Object Text.UTF8Encoding($false)))
+Write-Host "$($made.Count) templates written to $Out, their outlines to $previewPath"

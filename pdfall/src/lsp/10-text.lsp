@@ -1,18 +1,22 @@
 ;;; ---- Text -------------------------------------------------------------------
 ;;; String helpers that every other file may use:
 ;;;   pa:msg pa:label pa:file  the texts of messages.json
-;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:cyr
-;;;   pa:lower pa:pad pa:bad-char
+;;;   pa:fill          {name}s of any text filled in, as pa:msg does
+;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:marka-error pa:cyr
+;;;   pa:lower pa:pad pa:bad-char pa:file-safe pa:title-name
 ;;;
 ;;; build.bat writes messages.json into *pa-messages*, *pa-labels* and *pa-files* just before
 ;;; this file, and fails if the code uses a key or {name} that messages.json doesn't have, or a
 ;;; Ukrainian string outside 00-settings.lsp. So every key is a literal string, and pa:msg gets
 ;;; its values as a literal (list "name" value ...).
 
-(defun pa:msg (key args / s k v p)
+(defun pa:msg (key args)
   ;; The message key with each {name} replaced by its value from args, (name value name value ...).
   ;; Numbers are written as integers.
-  (setq s (cond ((cdr (assoc key *pa-messages*))) ((strcat "{" key "}"))))
+  (pa:fill (cond ((cdr (assoc key *pa-messages*))) ((strcat "{" key "}"))) args))
+
+(defun pa:fill (s args / k v p)
+  ;; s with each {name} replaced by its value from args, as for pa:msg.
   (while args
     (setq k (strcat "{" (car args) "}")
           v (cadr args)
@@ -45,6 +49,21 @@
   (vl-some '(lambda (c) (if (vl-string-position c s) (chr c)))
            (vl-string->list "\\/:*?\"<>|")))
 
+(defun pa:file-safe (s)
+  ;; s with every character Windows doesn't allow in a file name replaced by _.
+  (vl-string-translate "\\/:*?\"<>|" "_________" s))
+
+(defun pa:title-name (words / s)
+  ;; words as one word that can name a folder and its files, or nil: joined by _, with the characters
+  ;; Windows forbids left out, so ДВНЗ "ПДАБА" becomes ДВНЗ_ПДАБА. One word, since merge.exe reads the
+  ;; марка of a file as the first word of its name.
+  (if words
+    (progn
+      (setq s (pa:file-safe (apply 'strcat (cons (car words) (mapcar '(lambda (w) (strcat "_" w)) (cdr words))))))
+      (while (vl-string-search "__" s) (setq s (vl-string-subst "_" "__" s)))
+      (setq s (vl-string-trim "_" s))
+      (if (/= s "") s))))
+
 (defun pa:split (s sep / out p)
   (while (setq p (vl-string-search sep s))
     (setq out (cons (substr s 1 p) out)
@@ -61,6 +80,14 @@
   (and s (/= s "") (vl-every 'pa:digit-p (vl-string->list s))))
 
 (defun pa:marka-p (s / codes)
-  ;; A марка has at least one letter and one digit, e.g. 1ЧП, К2, Х1А1Р.
+  ;; Whether s looks like the usual марка, with a letter and a digit (1ЧП, К2, Х1А1Р), which the
+  ;; reader picks out of a name cell wherever it stands. A марка may also be any other word.
   (setq codes (vl-string->list s))
   (and (vl-some 'pa:digit-p codes) (vl-some 'pa:letter-p codes)))
+
+(defun pa:marka-error (s)
+  ;; Why s can't be a марка, or nil. A марка is one word of any characters a file name may have
+  ;; ("1ЧП", "Лорем"): it begins the name of every PDF, and the name cell is read up to it.
+  (cond ((= s "") (pa:msg "paste.marka-empty" nil))
+        ((vl-string-search " " s) (pa:msg "paste.marka-bad" nil))
+        ((pa:bad-char s) (pa:msg "paste.marka-char" (list "char" (pa:bad-char s))))))

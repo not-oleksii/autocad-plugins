@@ -29,9 +29,9 @@ function Set-Installed($v) {
 }
 function Uri($path) { ([Uri]$path).AbsoluteUri }
 
-# A fake GitHub release list: the built zip published as $version, a release between that and
-# 1.7.0, one older than 1.7.0, and releases update.ps1 must skip (a pre-release, a draft, another
-# plugin's tag). $hash replaces the zip's real checksum.
+# A fake GitHub release list: the built zip published as $version and again as 1.7.5 (to go back
+# to), one older than 1.7.0 without files, and releases update.ps1 must skip (a pre-release, a
+# draft, another plugin's tag). $hash replaces the zip's real checksum of $version.
 function Publish($version, $hash) {
     if (Test-Path $releases) { Remove-Item $releases -Recurse -Force }
     New-Item $releases -ItemType Directory | Out-Null
@@ -43,27 +43,35 @@ function Publish($version, $hash) {
     $assets = @(
         @{ name = $name; browser_download_url = (Uri $zip) },
         @{ name = "$name.sha256"; browser_download_url = (Uri "$zip.sha256") })
+    $oldZip = Join-Path $releases 'PDFALL-1.7.5.zip'
+    Copy-Item $zip $oldZip
+    [IO.File]::WriteAllText("$oldZip.sha256", "$((Get-FileHash $oldZip -Algorithm SHA256).Hash.ToLower())  PDFALL-1.7.5.zip`n")
+    $oldAssets = @(
+        @{ name = 'PDFALL-1.7.5.zip'; browser_download_url = (Uri $oldZip) },
+        @{ name = 'PDFALL-1.7.5.zip.sha256'; browser_download_url = (Uri "$oldZip.sha256") })
     $list = @(
         @{ tag_name = 'other-v9.0.0'; body = '- NOTES-OTHER' },
         @{ tag_name = 'pdfall-v9.1.0-rc.1'; prerelease = $true; body = '- NOTES-RC' },
         @{ tag_name = 'pdfall-v9.2.0'; draft = $true; body = '- NOTES-DRAFT' },
         @{ tag_name = "pdfall-v$version"; published_at = '2026-10-19T10:00:00Z'; assets = $assets
            body = "### Додано`r`n`r`n- NOTES-NEW **жирне**`r`n`r`n---`r`n`r`nNOTES-FOOTER" },
-        @{ tag_name = 'pdfall-v1.7.5'; published_at = '2026-10-18T10:00:00Z'; body = '- NOTES-BETWEEN' },
+        @{ tag_name = 'pdfall-v1.7.5'; published_at = '2026-10-18T10:00:00Z'; assets = $oldAssets; body = '- NOTES-BETWEEN' },
         @{ tag_name = 'pdfall-v1.6.0'; published_at = '2026-10-17T10:00:00Z'; body = '- NOTES-OLD' })
     [IO.File]::WriteAllText((Join-Path $releases 'releases.json'), (ConvertTo-Json $list -Depth 5), (New-Object Text.UTF8Encoding($false)))
 }
 
 # Runs the installed bundle's update.ps1 in its own process, started in the bundle folder that the
 # update replaces (update.bat moves to %TEMP% first; this checks update.ps1 copes without that).
-function Invoke-Update {
+# $keys, such as 'DownArrow,Enter', are pressed in the version picker; without them it answers yes.
+function Invoke-Update($keys) {
     $bundle = Join-Path $plugins 'PDFALL.bundle'
     $out = Join-Path $env:TEMP 'pdfall-test-update.txt'
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bundle\update.ps1`"",
         '-AcadKey', "`"$acad`"", '-PluginsDir', "`"$plugins`"", '-StartMenuDir', "`"$startMenu`"",
-        '-ReleasesUrl', (Uri (Join-Path $releases 'releases.json')), '-IgnoreRunningAutoCAD', '-Yes')
+        '-ReleasesUrl', (Uri (Join-Path $releases 'releases.json')), '-IgnoreRunningAutoCAD')
+    $argList += if ($keys) { @('-Keys', $keys) } else { @('-Yes') }
     $p = Start-Process powershell -ArgumentList $argList -WorkingDirectory $bundle -RedirectStandardOutput $out -PassThru -NoNewWindow -Wait
-    $text = Get-Content $out -Raw
+    $text = Get-Content $out -Raw -Encoding UTF8
     Remove-Item $out
     @{ Code = $p.ExitCode; Text = "$text" }
 }
@@ -132,6 +140,23 @@ try {
     Publish $built
     $u = Invoke-Update
     Check ($u.Code -eq 0 -and $u.Text -notmatch 'NOTES-') 'nothing is done when the newest version is installed'
+
+    Write-Host 'Pick a version...'
+    $u = Invoke-Update 'DownArrow,Enter'
+    Check ($u.Code -eq 0 -and $u.Text -match "встановлено[\s\S]*> PDFALL 1\.7\.5" -and $u.Text -match 'Що зникне, якщо повернутися до PDFALL 1\.7\.5' -and
+           $u.Text -match 'NOTES-NEW' -and $u.Text -match 'Enter — повернутися до 1\.7\.5' -and $u.Text -match 'Завантажую PDFALL-1\.7\.5\.zip') `
+        'with the newest installed, the arrow down picks the older version, shows what goes away and installs it'
+    if ($u.Code -ne 0) { Write-Host $u.Text }
+
+    Set-Installed '1.7.0'
+    $u = Invoke-Update 'DownArrow,DownArrow,DownArrow,UpArrow,Escape'
+    Check ($u.Code -eq 0 -and (Installed) -eq '1.7.0' -and $u.Text -match 'Скасовано' -and $u.Text -notmatch 'Завантажую' -and
+           $u.Text -match 'У PDFALL 1\.6\.0 ще немає «Оновити PDFALL»' -and $u.Text -match "Що з'явиться, якщо встановити PDFALL $([regex]::Escape($built))") `
+        'the picker starts at the newest version, warns that 1.6.0 has no updater, stops at the oldest, and Esc changes nothing'
+
+    $u = Invoke-Update 'Enter'
+    Check ($u.Code -eq 0 -and (Installed) -eq $built -and $u.Text -match "Завантажую PDFALL-$([regex]::Escape($built))\.zip" -and
+           $u.Text -match 'NOTES-NEW' -and $u.Text -match 'NOTES-BETWEEN') "Enter in the picker installs the newest version ($built) over 1.7.0"
 
     Write-Host 'Uninstall...'
     & $installer -Uninstall @common

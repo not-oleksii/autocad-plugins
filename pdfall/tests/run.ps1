@@ -4,7 +4,9 @@
 #   2. on the old project drawings in examples\old, if there are any: PDFNUM, PDFALL and merge.exe,
 #      and a paper size AutoCAD refuses;
 #   3. in an empty drawing: PDFLIST and PDFSPEC paste рамки, PDFNUM numbers them and PDFALL plots them;
-#   4. the ribbon tab.
+#   4. in another: every one of the 28 templates pasted, with each choice of name-cell text, then
+#      PDFNUM, PDFALL (each PDF on paper of its рамка's size) and merge.exe;
+#   5. the ribbon tab.
 # Usage: powershell -ExecutionPolicy Bypass -File tests\run.ps1   (run build.bat first)
 param(
     [string]$Contents = (Join-Path $PSScriptRoot '..\dist\PDFALL.bundle\Contents'),
@@ -105,11 +107,11 @@ $exported = Join-Path $Work 'exported files'
 $pdfs = @(Get-ChildItem $exported -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
 $first, $second = $log -split 'SECOND-PDFNUM', 2
 Check ($log -match 'END-OF-TEST') 'the script ran to the end'
-Check ($first -match 'PDFNUM заповнив:') 'PDFNUM filled in the empty counters'
+Check ($first -match 'PDFNUM записав номери:') 'PDFNUM filled in the empty counters'
 Check ($first -match 'К1 специфікація 2: Аркуш 2') 'К1 специфікація 2 got Аркуш 2'
 Check ($first -match '1П лист 1: Аркуш 1, Аркушів 1') '1П лист 1 got Аркуш 1, Аркушів 1'
 Check ($first -notmatch 'К1 лист') 'К1 листи, already numbered, were left alone'
-Check ($second -match 'PDFNUM: порожніх клітинок') 'a second PDFNUM finds nothing left to fill'
+Check ($second -match 'PDFNUM: усі номери') 'a second PDFNUM finds nothing left to fill or fix'
 Check ($log -notmatch 'клітинк[аи] Аркуш\S* порожн') 'PDFALL finds no empty counters'
 Check ($log -match 'PDFALL: 34 PDF у') 'PDFALL reports 34 PDFs'
 Check ($pdfs.Count -eq 34) "34 PDFs on disk (found $($pdfs.Count))"
@@ -177,7 +179,7 @@ foreach ($dwg in $oldDwgs) {
 (setq *pdfall-merge* nil)
 (defun show (tag / d)
   (setq d (pa:read-drawing))
-  (foreach r (car d) (princ (strcat "\n" tag " " (pa:get 'kind r) " " (pa:get 'marka r) " " (pa:paper r) " sheet=" (vl-princ-to-string (pa:get 'sheet r)) " total=" (vl-princ-to-string (pa:get 'total r)))))
+  (foreach r (car d) (princ (strcat "\n" tag " " (pa:get 'kind r) " " (pa:get 'marka r) " " (car (pa:paper r)) " sheet=" (vl-princ-to-string (pa:get 'sheet r)) " total=" (vl-princ-to-string (pa:get 'total r)))))
   (foreach p (cadr d) (princ (strcat "\n" tag " problem: " (car p)))))
 (show "BEFORE")
 PDFNUM
@@ -189,7 +191,7 @@ Y
 "@
     $olog = Invoke-Acad "old$n" $oldScr $copy
     $a4 = $n -eq 'M5'
-    $paper = if ($a4) { 'a4' } else { 'a3' }
+    $paper = if ($a4) { 'A4' } else { 'A3' }
     $oldPdfs = @(Get-ChildItem (Join-Path $dir 'exported files') -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
     Check ($olog -match 'END-OF-TEST') "$($dwg.Name): the script ran to the end"
     Check ($olog -match "BEFORE list $n $paper sheet=nil total=1" -and $olog -notmatch 'BEFORE.*problem') `
@@ -234,7 +236,7 @@ if ($oldDwgs.Count) {
 (setenv "PrinterConfigDir" "$($plotters -replace '\\', '\\')")
 (setq *pdfall-home* "$($Contents -replace '\\', '\\')")
 (load "$c/pdfall.lsp")
-(setq *pdfall-merge* nil *pdfall-paper-a3* "No such paper")
+(setq *pdfall-merge* nil *pdfall-paper* "No such paper")
 PDFNUM
 PDFALL
 (princ "\nEND-OF-TEST")
@@ -261,11 +263,12 @@ $pasteScr = @"
 (setenv "PrinterConfigDir" "$((Join-Path $pasteDir 'Plotters') -replace '\\', '\\')")
 (setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
 (load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil)
-(defun tpaste (cmd marka n file)
-  (setq placed 0 undo-open nil)
+(defun tpaste (cmd marka n file / kind)
+  (setq placed 0 undo-open nil kind (cond ((wcmatch file "*list*") "list") ((wcmatch file "*spec*") "spec") ("text")))
   (pa:paste-start)
-  (vl-catch-all-apply '(lambda () (pa:paste-run cmd marka '(lambda (i) (if (< i n) (cons file "t") (exit))))))
+  (vl-catch-all-apply '(lambda () (pa:paste-run cmd marka kind '(lambda (i) (if (< i n) (cons file "t") (exit))))))
   (pa:paste-cleanup)
   (princ (strcat "\nPLACED=" (itoa placed))))
 (defun report (/ d rs)
@@ -336,7 +339,7 @@ $dateLisp
   (princ (strcat "\nDATES=" (itoa ok) "/" (itoa n) " DATE-WARNINGS=" (itoa (length warnings)) " LEFT=" (itoa (date-count (pa:today))))))
 (setq pa:plot0 pa:plot dated-plots 0)
 (defun pa:plot (r path) (if (dated-p r) (setq dated-plots (1+ dated-plots))) (pa:plot0 r path))
-(tpaste "PDFLIST" "1ЧП" 2 "PDFALL_list.dwg")
+(tpaste "PDFLIST" "1ЧП" 2 "PDFALL_list_spdbv_A3l.dwg")
 1000,1000
 1500,1000
 (tpaste "PDFSPEC" "К1" 1 "PDFALL_spec1.dwg")
@@ -356,12 +359,43 @@ PDFNUM
 PDFALL
 (princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today)))))
 (princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner dated)))))
-(princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК")))))
+(princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК") (pa:file-safe "1/2П:") (pa:title-name '("ДВНЗ" "\"ПДАБА\"")) (pa:title-name '("\""))))))
+(princ (strcat "\nSHOWN=" (if (pa:console-p) "console" "full") " " (pa:shown-folder "C:\\x" '("1ЧП")) " " (pa:shown-folder "C:\\x" '("1ЧП" "К1"))))
 (princ (strcat "\nCANCELS=" (vl-princ-to-string (mapcar 'pa:cancelled-p (list "Function cancelled" "Функция прервана" (vl-catch-all-error-message (vl-catch-all-apply 'exit nil)) "bad argument type: numberp: nil")))))
 ;; a марка that Windows can't use in a file name stops PDFALL before it plots anything
-(tpaste "PDFLIST" "1/2П" 1 "PDFALL_list.dwg")
+(tpaste "PDFLIST" "1/2П" 1 "PDFALL_list_spdbv_A3l.dwg")
 5000,1000
 PDFALL
+Ні
+(princ "\nREFUSED-FORCE")
+;; with 4 листи whose name text was deleted and a лист copied together with its numbers as well, plot
+;; anyway: 1/2П becomes 1_2П, the copy is named by its position, the first two листи after their
+;; organisation cells, and the other two, both Аркуш 1, Без_марки_01 and Без_марки_02
+(tpaste "PDFLIST" "Х9" 4 "PDFALL_list_spdbv_A3l.dwg")
+7000,1000
+7500,1000
+8000,1000
+8500,1000
+(defun org-text (r s / p)
+  (setq p (list (- (car (pa:get 'ur r)) 30.0) (+ (cadr (pa:get 'll r)) 15.0) 0.0))
+  (entmake (list '(0 . "TEXT") (cons 10 p) (cons 11 p) '(72 . 1) '(40 . 3.5) (cons 1 s))))
+(foreach r (car (pa:read-drawing))
+  (if (= (pa:get 'marka r) "Х9")
+    (progn
+      (foreach z (pa:get 'zone r) (if (and (nth 4 z) (pa:name-cell-p z "list")) (entdel (nth 4 z))))
+      (cond
+        ((equal (car (pa:get 'll r)) 7000.0 1.0) (org-text r "1ДВНЗ \"ПДАБА\""))
+        ((equal (car (pa:get 'll r)) 7500.0 1.0) (org-text r "ДВНЗ \"ПДАБА\"")))
+      (if (> (car (pa:get 'll r)) 7900.0)
+        (foreach c (pa:get 'counters r)
+          (if (eq (car c) 'sheet)
+            ((lambda (d) (entmod (subst (cons 1 (strcat (cdr (assoc 1 d)) " 1")) (assoc 1 d) d))) (entget (nth 4 (cadr c))))))))))
+(princ (strcat "\nORG-TITLES=" (vl-princ-to-string (mapcar '(lambda (r) (pa:title-name (pa:org-title r))) (vl-sort (vl-remove nil (mapcar 'cdr (cadr (pa:read-drawing)))) '(lambda (a b) (< (car (pa:get 'll a)) (car (pa:get 'll b)))))))))
+(foreach r (car (pa:read-drawing))
+  (if (and (= (pa:get 'marka r) "1ЧП") (= (pa:get 'sheet r) 2))
+    (foreach c (pa:get 'counters r) (if (eq (car c) 'sheet) (pa:set-number c 1)))))
+PDFALL
+Так
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -382,13 +416,158 @@ Check ($plog -match 'NUMS=4/4\b') 'PDFNUM centres the 4 numbers it wrote in thei
 Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted рамки'
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
-Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк\)') 'the name helpers find a forbidden character, pad a number and lower-case Cyrillic'
+Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк 1_2П_ ДВНЗ_ПДАБА nil\)') 'the name helpers find a forbidden character, pad a number, lower-case Cyrillic and make a марка fit a file name'
+Check ($plog -match 'SHOWN=console C:\\x\\1ЧП C:\\x(\s|"|$)') 'after plotting PDFALL shows the марка''s folder, or all of them when there are several; not in the console AutoCAD'
 Check ($plog -match 'CANCELS=\(T T T nil\)') 'Esc in English or Russian and (exit) are not reported as errors, a real error is'
-Check ($plog -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($plog, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots'
+$beforeForce, $afterForce = $plog -split 'REFUSED-FORCE', 2
+Check ($beforeForce -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($beforeForce, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots, when the user says no'
+$pasted1 = Join-Path $pasteDir 'exported files\1ЧП'
+$pastedOut = Join-Path $pasteDir 'exported files'
+Check ($afterForce -match 'Аркуш 1 стоїть на кількох' -and $afterForce -match 'PDFALL друкує попри проблеми' -and $afterForce -match 'PDFALL: 17 PDF у' -and
+       (Test-Path (Join-Path $pasted1 '1ЧП лист 01.pdf')) -and (Test-Path (Join-Path $pasted1 '1ЧП лист 02.pdf'))) 'plotting anyway names a copied лист by its position and plots every рамка found (17 PDFs)'
+Check ($afterForce -match 'ORG-TITLES=\(1ДВНЗ_ПДАБА ДВНЗ_ПДАБА nil nil\)') 'the organisation cell''s top line names a рамка without a марка; none is read from an empty one'
+$orgNames = '1ДВНЗ_ПДАБА', 'ДВНЗ_ПДАБА', 'Без_марки_01', 'Без_марки_02'
+Check ($afterForce -match 'рамку без марки надруковано як «1ДВНЗ_ПДАБА»' -and $afterForce -match 'рамку без марки надруковано як «Без_марки_02»' -and
+       @($orgNames | Where-Object { -not (Test-Path (Join-Path $pastedOut "$_\$_ лист 01.pdf")) -or -not (Test-Path (Join-Path $pastedOut "$_\$_ лист 01 без заливки.pdf")) }).Count -eq 0 -and
+       -not (Test-Path (Join-Path $pastedOut 'Без_марки'))) 'plotting anyway plots рамки without a марка in a folder each: by organisation cell, else Без_марки_01, _02 when both are Аркуш 1'
+Check ($afterForce -match '1/2П: надруковано як «1_2П»' -and (Test-Path (Join-Path $pastedOut '1_2П\1_2П лист 01.pdf'))) 'plotting anyway plots a марка with a forbidden character with _ in its place'
 Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
 $today = Get-Date -Format 'dd.MM.yy'
 Check ($plog -match "TODAY=$([regex]::Escape($today))\|") "the date reads dd.mm.yy ($today)"
 Check ($plog -match 'DATED-PLOTS=7 TODAY-LEFT=0') 'all 7 PDFs of the pasted рамки were plotted with the date, and the drawing has none left'
+
+# Every template, pasted in one row in the order of $forms, so that PDFNUM numbers each марка's
+# рамки of a kind in that order. Each марка has its own choice of name-cell text.
+Write-Host 'Every template in an empty drawing...'
+$formsDir = Join-Path $Work 'forms'
+New-Item (Join-Path $formsDir 'Plotters') -ItemType Directory -Force | Out-Null
+$sizes = @{ A1 = 594, 841; A2 = 420, 594; A3 = 297, 420; A4 = 210, 297; A5 = 148, 210 }
+$groups = @(
+    # марка, kind, template-name pattern, prefix, custom prefix, second line, custom second line, name it gets
+    @('1ЧП', 'list', 'PDFALL_list_skd_*', 'std', '', 'std', '', 'Джгут 1ЧП|Складальне креслення'),
+    # a марка may be any word, without a digit too
+    @('Іпсум', 'list', 'PDFALL_list_spdb_*', 'none', '', 'none', '', 'Іпсум'),
+    @('Лорем', 'list', 'PDFALL_list_spdbv_*', 'custom', 'Кабель живлення', 'custom', 'Монтажна схема', 'Кабель живлення Лорем|Монтажна схема'),
+    @('Іпсум', 'spec', 'PDFALL_spec?', 'none', '', 'none', '', 'Іпсум'),
+    @('1ЧП', 'text', 'PDFALL_text_skd_?', 'std', '', 'std', '', 'Джгут 1ЧП'),
+    @('Лорем', 'text', 'PDFALL_text_spdb_?', 'custom', 'Кабель живлення', 'custom', 'Монтажна схема', 'Кабель живлення Лорем')
+)
+$x = 0
+$pasteLines = @()
+$expected = @()
+foreach ($g in $groups) {
+    $files = @(Get-ChildItem $Contents -Filter "$($g[2]).dwg" | Sort-Object Name)
+    $pasteLines += "(pa:set-setting `"Prefix`" `"$($g[3])`") (pa:set-setting `"PrefixText`" `"$($g[4])`") (pa:set-setting `"Line2`" `"$($g[5])`") (pa:set-setting `"Line2Text`" `"$($g[6])`")"
+    $n = 0
+    foreach ($f in $files) {
+        $n++
+        $size, $o = if ($f.BaseName -match '_(A\d)([lp])$') { $Matches[1], $Matches[2] } else { 'A4', 'p' }
+        $wh = $sizes[$size]
+        $w, $h = if ($o -eq 'l') { $wh[1], $wh[0] } else { $wh[0], $wh[1] }
+        $pasteLines += "(tone `"$($g[0])`" `"$($f.Name)`")"
+        $pasteLines += "$x,0"
+        $expected += [pscustomobject]@{ Marka = $g[0]; Kind = $g[1]; Size = $size; W = $w; H = $h; Sheet = $n; Count = $files.Count; Name = $g[7] }
+        $x += $w + 50
+    }
+}
+$fh = $Contents -replace '\\', '/'
+$formsScr = @"
+(setvar "SECURELOAD" 0)
+(setenv "PrinterConfigDir" "$((Join-Path $formsDir 'Plotters') -replace '\\', '\\')")
+(setq *pdfall-home* "$($Contents -replace '\\', '\\')")
+(load "$fh/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
+(setq *pdfall-merge* nil)
+(defun tone (marka file / kind)
+  (setq placed 0 undo-open nil kind (cond ((wcmatch file "*list*") "list") ((wcmatch file "*spec*") "spec") ("text")))
+  (pa:paste-start)
+  (vl-catch-all-apply '(lambda () (pa:paste-run "T" marka kind '(lambda (i) (if (< i 1) (cons file "t") (exit))))))
+  (pa:paste-cleanup))
+(defun show (tag / d n)
+  (setq d (pa:read-drawing))
+  (foreach r (vl-sort (car d) '(lambda (a b) (< (car (pa:get 'll a)) (car (pa:get 'll b)))))
+    (setq n nil)
+    (foreach z (pa:get 'zone r) (if (and (pa:name-cell-p z (pa:get 'kind r)) (vl-string-search (pa:get 'marka r) (cadddr z))) (setq n (cadddr z))))
+    (princ (strcat "\n" tag " " (pa:get 'marka r) " " (pa:get 'kind r) " " (car (pa:paper r)) " "
+                   (itoa (cadr (pa:paper r))) "x" (itoa (caddr (pa:paper r)))
+                   " sheet=" (vl-princ-to-string (pa:get 'sheet r)) " total=" (vl-princ-to-string (pa:get 'total r))
+                   " name=" (vl-string-translate "\n" "|" (cond (n) ("?"))))))
+  (foreach p (cadr d) (princ (strcat "\n" tag " problem: " (car p))))
+  (princ))
+$($pasteLines -join "`r`n")
+(show "BEFORE")
+PDFNUM
+(show "AFTER")
+(princ (strcat "\nPREFIX-ERRORS=" (vl-princ-to-string (list (if (pa:prefix-error "Кабель 2") 1 0) (if (pa:prefix-error "  ") 1 0) (if (pa:prefix-error "Кабель живлення") 1 0)))))
+(setq pl (pa:preview-lines "PDFALL_list_skd_A1p.dwg" 200 120))
+(princ (strcat "\nPREVIEW=" (itoa (length pl)) " " (if (vl-every '(lambda (s) (and (<= 0 (car s) 200) (<= 0 (cadr s) 120) (<= 0 (caddr s) 200) (<= 0 (cadddr s) 120))) pl) "inside" "outside")))
+(pa:set-setting "Paste" "list_skd_A5l")
+(princ (strcat "\nCHOSEN=" (pa:chosen-kind) " " (pa:list-file) " " (pa:chosen-shown) "|" (apply 'strcat (pa:doc-sizes "list_spdb")) "|" (apply 'strcat (pa:doc-orients "list_skd" "A4")) "|" (apply 'strcat (pa:doc-sizes "text_spdb")) (apply 'strcat (pa:doc-orients "text_spdb" "A4"))))
+(pa:set-setting "Paste" "text_spdb")
+(princ (strcat "\nTEXT=" (pa:chosen-kind) " " (pa:text-file "2") " " (pa:list-file) " " (pa:chosen-shown)))
+(pa:set-setting "Paste" "list_skd_A5p")
+(princ (strcat "\nFALLBACK=" (pa:list-file)))
+(princ (strcat "\nMARKA-ERRORS=" (vl-princ-to-string (mapcar '(lambda (m) (if (pa:marka-error m) 1 0)) (list "Лорем" "1ЧП" "Лорем Іпсум" "" "1/2")))))
+(princ (strcat "\nNAME-LINE=" (pa:name-line "Джгут" "Лорем" "Складальне креслення") "|" (pa:name-line "" "Лорем" "") "|"))
+(pa:remember-marka "Лорем") (setq *pdfall-marka* nil)
+(princ (strcat "\nREMEMBERED=" (pa:last-marka)))
+(pa:set-setting "Prefix" "custom") (pa:set-setting "PrefixText" "Джгут {1}\\") (pa:set-setting "Line2" "none")
+(princ (strcat "\nESCAPED=" (pa:name-text "list" "Х2")))
+(command "_.-LAYER" "_M" "Цвет" "")
+(command "_.SAVEAS" "2018" "$($formsDir -replace '\\', '/')/forms.dwg")
+PDFALL
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+$flog = Invoke-Acad 'forms' $formsScr $null
+Check ($flog -match 'END-OF-TEST') 'the every-template script ran to the end'
+$before = @([regex]::Matches($flog, '(?m)^BEFORE (\S+) (\S+) (A\d) (\d+)x(\d+) sheet=\S+ total=\S+ name=(.*)$'))
+$after = @([regex]::Matches($flog, '(?m)^AFTER (\S+) (\S+) (A\d) (\d+)x(\d+) sheet=(\S+) total=(\S+) name=(.*)$'))
+Check ($before.Count -eq $expected.Count -and $flog -notmatch 'BEFORE problem') "PDFALL finds all $($expected.Count) pasted рамки and reads a марка in each (found $($before.Count))"
+$bad = @()
+for ($i = 0; $i -lt [math]::Min($after.Count, $expected.Count); $i++) {
+    $e = $expected[$i]; $a = $after[$i].Groups
+    $total = if ($e.Kind -eq 'list' -or $e.Sheet -eq 1) { "$($e.Count)" } else { 'nil' }
+    if ($a[1].Value -ne $e.Marka -or $a[2].Value -ne $e.Kind -or $a[3].Value -ne $e.Size -or $a[4].Value -ne "$($e.W)" -or $a[5].Value -ne "$($e.H)" -or
+        $a[6].Value -ne "$($e.Sheet)" -or $a[7].Value -ne $total -or $a[8].Value.Trim() -ne $e.Name) {
+        $bad += "$($after[$i].Value.Trim()) (expected $($e.Marka) $($e.Kind) $($e.Size) $($e.W)x$($e.H) sheet=$($e.Sheet) total=$total name=$($e.Name))"
+    }
+}
+Check ($after.Count -eq $expected.Count -and $bad.Count -eq 0) "every рамка is read with its kind, size, марка and name cell, and PDFNUM numbers it ($($bad -join '; '))"
+Check ($flog -match 'PREFIX-ERRORS=\(1 1 0\)') 'a custom prefix with a digit, or an empty one, is refused'
+Check ($flog -match 'PREVIEW=(\d+) inside' -and [int]$Matches[1] -gt 50) 'the preview draws a template''s lines inside the picture'
+Check ($flog -match 'CHOSEN=list PDFALL_list_skd_A5l\.dwg лист СКД A5 горизонтальний\|A1A2A3A4\|p\|A4p') 'the settings pick a лист template, and list a document''s sizes and orientations'
+Check ($flog -match 'TEXT=text PDFALL_text_spdb_2\.dwg PDFALL_text_spdb_1\.dwg текстовий документ СПДБ') 'the «Лист» button''s settings may pick a текстовий документ instead'
+Check ($flog -match 'MARKA-ERRORS=\(0 0 1 1 1\)') 'a марка may be any one word, without a space or a character Windows forbids'
+Check ($flog -match 'NAME-LINE=Джгут Лорем Складальне креслення\|Лорем\|') 'the dialog shows the whole name in one line'
+Check ($flog -match 'REMEMBERED=Лорем') 'the марка set last is remembered across sessions'
+Check ($flog -match 'FALLBACK=PDFALL_list_spdbv_A3l\.dwg') 'a лист format with no template falls back to the default'
+Check ($flog -match [regex]::Escape('ESCAPED=Джгут \{1\}\\ Х2')) 'a custom prefix is written literally, not as MTEXT codes'
+$formPdfs = @(Get-ChildItem (Join-Path $formsDir 'exported files') -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
+$lists = @($expected | Where-Object { $_.Kind -eq 'list' }).Count
+$wantPdfs = 2 * $lists + ($expected.Count - $lists)
+Check ($flog -match "PDFALL: $wantPdfs PDF у" -and $formPdfs.Count -eq $wantPdfs) "PDFALL plots $wantPdfs PDFs: every лист twice, every специфікація and текстовий документ once (found $($formPdfs.Count))"
+Check ($flog -notmatch 'Unknown command|Помилка|замість|клітинку під заголовком Дата') 'with no error, no size warning, and a date in every Дата cell'
+$words = @{ list = 'лист'; spec = 'специфікація'; text = 'текстовий документ' }
+$wrong = @()
+foreach ($e in $expected) {
+    $name = "$($e.Marka) $($words[$e.Kind]) $('{0:D2}' -f $e.Sheet).pdf"
+    $pdf = Join-Path $formsDir "exported files\$($e.Marka)\$name"
+    $box = if ((Test-Path $pdf) -and ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($pdf)) -match '/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)')) { [double]$Matches[1], [double]$Matches[2] }
+    if (-not $box -or [math]::Abs($box[0] - $e.W * 72 / 25.4) -gt 2 -or [math]::Abs($box[1] - $e.H * 72 / 25.4) -gt 2) { $wrong += "$name ($box)" }
+}
+Check ($wrong.Count -eq 0) "every PDF is on paper of its рамка's size and orientation ($($wrong -join '; '))"
+$mergeForms = Join-Path $Work 'merge-forms.txt'
+$m4 = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$(Join-Path $formsDir 'exported files')`" --force" -RedirectStandardInput $answers `
+    -RedirectStandardOutput $mergeForms -PassThru -NoNewWindow
+$null = $m4.Handle
+if (-not $m4.WaitForExit(120000)) { $m4.Kill(); $script:failures += 'merge.exe (every template) timed out' }
+$fmlog = Get-Content $mergeForms -Raw -Encoding UTF8
+$formMerged = @(Get-ChildItem (Join-Path $formsDir 'exported files') -Recurse -Filter '*загальний*.pdf')
+Check ($formMerged.Count -eq 6 -and $fmlog -notmatch 'Не вдалося звірити|НЕ збігається|Нерозпізнані|--force') "merge.exe reads every марка, Аркуш and текстовий документ back and builds 6 combined files (found $($formMerged.Count))"
+$n1 = @($expected | Where-Object { $_.Marka -eq '1ЧП' }).Count
+Check ($fmlog -match "1ЧП загальний\.pdf: файлів $n1, сторінок $n1") "1ЧП загальний holds its $n1 листи and текстові документи"
 
 # The real command, ended by Esc (0x1B), which also ends the script.
 $esc = [string][char]27
@@ -396,6 +575,7 @@ $escScr = @"
 (setvar "SECURELOAD" 0)
 (setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
 (load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 PDFLIST
 1ЧП
 1000,1000
@@ -404,17 +584,80 @@ $esc
 $elog = Invoke-Acad 'esc' $escScr $null
 Check ($elog -match 'PDFLIST: додано рамок: 1 \(марка 1ЧП\)') 'PDFLIST reports what it added when Esc ends it'
 
+# The real PDFLIST and PDFSPEC, down to the run of pages, with pasting itself replaced by a stand-in
+# that "pastes" 3 рамки and then ends the run as Esc would. The debug log is on.
+Write-Host 'Runs of pages and the debug log...'
+$pagesDwg = Join-Path $Work 'pages.dwg'
+Copy-Item (Join-Path $pasteDir 'paste.dwg') $pagesDwg -Force
+$debugLog = Join-Path $env:TEMP 'PDFALL-debug.log'
+$pagesScr = @"
+(setvar "SECURELOAD" 0)
+(setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
+(load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
+PDFDEBUG
+Увімкнути
+(defun pa:paste-one (file name) (if (< (length pasted) 3) (progn (setq pasted (cons file pasted)) T)))
+(setq pasted nil)
+(pa:set-setting "Paste" "text_skd")
+PDFLIST
+Лорем
+Перший
+(princ (strcat "\nTEXT-PAGES=" (vl-princ-to-string (reverse pasted))))
+(setq pasted nil)
+PDFSPEC
+Лорем
+Наступний
+(princ (strcat "\nSPEC-PAGES=" (vl-princ-to-string (reverse pasted))))
+(setq pasted nil)
+(pa:set-setting "Paste" "list_skd_A3l")
+PDFLIST
+Лорем
+(princ (strcat "\nLIST-PAGES=" (vl-princ-to-string (reverse pasted))))
+(foreach r (car (pa:read-drawing))
+  (if (and (= (pa:get 'marka r) "1ЧП") (equal (car (pa:get 'll r)) 1500.0 1.0))
+    (foreach c (pa:get 'counters r) (pa:set-number c (if (eq (car c) 'total) 5 1)))))
+PDFNUM
+;; deleting "Аркуш 2" and "Аркушів 2" deletes the labels with the numbers
+(foreach r (car (pa:read-drawing))
+  (if (and (= (pa:get 'marka r) "1ЧП") (equal (car (pa:get 'll r)) 1500.0 1.0))
+    (foreach c (pa:get 'counters r) (entdel (nth 4 (cadr c))))))
+(princ "\nLABELS-DELETED")
+PDFNUM
+PDFALL
+Ні
+PDFDEBUG
+Вимкнути
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+$glog = Invoke-Acad 'pages' $pagesScr $pagesDwg
+Check ($glog -match 'END-OF-TEST' -and $glog -notmatch 'Hard error|Помилка') 'PDFLIST and PDFSPEC run through their pages without an error'
+Check ($glog -match 'TEXT-PAGES=\(PDFALL_text_skd_1\.dwg PDFALL_text_skd_2\.dwg PDFALL_text_skd_2\.dwg\)') 'PDFLIST pastes a текстовий документ''s first page, then later ones'
+Check ($glog -match 'SPEC-PAGES=\(PDFALL_spec2\.dwg PDFALL_spec2\.dwg PDFALL_spec2\.dwg\)') 'PDFSPEC pastes only later pages when asked to start on one'
+Check ($glog -match 'LIST-PAGES=\(PDFALL_list_skd_A3l\.dwg PDFALL_list_skd_A3l\.dwg PDFALL_list_skd_A3l\.dwg\)') 'PDFLIST pastes the лист chosen in the settings'
+Check ($glog -match 'журнал увімкнено' -and $glog -match 'журнал вимкнено') 'PDFDEBUG turns the debug log on and off'
+Check ($glog -match '1ЧП лист 2: Аркуш 1 → 2, Аркушів 5 → 2' -and $glog -notmatch '1ЧП лист 1:') 'PDFNUM fixes a лист copied with the number of another, and leaves the right ones alone'
+$dlog = if (Test-Path $debugLog) { Get-Content $debugLog -Raw -Encoding UTF8 } else { '' }
+Check ($dlog -match '==== PDFLIST \| PDFALL' -and $dlog -match 'paste: pages of text starting on' -and $dlog -match 'paste: template "?PDFALL_spec2') 'the debug log follows PDFLIST and PDFSPEC step by step'
+Check ($dlog -match '==== PDFNUM' -and $dlog -match 'reader: frame at' -and $dlog -match 'kind (list|spec)' -and $dlog -match '\[name cell\]' -and $dlog -match 'pdfnum: filled') 'the debug log shows each рамка''s kind and title-block texts, with the name cell marked'
+Check ($dlog -match 'log turned off') 'turning the log off is the last thing logged'
+$afterDelete = ($glog -split 'LABELS-DELETED', 2)[1]
+Check ($afterDelete -match 'немає напису «Аркуш», тож номер нікуди записати' -and $afterDelete -match 'немає напису «Аркушів»' -and
+       $afterDelete -match 'немає напису «Аркуш» \(його видалили') 'PDFNUM and PDFALL say when the Аркуш and Аркушів labels were deleted, instead of offering to fill them'
+
 Write-Host 'Ribbon tab...'
 [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path $Acad) 'AcCui.dll')) | Out-Null
 $cs = New-Object Autodesk.AutoCAD.Customization.CustomizationSection((Join-Path $Contents 'PDFALL.cuix'))
 $tab = @($cs.MenuGroup.RibbonRoot.RibbonTabSources)[0]
 $macros = @($cs.MenuGroup.MacroGroups | ForEach-Object { $_.MenuMacros })
 Check ($tab.Text -eq 'PDFALL' -and "$($tab.DefaultDisplay)" -eq 'AddToWorkspace') 'PDFALL.cuix has a PDFALL tab that AutoCAD adds by itself'
-Check (($macros | ForEach-Object { $_.macro.Command }) -join ',' -eq '^C^CPDFALL ,^C^CPDFNUM ,^C^CPDFLIST ,^C^CPDFSPEC ') 'its buttons run PDFALL, PDFNUM, PDFLIST and PDFSPEC'
+Check (($macros | ForEach-Object { $_.macro.Command }) -join ',' -eq '^C^CPDFALL ,^C^CPDFNUM ,^C^CPDFLIST ,^C^CPDFSPEC ,^C^CPDFSETTINGS ') 'its buttons run PDFALL, PDFNUM, PDFLIST, PDFSPEC and PDFSETTINGS'
 $labels = @($cs.MenuGroup.RibbonRoot.RibbonPanelSources | ForEach-Object { $_.Items } | ForEach-Object { $_.Items } | ForEach-Object { $_.Text })
-Check (($labels -join '|') -eq 'Друк у PDF|Номери аркушів|Лист|Специфікація') "the buttons read in Ukrainian, not as command names (got $($labels -join ', '))"
+Check (($labels -join '|') -eq 'Друк у PDF|Номери аркушів|Лист|Специфікація|Налаштування') "the buttons read in Ukrainian, not as command names (got $($labels -join ', '))"
 Check (@($macros | Where-Object { -not (Test-Path (Join-Path $Contents $_.macro.LargeImage)) }).Count -eq 0) 'every button image is in Contents'
-Check (@('PDFALL_list.dwg', 'PDFALL_spec1.dwg', 'PDFALL_spec2.dwg' | Where-Object { -not (Test-Path (Join-Path $Contents $_)) }).Count -eq 0) 'the three рамка templates are in Contents'
+Check (@(Get-ChildItem $Contents -Filter 'PDFALL_*.dwg').Count -eq 28) 'the 28 рамка templates are in Contents'
 
 Write-Host "Logs: $out, $mergeOut"
 if ($failures) { Write-Host "FAILED: $($failures -join '; ')"; exit 1 } else { Write-Host 'All passed.' }
