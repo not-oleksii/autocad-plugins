@@ -571,6 +571,23 @@ def home_folder():
     return Path(sys.executable if frozen else __file__).resolve().parent
 
 
+def parse_args(args, check=False):
+    """(check, forced, folder to open, roots) from the command line:
+    merge.exe [--check] [--force] [--open <folder>] [<folder> ...]"""
+    forced, shown, roots = False, None, []
+    rest = iter(args)
+    for arg in rest:
+        if arg == "--check":
+            check = True
+        elif arg == "--force":
+            forced = True
+        elif arg == "--open":
+            shown = next(rest, None)
+        else:
+            roots.append(Path(arg).resolve())
+    return check, forced, shown, roots or [home_folder()]
+
+
 def main(check=False):
     """Merge every марка under the given folders; with check, only report and change nothing."""
     if hasattr(sys.stdout, "reconfigure"):
@@ -578,9 +595,7 @@ def main(check=False):
     # AutoCAD's PDFs trip harmless pypdf parser warnings on every file.
     logging.getLogger("pypdf").setLevel(logging.ERROR)
     args = sys.argv[1:]
-    check = check or "--check" in args
-    forced = "--force" in args
-    roots = [Path(arg).resolve() for arg in args if arg not in ("--check", "--force")] or [home_folder()]
+    check, forced, shown, roots = parse_args(args, check)
     if check:
         print(msg("merge.check-only"))
     for root in roots:
@@ -596,6 +611,12 @@ def main(check=False):
         force = confirm_mismatches(folders, root, check, forced)
         for entry in folders:
             process(entry, root, force, dry_run=check)
+    if shown and not check:
+        # PDFALL asks for the folder it plotted into, to show it once the combined files are there.
+        try:
+            os.startfile(shown)
+        except OSError:
+            pass
     if getattr(sys, "frozen", False):
         # A double-clicked .exe closes its window on exit; keep the report readable.
         try:

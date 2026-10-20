@@ -157,7 +157,7 @@
   (initget (strcat yes " " no))
   (= yes (getkword (strcat "\n\n" (pa:msg "pdfall.force-ask" (list "yes" yes "no" no))))))
 
-(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e skipped)
+(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e skipped shown)
   (if (= 0 (getvar "DWGTITLED"))
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
@@ -267,14 +267,31 @@
   (princ (strcat "\n\n" (pa:msg "pdfall.plotted" (list "n" plotted "folder" base))))
   (if errors (pa:report-errors (pa:msg "pdfall.not-plotted" nil)))
   (pa:report-warnings)
+  ;; The folder to show once it is done: the марка's own when there is one, else all of them. Nobody
+  ;; watches the console AutoCAD the tests run in, so it shows nothing.
+  (setq shown (if (and (> plotted 0) (not (pa:console-p))) (pa:shown-folder base markas)))
+  (pa:log (list "pdfall: folder to open" shown))
   (cond
-    ((null *pdfall-merge*))
-    ((findfile *pdfall-merge*)
+    ((pa:console-p) (pa:log "pdfall: console AutoCAD, merge.exe not started"))
+    ((and *pdfall-merge* (findfile *pdfall-merge*))
      (princ (strcat "\n" (pa:msg "pdfall.merging" nil)))
      (pa:log (list "pdfall: merging" base))
-     ;; --force: the user already chose to go on despite the numbers, so merge.exe needn't ask again
-     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"" (if forced " --force" "") "\"")))
-    (T (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))))
+     ;; --force: the user already chose to go on despite the numbers, so merge.exe needn't ask again;
+     ;; --open: merge.exe opens the folder once the combined files are in it
+     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"" (if forced " --force" "")
+                                 (if shown (strcat " --open \"" shown "\"") "") "\"")))
+    (T
+     (if *pdfall-merge* (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))
+     (if shown (startapp "explorer.exe" (strcat "\"" shown "\""))))))
+
+(defun pa:shown-folder (base markas)
+  ;; The folder PDFALL opens after a run: the марка's folder when one марка was plotted, else base.
+  (if (= (length markas) 1) (strcat base "\\" (car markas)) base))
+
+(defun pa:console-p ()
+  ;; Whether this is the console AutoCAD (accoreconsole), which can't start programs: it has no
+  ;; startapp.
+  (null startapp))
 
 ;; AutoCAD's Plotters folder (the first one, if several are set).
 (defun pa:plotters ()

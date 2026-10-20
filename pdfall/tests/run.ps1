@@ -360,6 +360,7 @@ PDFALL
 (princ (strcat "\nDATED-PLOTS=" (itoa dated-plots) " TODAY-LEFT=" (itoa (date-count (pa:today)))))
 (princ (strcat "\nLEAKED=" (vl-princ-to-string (vl-remove-if-not 'boundp '(texts hsegs vsegs cellsegs rowsegs pa-owner dated)))))
 (princ (strcat "\nHELPERS=" (vl-princ-to-string (list (pa:bad-char "1/2П") (pa:bad-char "К1") (pa:bad-char "Х1:А") (pa:pad 3) (pa:pad 12) (pa:lower "Загальний ДРУК")))))
+(princ (strcat "\nSHOWN=" (if (pa:console-p) "console" "full") " " (pa:shown-folder "C:\\x" '("1ЧП")) " " (pa:shown-folder "C:\\x" '("1ЧП" "К1"))))
 (princ (strcat "\nCANCELS=" (vl-princ-to-string (mapcar 'pa:cancelled-p (list "Function cancelled" "Функция прервана" (vl-catch-all-error-message (vl-catch-all-apply 'exit nil)) "bad argument type: numberp: nil")))))
 ;; a марка that Windows can't use in a file name stops PDFALL before it plots anything
 (tpaste "PDFLIST" "1/2П" 1 "PDFALL_list_spdbv_A3l.dwg")
@@ -395,6 +396,7 @@ Check ($plog -match 'PDFALL: 7 PDF у') 'PDFALL plots the 7 PDFs of the pasted �
 Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
 Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк\)') 'the name helpers find a forbidden character, pad a number and lower-case Cyrillic'
+Check ($plog -match 'SHOWN=console C:\\x\\1ЧП C:\\x(\s|"|$)') 'after plotting PDFALL shows the марка''s folder, or all of them when there are several; not in the console AutoCAD'
 Check ($plog -match 'CANCELS=\(T T T nil\)') 'Esc in English or Russian and (exit) are not reported as errors, a real error is'
 $beforeForce, $afterForce = $plog -split 'REFUSED-FORCE', 2
 Check ($beforeForce -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($beforeForce, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots, when the user says no'
