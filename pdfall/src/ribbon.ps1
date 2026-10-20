@@ -1,5 +1,5 @@
 ﻿# Builds PDFALL.cuix, the partial menu that adds a "PDFALL" ribbon tab with PDFALL, PDFNUM,
-# PDFLIST, PDFSPEC, PDFTEXT and PDFSETTINGS buttons, and the buttons' icons. It uses AutoCAD's own customization library (AcCui.dll), so
+# PDFLIST, PDFSPEC and PDFSETTINGS buttons, and the buttons' icons. It uses AutoCAD's own customization library (AcCui.dll), so
 # the file is written exactly as AutoCAD's CUI editor would write it.
 # build.bat runs it: powershell -File src\ribbon.ps1 -Out dist\PDFALL.bundle\Contents
 param(
@@ -15,8 +15,8 @@ function Msg($key) { $messages.$key }
 Add-Type -AssemblyName System.Drawing
 New-Item $Out -ItemType Directory -Force | Out-Null
 
-# A page with a coloured band and a short label: PDF for PDFALL, 1 2 for PDFNUM, Л, СП and ТД for
-# PDFLIST, PDFSPEC and PDFTEXT, ... for PDFSETTINGS.
+# A page with a coloured band and a short label: PDF for PDFALL, 1 2 for PDFNUM, Л and СП for
+# PDFLIST and PDFSPEC, ... for PDFSETTINGS.
 function New-Icon($name, $size, $label, $color) {
     $bmp = New-Object Drawing.Bitmap $size, $size
     $g = [Drawing.Graphics]::FromImage($bmp)
@@ -50,8 +50,6 @@ New-Icon 'PDFLIST_16.png' 16 'Л' ([Drawing.Color]::FromArgb(40, 140, 70))
 New-Icon 'PDFLIST_32.png' 32 'Л' ([Drawing.Color]::FromArgb(40, 140, 70))
 New-Icon 'PDFSPEC_16.png' 16 'СП' ([Drawing.Color]::FromArgb(210, 120, 30))
 New-Icon 'PDFSPEC_32.png' 32 'СП' ([Drawing.Color]::FromArgb(210, 120, 30))
-New-Icon 'PDFTEXT_16.png' 16 'ТД' ([Drawing.Color]::FromArgb(120, 70, 160))
-New-Icon 'PDFTEXT_32.png' 32 'ТД' ([Drawing.Color]::FromArgb(120, 70, 160))
 New-Icon 'PDFSETTINGS_16.png' 16 '...' ([Drawing.Color]::FromArgb(110, 110, 110))
 New-Icon 'PDFSETTINGS_32.png' 32 '...' ([Drawing.Color]::FromArgb(110, 110, 110))
 
@@ -104,7 +102,6 @@ Add-Panel (Msg 'ribbon.print-panel') 'PDFALL' @(
 Add-Panel (Msg 'ribbon.frame-panel') 'PDFFRAME' @(
     @{ Name = 'PDFLIST'; Text = (Msg 'ribbon.list'); Help = (Msg 'ribbon.list-help') },
     @{ Name = 'PDFSPEC'; Text = (Msg 'ribbon.spec'); Help = (Msg 'ribbon.spec-help') },
-    @{ Name = 'PDFTEXT'; Text = (Msg 'ribbon.text'); Help = (Msg 'ribbon.text-help') },
     @{ Name = 'PDFSETTINGS'; Text = (Msg 'ribbon.settings'); Help = (Msg 'ribbon.settings-help') }
 )
 $mg.RibbonRoot.RibbonTabSources.Add($tab)

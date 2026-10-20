@@ -2,7 +2,7 @@
 ;;; String helpers that every other file may use:
 ;;;   pa:msg pa:label pa:file  the texts of messages.json
 ;;;   pa:fill          {name}s of any text filled in, as pa:msg does
-;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:cyr
+;;;   pa:split pa:words pa:digit-p pa:digits-p pa:marka-p pa:marka-error pa:cyr
 ;;;   pa:lower pa:pad pa:bad-char
 ;;;
 ;;; build.bat writes messages.json into *pa-messages*, *pa-labels* and *pa-files* just before
@@ -65,6 +65,14 @@
   (and s (/= s "") (vl-every 'pa:digit-p (vl-string->list s))))
 
 (defun pa:marka-p (s / codes)
-  ;; A марка has at least one letter and one digit, e.g. 1ЧП, К2, Х1А1Р.
+  ;; Whether s looks like the usual марка, with a letter and a digit (1ЧП, К2, Х1А1Р), which the
+  ;; reader picks out of a name cell wherever it stands. A марка may also be any other word.
   (setq codes (vl-string->list s))
   (and (vl-some 'pa:digit-p codes) (vl-some 'pa:letter-p codes)))
+
+(defun pa:marka-error (s)
+  ;; Why s can't be a марка, or nil. A марка is one word of any characters a file name may have
+  ;; ("1ЧП", "Лорем"): it begins the name of every PDF, and the name cell is read up to it.
+  (cond ((= s "") (pa:msg "paste.marka-empty" nil))
+        ((vl-string-search " " s) (pa:msg "paste.marka-bad" nil))
+        ((pa:bad-char s) (pa:msg "paste.marka-char" (list "char" (pa:bad-char s))))))

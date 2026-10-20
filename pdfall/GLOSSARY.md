@@ -33,7 +33,7 @@ The border that marks out one лист, специфікація or тексто
 _Avoid_: frame, layout, format
 
 **Шаблон рамки**:
-An empty рамка with its title block, kept as a DWG (`src\templates`) and pasted by PDFLIST (лист, in the standard, size and orientation chosen in the settings), PDFSPEC (специфікація, first or later аркуш) or PDFTEXT (текстовий документ). Its name cell gets the prefix, the марка and, on a лист, the second line chosen in the settings.
+An empty рамка with its title block, kept as a DWG (`src\templates`) and pasted by PDFLIST (what the settings choose: a лист of a standard, size and orientation, or a текстовий документ, first or later аркуш) or PDFSPEC (специфікація, first or later аркуш). Its name cell gets the prefix, the марка and, on a лист, the second line chosen in the settings.
 _Avoid_: blank, stamp
 
 **Orientation**:
@@ -45,7 +45,7 @@ The stamp in the bottom-right corner of every лист and специфікац�
 _Avoid_: штамп, stamp
 
 **Name cell** (клітинка назви):
-The title block cell that names the product and марка: the prefix, the марка, and on a лист a second line ("Джгут 1ЧП / Складальне креслення", or only "1ЧП"). The марка is its first word with a letter and a digit. Old drawings write only the марка there ("M1"). PDFLIST and PDFSPEC write the марка there; its text fills the cell and is centred in it, so it wraps only when the марка is too long for the cell.
+The title block cell that names the product and марка: the prefix, the марка, and on a лист a second line ("Джгут 1ЧП / Складальне креслення", or only "1ЧП"). The марка is one word: its first word with a letter and a digit, or, when none has a digit, the last word of its first line ("Джгут Лорем"). Old drawings write only the марка there ("M1"). PDFLIST and PDFSPEC write the марка there; its text fills the cell and is centred in it, so it wraps only when the марка is too long for the cell.
 _Avoid_: name field, title
 
 **Prefix** (префікс):

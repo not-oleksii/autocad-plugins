@@ -1,7 +1,7 @@
 ;;; PDFALL: plot every лист, специфікація and текстовий документ drawn in Model space to PDF, then merge them.
 ;;; PDFNUM: fill in the empty Аркуш and Аркушів cells of their title blocks.
-;;; PDFLIST, PDFSPEC, PDFTEXT: paste an empty рамка with its title block for a лист, a специфікація
-;;; or a текстовий документ; PDFSETTINGS: choose what they paste.
+;;; PDFLIST, PDFSPEC: paste an empty рамка with its title block for a лист or текстовий документ,
+;;; or for a специфікація; PDFSETTINGS: choose what PDFLIST pastes.
 ;;;
 ;;; Terms are defined in GLOSSARY.md, the design in docs/adr/0001-plot-from-model-space-with-lisp.md.
 ;;; install.bat installs it as PDFALL.bundle, which AutoCAD loads by itself at startup.

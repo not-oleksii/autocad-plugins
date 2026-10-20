@@ -1,4 +1,4 @@
-﻿# Makes the рамка templates that PDFLIST, PDFSPEC and PDFTEXT paste from the company's forms in
+﻿# Makes the рамка templates that PDFLIST and PDFSPEC paste from the company's forms in
 # examples\formats (kept out of git), one per form:
 #   PDFALL_list_<standard>_<size><orientation>.dwg   a лист: skd, spdb or spdbv (СПДБ «Вироби»);
 #                                                    A1..A5; p (portrait) or l (landscape)
@@ -101,7 +101,7 @@ $rows = foreach ($m in $made | Sort-Object Id) {
 $previews = @"
 ;;; ---- Templates --------------------------------------------------------------
 ;;; Made by src\make_templates.ps1 from examples\formats; run it again instead of editing this.
-;;; Every template PDFLIST, PDFSPEC and PDFTEXT can paste, as
+;;; Every template PDFLIST and PDFSPEC can paste, as
 ;;;   (file kind standard size page width height (name cell: x1 y1 x2 y2) (lines: x1 y1 x2 y2 ...))
 ;;; in mm from the рамка's lower-left corner. page is "1" or "2" for the first and a later page of a
 ;;; специфікація or текстовий документ, nil for a лист. The settings dialog draws the lines as its preview.

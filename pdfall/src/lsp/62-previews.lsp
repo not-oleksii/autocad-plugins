@@ -1,6 +1,6 @@
 ;;; ---- Templates --------------------------------------------------------------
 ;;; Made by src\make_templates.ps1 from examples\formats; run it again instead of editing this.
-;;; Every template PDFLIST, PDFSPEC and PDFTEXT can paste, as
+;;; Every template PDFLIST and PDFSPEC can paste, as
 ;;;   (file kind standard size page width height (name cell: x1 y1 x2 y2) (lines: x1 y1 x2 y2 ...))
 ;;; in mm from the рамка's lower-left corner. page is "1" or "2" for the first and a later page of a
 ;;; специфікація or текстовий документ, nil for a лист. The settings dialog draws the lines as its preview.

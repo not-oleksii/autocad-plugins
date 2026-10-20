@@ -263,6 +263,7 @@ $pasteScr = @"
 (setenv "PrinterConfigDir" "$((Join-Path $pasteDir 'Plotters') -replace '\\', '\\')")
 (setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
 (load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil)
 (defun tpaste (cmd marka n file / kind)
   (setq placed 0 undo-open nil kind (cond ((wcmatch file "*list*") "list") ((wcmatch file "*spec*") "spec") ("text")))
@@ -401,11 +402,12 @@ $sizes = @{ A1 = 594, 841; A2 = 420, 594; A3 = 297, 420; A4 = 210, 297; A5 = 148
 $groups = @(
     # марка, kind, template-name pattern, prefix, custom prefix, second line, custom second line, name it gets
     @('1ЧП', 'list', 'PDFALL_list_skd_*', 'std', '', 'std', '', 'Джгут 1ЧП|Складальне креслення'),
-    @('К1', 'list', 'PDFALL_list_spdb_*', 'none', '', 'none', '', 'К1'),
-    @('Х2', 'list', 'PDFALL_list_spdbv_*', 'custom', 'Кабель живлення', 'custom', 'Монтажна схема', 'Кабель живлення Х2|Монтажна схема'),
-    @('К1', 'spec', 'PDFALL_spec?', 'none', '', 'none', '', 'К1'),
+    # a марка may be any word, without a digit too
+    @('Іпсум', 'list', 'PDFALL_list_spdb_*', 'none', '', 'none', '', 'Іпсум'),
+    @('Лорем', 'list', 'PDFALL_list_spdbv_*', 'custom', 'Кабель живлення', 'custom', 'Монтажна схема', 'Кабель живлення Лорем|Монтажна схема'),
+    @('Іпсум', 'spec', 'PDFALL_spec?', 'none', '', 'none', '', 'Іпсум'),
     @('1ЧП', 'text', 'PDFALL_text_skd_?', 'std', '', 'std', '', 'Джгут 1ЧП'),
-    @('Х2', 'text', 'PDFALL_text_spdb_?', 'custom', 'Кабель живлення', 'custom', 'Монтажна схема', 'Кабель живлення Х2')
+    @('Лорем', 'text', 'PDFALL_text_spdb_?', 'custom', 'Кабель живлення', 'custom', 'Монтажна схема', 'Кабель живлення Лорем')
 )
 $x = 0
 $pasteLines = @()
@@ -431,6 +433,7 @@ $formsScr = @"
 (setenv "PrinterConfigDir" "$((Join-Path $formsDir 'Plotters') -replace '\\', '\\')")
 (setq *pdfall-home* "$($Contents -replace '\\', '\\')")
 (load "$fh/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil)
 (defun tone (marka file / kind)
   (setq placed 0 undo-open nil kind (cond ((wcmatch file "*list*") "list") ((wcmatch file "*spec*") "spec") ("text")))
@@ -455,10 +458,16 @@ PDFNUM
 (princ (strcat "\nPREFIX-ERRORS=" (vl-princ-to-string (list (if (pa:prefix-error "Кабель 2") 1 0) (if (pa:prefix-error "  ") 1 0) (if (pa:prefix-error "Кабель живлення") 1 0)))))
 (setq pl (pa:preview-lines "PDFALL_list_skd_A1p.dwg" 200 120))
 (princ (strcat "\nPREVIEW=" (itoa (length pl)) " " (if (vl-every '(lambda (s) (and (<= 0 (car s) 200) (<= 0 (cadr s) 120) (<= 0 (caddr s) 200) (<= 0 (cadddr s) 120))) pl) "inside" "outside")))
-(pa:set-setting "List" "skd_A5l") (pa:set-setting "Text" "spdb")
-(princ (strcat "\nCHOSEN=" (pa:list-file) " " (pa:text-file "2") " " (pa:form-name (pa:list-file)) "|" (apply 'strcat (pa:list-sizes "spdb")) "|" (apply 'strcat (pa:list-orients "skd" "A4"))))
-(pa:set-setting "List" "skd_A5p")
+(pa:set-setting "Paste" "list_skd_A5l")
+(princ (strcat "\nCHOSEN=" (pa:chosen-kind) " " (pa:list-file) " " (pa:chosen-shown) "|" (apply 'strcat (pa:doc-sizes "list_spdb")) "|" (apply 'strcat (pa:doc-orients "list_skd" "A4")) "|" (apply 'strcat (pa:doc-sizes "text_spdb")) (apply 'strcat (pa:doc-orients "text_spdb" "A4"))))
+(pa:set-setting "Paste" "text_spdb")
+(princ (strcat "\nTEXT=" (pa:chosen-kind) " " (pa:text-file "2") " " (pa:list-file) " " (pa:chosen-shown)))
+(pa:set-setting "Paste" "list_skd_A5p")
 (princ (strcat "\nFALLBACK=" (pa:list-file)))
+(princ (strcat "\nMARKA-ERRORS=" (vl-princ-to-string (mapcar '(lambda (m) (if (pa:marka-error m) 1 0)) (list "Лорем" "1ЧП" "Лорем Іпсум" "" "1/2")))))
+(princ (strcat "\nNAME-LINE=" (pa:name-line "Джгут" "Лорем" "Складальне креслення") "|" (pa:name-line "" "Лорем" "") "|"))
+(pa:remember-marka "Лорем") (setq *pdfall-marka* nil)
+(princ (strcat "\nREMEMBERED=" (pa:last-marka)))
 (pa:set-setting "Prefix" "custom") (pa:set-setting "PrefixText" "Джгут {1}\\") (pa:set-setting "Line2" "none")
 (princ (strcat "\nESCAPED=" (pa:name-text "list" "Х2")))
 (command "_.-LAYER" "_M" "Цвет" "")
@@ -485,7 +494,11 @@ for ($i = 0; $i -lt [math]::Min($after.Count, $expected.Count); $i++) {
 Check ($after.Count -eq $expected.Count -and $bad.Count -eq 0) "every рамка is read with its kind, size, марка and name cell, and PDFNUM numbers it ($($bad -join '; '))"
 Check ($flog -match 'PREFIX-ERRORS=\(1 1 0\)') 'a custom prefix with a digit, or an empty one, is refused'
 Check ($flog -match 'PREVIEW=(\d+) inside' -and [int]$Matches[1] -gt 50) 'the preview draws a template''s lines inside the picture'
-Check ($flog -match 'CHOSEN=PDFALL_list_skd_A5l\.dwg PDFALL_text_spdb_2\.dwg СКД A5 горизонтальний\|A1A2A3A4\|p') 'the settings pick the лист and текстовий документ templates, and list a standard''s sizes and orientations'
+Check ($flog -match 'CHOSEN=list PDFALL_list_skd_A5l\.dwg лист СКД A5 горизонтальний\|A1A2A3A4\|p\|A4p') 'the settings pick a лист template, and list a document''s sizes and orientations'
+Check ($flog -match 'TEXT=text PDFALL_text_spdb_2\.dwg PDFALL_text_spdb_1\.dwg текстовий документ СПДБ') 'the «Лист» button''s settings may pick a текстовий документ instead'
+Check ($flog -match 'MARKA-ERRORS=\(0 0 1 1 1\)') 'a марка may be any one word, without a space or a character Windows forbids'
+Check ($flog -match 'NAME-LINE=Джгут Лорем Складальне креслення\|Лорем\|') 'the dialog shows the whole name in one line'
+Check ($flog -match 'REMEMBERED=Лорем') 'the марка set last is remembered across sessions'
 Check ($flog -match 'FALLBACK=PDFALL_list_spdbv_A3l\.dwg') 'a лист format with no template falls back to the default'
 Check ($flog -match [regex]::Escape('ESCAPED=Джгут \{1\}\\ Х2')) 'a custom prefix is written literally, not as MTEXT codes'
 $formPdfs = @(Get-ChildItem (Join-Path $formsDir 'exported files') -Recurse -Filter '*.pdf' -ErrorAction SilentlyContinue)
@@ -519,6 +532,7 @@ $escScr = @"
 (setvar "SECURELOAD" 0)
 (setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
 (load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 PDFLIST
 1ЧП
 1000,1000
@@ -533,9 +547,9 @@ $cs = New-Object Autodesk.AutoCAD.Customization.CustomizationSection((Join-Path 
 $tab = @($cs.MenuGroup.RibbonRoot.RibbonTabSources)[0]
 $macros = @($cs.MenuGroup.MacroGroups | ForEach-Object { $_.MenuMacros })
 Check ($tab.Text -eq 'PDFALL' -and "$($tab.DefaultDisplay)" -eq 'AddToWorkspace') 'PDFALL.cuix has a PDFALL tab that AutoCAD adds by itself'
-Check (($macros | ForEach-Object { $_.macro.Command }) -join ',' -eq '^C^CPDFALL ,^C^CPDFNUM ,^C^CPDFLIST ,^C^CPDFSPEC ,^C^CPDFTEXT ,^C^CPDFSETTINGS ') 'its buttons run PDFALL, PDFNUM, PDFLIST, PDFSPEC, PDFTEXT and PDFSETTINGS'
+Check (($macros | ForEach-Object { $_.macro.Command }) -join ',' -eq '^C^CPDFALL ,^C^CPDFNUM ,^C^CPDFLIST ,^C^CPDFSPEC ,^C^CPDFSETTINGS ') 'its buttons run PDFALL, PDFNUM, PDFLIST, PDFSPEC and PDFSETTINGS'
 $labels = @($cs.MenuGroup.RibbonRoot.RibbonPanelSources | ForEach-Object { $_.Items } | ForEach-Object { $_.Items } | ForEach-Object { $_.Text })
-Check (($labels -join '|') -eq 'Друк у PDF|Номери аркушів|Лист|Специфікація|Текстовий документ|Налаштування') "the buttons read in Ukrainian, not as command names (got $($labels -join ', '))"
+Check (($labels -join '|') -eq 'Друк у PDF|Номери аркушів|Лист|Специфікація|Налаштування') "the buttons read in Ukrainian, not as command names (got $($labels -join ', '))"
 Check (@($macros | Where-Object { -not (Test-Path (Join-Path $Contents $_.macro.LargeImage)) }).Count -eq 0) 'every button image is in Contents'
 Check (@(Get-ChildItem $Contents -Filter 'PDFALL_*.dwg').Count -eq 28) 'the 28 рамка templates are in Contents'
 

@@ -355,8 +355,8 @@
   (reverse out))
 
 (defun pa:name-marka (w / i)
-  ;; Where the марка is among the words w of a name-cell line: the first word with a letter and a
-  ;; digit, after a prefix of words without digits ("Джгут", "Джгут живлення" or none), as its
+  ;; Where the usual марка is among the words w of a name-cell line: the first word with a letter and
+  ;; a digit, after a prefix of words without digits ("Джгут", "Джгут живлення" or none), as its
   ;; position from 0. nil for a title-block label ("Формат А3", "Аркуш 2"), or when a word before it
   ;; has a digit and no letter (a date, a number).
   (if (and w (not (member (car w) (pa:label "not-names"))))
@@ -370,7 +370,9 @@
   ;; Whether the zone entry z is inside the name cell, wherever the forms have it.
   (and (< -125.0 (car z) -55.0) (if (= kind "list") (< 20.0 (cadr z) 45.0) (< (cadr z) 30.0))))
 
-(defun pa:read-title (zone counters kind / w i names sheet total)
+(defun pa:first-line-words (s) (pa:words (car (pa:split s "\n"))))
+
+(defun pa:read-title (zone counters kind / w i names top sheet total)
   ;; Returns (names sheet total). names holds (марка-for-comparing марка-as-typed) for every
   ;; name-cell candidate; comparing turns Latin lookalike letters into Cyrillic. Only texts in the
   ;; name cell count, so the organisation cell ("ТОВ Енергія-2") or a connector label drawn near the
@@ -388,6 +390,17 @@
       (setq w (pa:words (car (pa:split (caddr z) "\n"))))
       (if (and (pa:name-cell-p z kind) (= 0 (pa:name-marka w)))
         (setq names (cons (list (car w) (car (pa:words (car (pa:split (cadddr z) "\n"))))) names)))))
+  ;; A марка without a digit ("Лорем") is the last word of the name's first line: PDFLIST writes
+  ;; "[prefix] марка" there and the лист's second line under it, and a prefix has no digits.
+  (if (null names)
+    (progn
+      (foreach z zone
+        (setq w (pa:first-line-words (caddr z)))
+        (if (and (pa:name-cell-p z kind) w (not (member (car w) (pa:label "not-names")))
+                 (or (null top) (> (cadr z) (cadr top))))
+          (setq top z)))
+      (if top
+        (setq names (list (list (last (pa:first-line-words (caddr top))) (last (pa:first-line-words (cadddr top)))))))))
   (list names sheet total))
 
 (defun pa:paper (r)

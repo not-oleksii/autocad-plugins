@@ -82,6 +82,7 @@ class TitleBlock:
     sheet: int | None = None
     total: int | None = None
     alone: list = field(default_factory=list)  # texts that are only a марка, as old name cells print it
+    name: list = field(default_factory=list)  # the name cell's lines, as lists of words
 
 
 @dataclass
@@ -126,7 +127,7 @@ def parse(path):
     words = normalize_words(path.stem)
     if not words:
         return None
-    marka = words[0].upper()
+    marka = words[0]
     rest = [w.lower() for w in words[1:]]
 
     for title in (GENERAL, GENERAL_PRINT):
@@ -175,28 +176,29 @@ def parse(path):
 
 
 def is_marka(text):
-    """A марка is letters and digits only, with at least one of each, e.g. 1ЧП, К2, Х1А1Р."""
+    """The usual марка: letters and digits only, with at least one of each, e.g. 1ЧП, К2, Х1А1Р.
+    A марка may also be any other word ("Лорем"), see read_title_block."""
     return text.isalnum() and any(c.isdigit() for c in text) and any(c.isalpha() for c in text)
 
 
 def name_marka(words):
-    """The марка among the words of a name cell: the first word with a letter and a digit, after a
+    """The usual марка among the words of a name cell: the first word with a letter and a digit, after a
     prefix of words without digits ("Джгут", "Джгут живлення" or none), as the LISP reader's
     pa:name-marka. None for a title-block label ("Формат А3") or when a word before it has a digit."""
     if not words or words[0] in LABELS:
         return None
     for word in words:
         if is_marka(word):
-            return word.upper()
+            return word
         if any(c.isdigit() for c in word):
             return None
     return None
 
 
-def read_marka(items, page_width=None, raw=False, right=NAME_CELL_RIGHT):
-    """The марка in the name cell, read line by line from the top: a long prefix or марка may wrap
+def read_name(items, page_width=None, raw=False, right=NAME_CELL_RIGHT):
+    """The lines of the name cell from the top, as lists of words: a long prefix or марка may wrap
     onto the line below. Only texts in the name cell count, so the organisation cell or a caption
-    near the title block is never taken for it.
+    near the title block is never taken for the марка.
 
     A line arrives in pieces wherever the font changes, even inside a word ("Джгут ", "1", "ЧП"),
     and a piece keeps the space after it. With raw, items are such pieces, joined as they are;
@@ -211,8 +213,7 @@ def read_marka(items, page_width=None, raw=False, right=NAME_CELL_RIGHT):
         else:
             lines.append((y, [(x, text)]))
     glue = "" if raw else " "
-    words = " ".join(glue.join(t for _, t in sorted(line)) for _, line in lines).split()
-    return name_marka(words)
+    return [glue.join(t for _, t in sorted(line)).split() for _, line in lines]
 
 
 def number_below(items, label_x, label_y, x_max, depth):
@@ -235,7 +236,7 @@ def read_title_block(items, page_width=None, pieces=None):
 
     With page_width, texts left of the title block are left out: on an A3 page, a caption in the
     drawing near the bottom edge ("контактів X6") would read as a name cell. pieces are the same
-    texts as they came, with their spaces, for the name cell (see read_marka).
+    texts as they came, with their spaces, for the name cell (see read_name).
 
     Handles the drawing form ("Аркуш 1  Аркушів 3" in one line, or in an old title block
     "Аркуш", "1", "Аркушів", "3" as separate texts), the first specification sheet ("Аркуш"
@@ -274,8 +275,9 @@ def read_title_block(items, page_width=None, pieces=None):
         x, y = labels[CORNER_LABEL]
         title.sheet = number_below(items, x, y, x + 20, 28)
     right = NAME_CELL_RIGHT_LATER if later else NAME_CELL_RIGHT
-    title.marka = (read_marka(pieces, page_width, raw=True, right=right) if pieces is not None
-                   else read_marka(items, page_width, right=right))
+    title.name = (read_name(pieces, page_width, raw=True, right=right) if pieces is not None
+                  else read_name(items, page_width, right=right))
+    title.marka = name_marka([w for line in title.name for w in line])
     return title
 
 
@@ -303,6 +305,13 @@ def load(part):
     # such a text confirms the file's марка but never contradicts it.
     if title.marka is None and any(looks(t) == looks(part.marka) for t in title.alone):
         title.marka = part.marka
+    # A марка without a digit ("Лорем") is a word of the name cell: the last of its first line, unless
+    # a long prefix wrapped it onto the next one.
+    words = [w for line in title.name for w in line]
+    if title.marka is None and any(looks(w) == looks(part.marka) for w in words):
+        title.marka = part.marka
+    if title.marka is None and words and words[0] not in LABELS:
+        title.marka = title.name[0][-1]
 
     if title.marka is None:
         part.unverified.append(msg("merge.field-marka"))
