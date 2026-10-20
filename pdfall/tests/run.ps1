@@ -365,6 +365,15 @@ PDFALL
 (tpaste "PDFLIST" "1/2П" 1 "PDFALL_list_spdbv_A3l.dwg")
 5000,1000
 PDFALL
+Ні
+(princ "\nREFUSED-FORCE")
+;; with a лист copied together with its numbers as well, plot anyway: 1/2П is left out, and the copy
+;; is named by its position
+(foreach r (car (pa:read-drawing))
+  (if (and (= (pa:get 'marka r) "1ЧП") (= (pa:get 'sheet r) 2))
+    (foreach c (pa:get 'counters r) (if (eq (car c) 'sheet) (pa:set-number c 1)))))
+PDFALL
+Так
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -387,7 +396,12 @@ Check ($plog -notmatch 'Помилка') 'no error was reported'
 Check ($plog -match 'LEAKED=nil') 'the reader and PDFALL keep their texts, lines and dates to themselves'
 Check ($plog -match 'HELPERS=\(/ nil : 03 12 загальний друк\)') 'the name helpers find a forbidden character, pad a number and lower-case Cyrillic'
 Check ($plog -match 'CANCELS=\(T T T nil\)') 'Esc in English or Russian and (exit) are not reported as errors, a real error is'
-Check ($plog -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($plog, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots'
+$beforeForce, $afterForce = $plog -split 'REFUSED-FORCE', 2
+Check ($beforeForce -match "1/2П: у марці є символ '/'" -and ([regex]::Matches($beforeForce, 'PDFALL: \d+ PDF у')).Count -eq 1) 'a марка with a character Windows forbids in file names stops PDFALL before it plots, when the user says no'
+$pasted1 = Join-Path $pasteDir 'exported files\1ЧП'
+Check ($afterForce -match 'Аркуш 1 стоїть на кількох' -and $afterForce -match 'PDFALL друкує попри проблеми' -and $afterForce -match 'PDFALL: 7 PDF у' -and
+       $afterForce -match 'рамок без марки або з недозволеним символом у марці: 1' -and
+       (Test-Path (Join-Path $pasted1 '1ЧП лист 01.pdf')) -and (Test-Path (Join-Path $pasted1 '1ЧП лист 02.pdf'))) 'plotting anyway names a copied лист by its position and leaves out only the рамка it can''t name'
 Check ($plog -match 'DATES=5/5 DATE-WARNINGS=0 LEFT=0') 'the date goes in the Дата cell of all 5 pasted рамки at 2 mm, centred, and comes out again'
 $today = Get-Date -Format 'dd.MM.yy'
 Check ($plog -match "TODAY=$([regex]::Escape($today))\|") "the date reads dd.mm.yy ($today)"
@@ -516,13 +530,13 @@ foreach ($e in $expected) {
 }
 Check ($wrong.Count -eq 0) "every PDF is on paper of its рамка's size and orientation ($($wrong -join '; '))"
 $mergeForms = Join-Path $Work 'merge-forms.txt'
-$m4 = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$(Join-Path $formsDir 'exported files')`"" -RedirectStandardInput $answers `
+$m4 = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$(Join-Path $formsDir 'exported files')`" --force" -RedirectStandardInput $answers `
     -RedirectStandardOutput $mergeForms -PassThru -NoNewWindow
 $null = $m4.Handle
 if (-not $m4.WaitForExit(120000)) { $m4.Kill(); $script:failures += 'merge.exe (every template) timed out' }
 $fmlog = Get-Content $mergeForms -Raw -Encoding UTF8
 $formMerged = @(Get-ChildItem (Join-Path $formsDir 'exported files') -Recurse -Filter '*загальний*.pdf')
-Check ($formMerged.Count -eq 6 -and $fmlog -notmatch 'Не вдалося звірити|НЕ збігається|Нерозпізнані') "merge.exe reads every марка, Аркуш and текстовий документ back and builds 6 combined files (found $($formMerged.Count))"
+Check ($formMerged.Count -eq 6 -and $fmlog -notmatch 'Не вдалося звірити|НЕ збігається|Нерозпізнані|--force') "merge.exe reads every марка, Аркуш and текстовий документ back and builds 6 combined files (found $($formMerged.Count))"
 $n1 = @($expected | Where-Object { $_.Marka -eq '1ЧП' }).Count
 Check ($fmlog -match "1ЧП загальний\.pdf: файлів $n1, сторінок $n1") "1ЧП загальний holds its $n1 листи and текстові документи"
 
@@ -572,9 +586,17 @@ PDFLIST
 Лорем
 (princ (strcat "\nLIST-PAGES=" (vl-princ-to-string (reverse pasted))))
 (foreach r (car (pa:read-drawing))
-  (if (and (= (pa:get 'marka r) "1ЧП") (= (pa:get 'kind r) "list") (= (pa:get 'sheet r) 2))
+  (if (and (= (pa:get 'marka r) "1ЧП") (equal (car (pa:get 'll r)) 1500.0 1.0))
     (foreach c (pa:get 'counters r) (pa:set-number c (if (eq (car c) 'total) 5 1)))))
 PDFNUM
+;; deleting "Аркуш 2" and "Аркушів 2" deletes the labels with the numbers
+(foreach r (car (pa:read-drawing))
+  (if (and (= (pa:get 'marka r) "1ЧП") (equal (car (pa:get 'll r)) 1500.0 1.0))
+    (foreach c (pa:get 'counters r) (entdel (nth 4 (cadr c))))))
+(princ "\nLABELS-DELETED")
+PDFNUM
+PDFALL
+Ні
 PDFDEBUG
 Вимкнути
 (princ "\nEND-OF-TEST")
@@ -592,6 +614,9 @@ $dlog = if (Test-Path $debugLog) { Get-Content $debugLog -Raw -Encoding UTF8 } e
 Check ($dlog -match '==== PDFLIST \| PDFALL' -and $dlog -match 'paste: pages of text starting on' -and $dlog -match 'paste: template "?PDFALL_spec2') 'the debug log follows PDFLIST and PDFSPEC step by step'
 Check ($dlog -match '==== PDFNUM' -and $dlog -match 'reader: frame at' -and $dlog -match 'kind (list|spec)' -and $dlog -match '\[name cell\]' -and $dlog -match 'pdfnum: filled') 'the debug log shows each рамка''s kind and title-block texts, with the name cell marked'
 Check ($dlog -match 'log turned off') 'turning the log off is the last thing logged'
+$afterDelete = ($glog -split 'LABELS-DELETED', 2)[1]
+Check ($afterDelete -match 'немає напису «Аркуш», тож номер нікуди записати' -and $afterDelete -match 'немає напису «Аркушів»' -and
+       $afterDelete -match 'немає напису «Аркуш» \(його видалили') 'PDFNUM and PDFALL say when the Аркуш and Аркушів labels were deleted, instead of offering to fill them'
 
 Write-Host 'Ribbon tab...'
 [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path $Acad) 'AcCui.dll')) | Out-Null

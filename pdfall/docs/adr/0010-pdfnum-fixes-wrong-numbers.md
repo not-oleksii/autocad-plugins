@@ -10,6 +10,10 @@ PDFNUM now fixes them, changing as little as it can. For each kind of each ма�
 
 We chose this over renumbering every рамка by position, which is simpler to explain but rewrites a drawing whose листи are numbered correctly yet laid out in another order. The cost is that a new лист put between two numbered ones gets the next free number, not its place: to renumber by position, clear the numbers first.
 
+## Plotting despite wrong numbers
+
+When PDFALL's check finds problems, it now asks whether to plot anyway instead of only stopping. On yes, every рамка that can be named is plotted, with the numbers this same rule gives (`pa:sheet-numbers`) in its file name, so files without numbers, or with a copied one, still make one combined document per марка, in position order. The drawing isn't changed: numbering it is PDFNUM's job, and the user may not want that done in passing. Only рамки without a марка, or with a character Windows forbids in it, are left out, and their count is reported. PDFALL then starts merge.exe with `--force`, so it builds the combined files despite the title blocks disagreeing with the file names, without asking a second time.
+
 ## Consequences
 
 - A changed number is edited where it is: in its own text, or in the label's ("Аркуш 2"). A number inside a block can't be changed and is reported, as before.

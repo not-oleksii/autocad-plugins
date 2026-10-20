@@ -486,14 +486,19 @@ def rename_sloppy(folders, root, check):
         print(msg("merge.not-renamed"))
 
 
-def confirm_mismatches(folders, root, check):
-    """List every sheet whose title block contradicts its name; return True to build anyway."""
+def confirm_mismatches(folders, root, check, forced=False):
+    """List every sheet whose title block contradicts its name; return True to build anyway.
+
+    forced: PDFALL plotted despite wrong numbers, the user agreed there, so merge.exe doesn't ask."""
     wrong = [p for folder in folders for p in folder.winners if p.mismatches]
     if not wrong:
-        return False
+        return forced
     print("\n" + msg("merge.mismatches"))
     for part in wrong:
         print(f"  X '{part.path.relative_to(root)}': {'; '.join(part.mismatches)}")
+    if forced and not check:
+        print(msg("merge.forced"))
+        return True
     print(msg("merge.mismatches-skipped"))
     return not check and ask_yes(msg("merge.build-anyway"))
 
@@ -574,7 +579,8 @@ def main(check=False):
     logging.getLogger("pypdf").setLevel(logging.ERROR)
     args = sys.argv[1:]
     check = check or "--check" in args
-    roots = [Path(arg).resolve() for arg in args if arg != "--check"] or [home_folder()]
+    forced = "--force" in args
+    roots = [Path(arg).resolve() for arg in args if arg not in ("--check", "--force")] or [home_folder()]
     if check:
         print(msg("merge.check-only"))
     for root in roots:
@@ -587,7 +593,7 @@ def main(check=False):
             print("  " + msg("merge.no-sheets"))
             continue
         rename_sloppy(folders, root, check)
-        force = confirm_mismatches(folders, root, check)
+        force = confirm_mismatches(folders, root, check, forced)
         for entry in folders:
             process(entry, root, force, dry_run=check)
     if getattr(sys, "frozen", False):

@@ -1,6 +1,8 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
-;;; merge.exe. Defines c:PDFALL; nothing here is called from the other files.
+;;; merge.exe. When the check finds problems, the user may plot anyway: the рамки are then numbered
+;;; in the file names as PDFNUM would number them, and only рамки that can't be named are left out.
+;;; Defines c:PDFALL; nothing here is called from the other files.
 ;;; Paper sizes, A4 листи and old drawings: docs/adr/0008-read-old-drawings.md; every A size and
 ;;; текстові документи: docs/adr/0009-every-a-size-and-settings-for-pasting.md.
 
@@ -17,7 +19,10 @@
       (if (null (pa:get 'sheet r)) (setq items (list (pa:put 'sheet 1 r))))))
   (foreach r items
     (if (null (pa:get 'sheet r))
-      (pa:err (pa:msg "check.sheet-empty" (list "marka" marka "kinds" (pa:kind-pl kind) "n" n)) r)))
+      (pa:err (if (pa:sheet-cell-p r)
+                (pa:msg "check.sheet-empty" (list "marka" marka "kinds" (pa:kind-pl kind) "n" n))
+                (pa:msg "check.no-label" (list "marka" marka "label" (pa:label "sheet"))))
+              r)))
   (setq nums (vl-remove nil (mapcar '(lambda (r) (pa:get 'sheet r)) items)))
   (foreach r items
     (setq k (pa:get 'sheet r))
@@ -38,7 +43,10 @@
                r))
       ((and (null (pa:get 'total r)) (> n 1)
             (or (= kind "list") (= (pa:get 'sheet r) 1)))
-       (pa:err (pa:msg "check.total-empty" (list "marka" marka)) r))))
+       (pa:err (if (or (pa:total-cell-p r) (/= kind "list"))
+                 (pa:msg "check.total-empty" (list "marka" marka))
+                 (pa:msg "check.no-label" (list "marka" marka "label" (pa:label "total"))))
+               r))))
   (vl-sort items '(lambda (a b) (< (cond ((pa:get 'sheet a)) (0)) (cond ((pa:get 'sheet b)) (0))))))
 
 ;;; ---- Files ------------------------------------------------------------------
@@ -137,7 +145,19 @@
 
 ;;; ---- The command ------------------------------------------------------------
 
-(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e)
+(defun pa:force-numbers (kind items / nums)
+  ;; items in the order PDFNUM numbers them, each with the Аркуш it would get, for plotting despite
+  ;; wrong numbers: only the file names follow them, the drawing is left as it is.
+  (setq items (pa:in-order kind items)
+        nums (pa:sheet-numbers items (length items)))
+  (mapcar '(lambda (r k) (pa:put 'sheet k r)) items nums))
+
+(defun pa:ask-force (/ yes no)
+  (setq yes (pa:msg "pdfall.yes" nil) no (pa:msg "pdfall.no" nil))
+  (initget (strcat yes " " no))
+  (= yes (getkword (strcat "\n\n" (pa:msg "pdfall.force-ask" (list "yes" yes "no" no))))))
+
+(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e skipped)
   (if (= 0 (getvar "DWGTITLED"))
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
@@ -179,7 +199,18 @@
     (progn
       (pa:report-errors (pa:msg "pdfall.fix-first" nil))
       (pa:report-warnings)
-      (exit)))
+      (if (not (pa:ask-force)) (exit))
+      ;; Plot anyway: leave out what can't be named, number the rest as PDFNUM would.
+      (setq skipped (+ (length (vl-remove-if-not 'cdr (cadr drawing)))
+                       (length (vl-remove-if-not '(lambda (r) (pa:bad-char (pa:get 'marka r))) records)))
+            markas (vl-remove-if 'pa:bad-char markas)
+            records (vl-remove-if-not '(lambda (r) (member (pa:get 'marka r) markas)) records)
+            groups (mapcar '(lambda (m) (cons m (mapcar '(lambda (k) (pa:force-numbers k (pa:of m k records))) *pa-kinds*)))
+                           markas)
+            forced T errors nil warnings nil)
+      (pa:log (list "pdfall: plotting anyway," skipped "frames left out"))
+      (princ (strcat "\n" (pa:msg "pdfall.forced" nil)))
+      (if (> skipped 0) (pa:warn (pa:msg "pdfall.forced-skipped" (list "n" skipped))))))
 
   ;; Hidden layers would silently drop objects from every PDF.
   (if (setq hidden (pa:hidden-layers))
@@ -241,7 +272,8 @@
     ((findfile *pdfall-merge*)
      (princ (strcat "\n" (pa:msg "pdfall.merging" nil)))
      (pa:log (list "pdfall: merging" base))
-     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"\"")))
+     ;; --force: the user already chose to go on despite the numbers, so merge.exe needn't ask again
+     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"" (if forced " --force" "") "\"")))
     (T (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))))
 
 ;; AutoCAD's Plotters folder (the first one, if several are set).
@@ -255,7 +287,7 @@
            (findfile (strcat *pdfall-home* "\\" name)))
     (vl-file-copy (strcat *pdfall-home* "\\" name) (strcat (pa:plotters) "\\" name))))
 
-(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device refused)
+(defun c:PDFALL (/ *error* errors warnings fills fill-state sysvars dated plotted device refused forced)
   (defun *error* (msg)
     (pa:date-remove)
     (pa:restore)

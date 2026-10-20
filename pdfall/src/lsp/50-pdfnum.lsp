@@ -25,17 +25,6 @@
       (entmod (subst (cons 1 (pa:replace-last (cdr (assoc 1 d)) (itoa (caddr c)) (itoa n))) (assoc 1 d) d))
       T)))
 
-(defun pa:sheet-numbers (items n / keep out)
-  ;; The Аркуш number each of items gets, in their order: its own when it is 1..n and no earlier
-  ;; item has it, otherwise the smallest number nobody keeps.
-  (foreach r items
-    (if (and (pa:get 'sheet r) (<= 1 (pa:get 'sheet r) n) (not (member (pa:get 'sheet r) keep)))
-      (setq keep (cons (pa:get 'sheet r) keep) out (cons (pa:get 'sheet r) out))
-      (setq out (cons nil out))))
-  (setq out (reverse out))
-  (mapcar '(lambda (x / k) (if x x (progn (setq k 1) (while (member k keep) (setq k (1+ k))) (setq keep (cons k keep)) k)))
-          out))
-
 (defun pa:number-style (records / o e d)
   ;; The look of a number someone already wrote in a counter cell of a специфікація or текстовий
   ;; документ, so new numbers match it: ((8 . layer) (7 . style) (40 . height) ...), or nil if there
@@ -120,26 +109,19 @@
                        (cond ((and style (/= (pa:get 'kind r) "list")) style)
                              ((pa:label-style z (pa:get 'zone r)))))))))
 
-(defun pa:position< (a b / ya yb)
-  ;; Upper row first, then left to right.
-  (setq ya (cadr (pa:get 'll a)) yb (cadr (pa:get 'll b)))
-  (if (> (abs (- ya yb)) 100.0) (> ya yb) (< (car (pa:get 'll a)) (car (pa:get 'll b)))))
-
-(defun pa:first-page-p (r)
-  ;; Whether r is the first page of a специфікація or текстовий документ: the one with Аркушів.
-  (and (vl-some '(lambda (c) (= (car c) 'total)) (pa:get 'counters r)) T))
-
-(defun pa:first-page< (a b)
-  ;; A first page before later ones, then by position.
-  (if (eq (pa:first-page-p a) (pa:first-page-p b)) (pa:position< a b) (pa:first-page-p a)))
-
 (defun pa:number (marka kind items style / n nums i done what want old)
   ;; Fills and fixes the counter cells of one kind of one марка (see the top of this file).
-  (setq items (vl-sort items (if (= kind "list") 'pa:position< 'pa:first-page<))
+  (setq items (pa:in-order kind items)
         n (length items)
         nums (pa:sheet-numbers items n))
   (foreach r items
     (setq i (car nums) nums (cdr nums) done nil)
+    ;; On some forms the number is part of its label's text ("Аркуш 3"), so deleting the number
+    ;; deletes the label, and there is no cell left to write into.
+    (if (not (pa:sheet-cell-p r))
+      (pa:warn (pa:msg "pdfnum.no-label" (list "marka" marka "label" (pa:label "sheet") "where" (pa:where r)))))
+    (if (and (not (pa:total-cell-p r)) (or (= kind "list") (= i 1)))
+      (pa:warn (pa:msg "pdfnum.no-label" (list "marka" marka "label" (pa:label "total") "where" (pa:where r)))))
     (foreach c (pa:ordered-cells r)
       (setq want (if (= (car c) 'total) n i)
             old (caddr c)
