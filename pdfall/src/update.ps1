@@ -90,23 +90,13 @@ function Get-Action($pick) {
     else { Msg 'update.action-reinstall' @{ version = $pick.Version } }
 }
 
-# The notes of every version that installing $pick adds (it is newer than the installed one) or takes
-# away (it is older), newest first.
+# The notes of $pick alone, under its name.
 function Get-ChoiceLines($pick) {
     $lines = @()
     # Versions before 1.8.0 have no updater, so there is no way back from them but by hand.
     if ($pick.Version -lt [version]'1.8.0') { $lines += Msg 'update.no-updater' @{ version = $pick.Version }; $lines += '' }
-    if ($installed -and $pick.Version -eq $installed) { return $lines + @(Msg 'update.same' @{ version = $pick.Version }) }
-    if (-not $installed -or $pick.Version -gt $installed) {
-        $lines += Msg 'update.gains' @{ version = $pick.Version }
-        $span = $releases | Where-Object { $_.Version -le $pick.Version -and (-not $installed -or $_.Version -gt $installed) }
-    }
-    else {
-        $lines += Msg 'update.loses' @{ version = $pick.Version }
-        $span = $releases | Where-Object { $_.Version -gt $pick.Version -and $_.Version -le $installed }
-    }
-    foreach ($r in $span) { $lines += ''; $lines += '  ' + (Get-Title $r); $lines += @(Get-NoteLines $r.Release.body) }
-    $lines
+    $lines += Get-Title $pick
+    $lines + @(Get-NoteLines $pick.Release.body)
 }
 
 # Lets the user pick a release with the arrow keys, starting at $releases[$i]: up or right for a newer
