@@ -21,7 +21,7 @@
 
 (vl-load-com)
 
-(setq *pdfall-version* "1.9.1")
+(setq *pdfall-version* "1.10.0")
 
 ;;; ---- Settings ---------------------------------------------------------------
 
