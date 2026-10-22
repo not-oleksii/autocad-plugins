@@ -105,6 +105,8 @@ powershell -ExecutionPolicy Bypass -File tests/run.ps1
 powershell -ExecutionPolicy Bypass -File tests/install.ps1
 ```
 
+Each accoreconsole run of `tests/run.ps1` gets its own isolated profile, but AutoCAD seeds it with the settings of your own AutoCAD, PDFALL's among them (`setenv` keeps them under `FixedProfile\General`). So every test script first resets PDFALL's settings to `*pa-setting-defaults*`; a new script must do the same, or what you chose in PDFSETTINGS (a шар заливки, say) changes its results.
+
 GitHub Actions (`.github/workflows/check.yml`) can't build or test without AutoCAD, so on every pull request it only runs `build_lisp.py`'s checks: `messages.json` against the code, and the version.
 
 ## Pull requests

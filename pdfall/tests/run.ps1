@@ -79,6 +79,7 @@ $scr = @"
 (command "_.SAVEAS" "2018" "$w/sample.dwg")
 (setq *pdfall-home* "$($Contents -replace '\\', '\\')")
 (load "$c/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil)
 $dateLisp
 ;; Counts the рамки that have the day's date while they are plotted.
@@ -177,6 +178,7 @@ foreach ($dwg in $oldDwgs) {
 (setenv "PrinterConfigDir" "$($plotters -replace '\\', '\\')")
 (setq *pdfall-home* "$($Contents -replace '\\', '\\')")
 (load "$c/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil)
 (defun show (tag / d)
   (setq d (pa:read-drawing))
@@ -198,7 +200,7 @@ Y
     Check ($olog -match "BEFORE list $n $paper sheet=nil total=1" -and $olog -notmatch 'BEFORE.*problem') `
         "$($dwg.Name): one $paper лист of марка $n, Аркуш empty and Аркушів 1 read after its label"
     Check ($olog -match "AFTER list $n $paper sheet=1 total=1") "$($dwg.Name): PDFNUM writes Аркуш 1 after the label, and PDFALL reads it back"
-    Check ($olog -match 'немає шару заливки' -and $olog -match "PDFALL: 2 PDF у" -and $oldPdfs.Count -eq 2) `
+    Check ($olog -match 'не вибрано шару заливки' -and $olog -match "PDFALL: 2 PDF у" -and $oldPdfs.Count -eq 2) `
         "$($dwg.Name): with no шар заливки, the лист and its без заливки copy are plotted (found $($oldPdfs.Count) PDFs)"
     Check ($olog -notmatch 'Unknown command|Помилка') "$($dwg.Name): no unknown command and no error"
     Check ($olog -notmatch 'клітинку під заголовком Дата|у клітинці Дата написано') "$($dwg.Name): the date goes in the Дата cell"
@@ -237,6 +239,7 @@ if ($oldDwgs.Count) {
 (setenv "PrinterConfigDir" "$($plotters -replace '\\', '\\')")
 (setq *pdfall-home* "$($Contents -replace '\\', '\\')")
 (load "$c/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil *pdfall-paper* "No such paper")
 PDFNUM
 PDFALL
@@ -586,7 +589,9 @@ $fillScr = @"
 (princ (strcat "\nFILL-NAMES=" (pa:join-names (pa:fill-names))))
 (setq fills (pa:fill-layers (pa:fill-names)))
 (princ (strcat "\nFILL-LAYERS=" (pa:join-names fills)))
-(princ (strcat "\nFILL-CHOICES=" (pa:join-names (mapcar 'cadr (pa:fill-choices (pa:fill-names))))))
+(princ (strcat "\nFILL-CHOICES=" (pa:join-names (mapcar 'cadr (pa:fill-choices)))))
+(princ (strcat "\nFILLS-HERE=" (pa:join-names (pa:fills-here (pa:fill-names)))))
+(princ (strcat "\nFILL-SAVED=" (pa:join-names (pa:fill-saved '("Штрих") (pa:fill-names)))))
 (pa:set-fill nil)
 (princ (strcat "\nFILLS-OFF=" (pa:join-names (mapcar '(lambda (n) (if (minusp (cdr (assoc 62 (pa:layer n)))) "off" "on")) (append fills '("Штрих"))))))
 (princ (strcat "\nNO-DIALOG=" (vl-princ-to-string (pa:settings-dialog 'fills))))
@@ -602,8 +607,10 @@ Check ($xlog -match 'DEFAULT-FILLS=Цвет;Колір') 'the шари зали�
 Check ($xlog -match 'FILL-NAMES=заливка;Цвет;Немає') 'the chosen names are kept, trimmed'
 Check ($xlog -match '(?m)^FILL-LAYERS=Заливка;forms\|Цвет"') 'a chosen name finds the layer in any case, and the same layer in an xref'
 $choices = if ($xlog -match '(?m)^FILL-CHOICES=([^"]*)') { $Matches[1] } else { '' }
-Check ($choices -match '(^|;)Заливка;' -and $choices -match 'Цвет \(у зовнішньому посиланні\)' -and $choices -match 'Немає \(немає в кресленні\)' -and
-       $choices -match '(^|;)Штрих(;|$)' -and $choices -notmatch '(^|;)0(;|$)' -and $choices -cnotmatch 'заливка') "the dialog lists the drawing's layers but 0, an xref's by its own name, and a chosen layer the drawing lacks ($choices)"
+Check ($choices -match '(^|;)Заливка;' -and $choices -match 'Цвет \(у зовнішньому посиланні\)' -and $choices -match '(^|;)Штрих(;|$)' -and
+       $choices -notmatch '(^|;)0(;|$)' -and $choices -notmatch 'Немає' -and $choices -cnotmatch 'заливка') "the dialog lists the drawing's layers but 0 and an xref's by its own name, not a chosen layer the drawing lacks ($choices)"
+Check ($xlog -match '(?m)^FILLS-HERE=заливка;Цвет"') 'the settings report only the chosen layers the drawing has'
+Check ($xlog -match '(?m)^FILL-SAVED=Штрих;Немає"') 'closing the dialog keeps the layers ticked, and the names chosen for other drawings'
 Check ($xlog -match 'FILLS-OFF=off;off;on') 'the листи без заливки have the chosen layers off, and only those'
 Check ($xlog -match 'NO-DIALOG=nil') 'without a dialog, PDFALL''s question about the шари заливки is skipped'
 Check ($xlog -match 'NO-FILLS=жодного\|nil') 'the user may choose no шар заливки at all'

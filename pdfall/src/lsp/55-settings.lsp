@@ -12,7 +12,9 @@
 ;;;   pa:name-text pa:name-line pa:name-shown  the name cell's text, and as the dialog and messages show it
 ;;;   pa:prefix-error  why a custom prefix can't be used, or nil
 ;;;   pa:fill-names pa:set-fill-names pa:fill-layers  the шари заливки chosen, and the layers they name
-;;;   pa:fill-choices pa:names-shown  the layers the dialog lists, and names as messages show them
+;;;   pa:fill-choices pa:fills-here pa:fill-saved  the layers the dialog lists, which chosen names
+;;;                    the drawing has, and what the dialog keeps
+;;;   pa:names-shown   names as messages show them
 ;;;
 ;;; Settings and their values:
 ;;;   Paste       what PDFLIST pastes: a лист as list_<standard>_<size><orientation>, e.g.
@@ -196,24 +198,31 @@
     (setq d (tblnext "LAYER")))
   (reverse out))
 
-(defun pa:fill-choices (names / d nm own xref all)
-  ;; The layers the dialog offers, sorted: the drawing's own but 0 and Defpoints, an xref's by its
-  ;; own name, and the chosen names the drawing has none of, each once and spelled as the drawing
-  ;; has it. Each is (name text), the text saying when the layer is only in an xref or not in the
-  ;; drawing at all.
+(defun pa:fill-choices (/ d nm own xref all)
+  ;; The layers the dialog offers, sorted: the drawing's own but 0 and Defpoints, and an xref's by its
+  ;; own name, each once. Each is (name text), the text saying when the layer is only in an xref.
+  ;; Chosen names the drawing has no layer of aren't offered: the user sees only their own layers.
   (setq d (tblnext "LAYER" T))
   (while d
     (setq nm (cdr (assoc 2 d)))
     (cond ((vl-string-search "|" nm) (setq xref (cons (pa:layer-base nm) xref)))
           ((not (pa:name-in nm '("0" "DEFPOINTS"))) (setq own (cons nm own))))
     (setq d (tblnext "LAYER")))
-  (foreach n (append own xref names)
+  (foreach n (append own xref)
     (if (not (pa:name-in n all)) (setq all (cons n all))))
-  (mapcar '(lambda (n)
-             (list n (cond ((pa:name-in n own) n)
-                           ((pa:name-in n xref) (pa:msg "settings.fill-xref" (list "layer" n)))
-                           ((pa:msg "settings.fill-missing" (list "layer" n))))))
+  (mapcar '(lambda (n) (list n (if (pa:name-in n own) n (pa:msg "settings.fill-xref" (list "layer" n)))))
           (acad_strlsort all)))
+
+(defun pa:fills-here (names / here)
+  ;; The names the drawing has a layer of, as the dialog offers it.
+  (setq here (mapcar 'car (pa:fill-choices)))
+  (vl-remove-if-not '(lambda (n) (pa:name-in n here)) names))
+
+(defun pa:fill-saved (ticked names / here)
+  ;; What the settings keep when the dialog closes with the layers ticked: those, and the names
+  ;; chosen before that the drawing has no layer of, so a choice made in another drawing stays.
+  (setq here (mapcar 'car (pa:fill-choices)))
+  (append ticked (vl-remove-if '(lambda (n) (pa:name-in n here)) names)))
 
 (defun pa:names-shown (names)
   ;; "Цвет, Колір", or a word saying there are none.

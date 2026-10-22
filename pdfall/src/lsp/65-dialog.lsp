@@ -120,7 +120,8 @@
 ;; settings were saved, 2 when they were saved to paste at once, and nil when there is no dialog.
 (defun pa:settings-dialog (mode / dcl f id docs doc sizes size want-size orients orient want-orient
                              choices marka prefix prefix-text line2 line2-text result chosen tp
-                             line2-empty fill-names fill-items fill-pick refresh-sizes refresh draw check)
+                             line2-empty fill-names fill-items fill-on refresh-sizes refresh draw check
+                             fill-text toggle-fill j)
   (setq docs (pa:docs)
         choices '("std" "custom" "none")
         chosen (pa:chosen)
@@ -133,12 +134,21 @@
         line2 (pa:setting "Line2") line2-text (vl-string-trim " " (pa:setting "Line2Text"))
         line2-empty (pa:msg "settings.line2-empty" nil)
         fill-names (pa:fill-names)
-        fill-items (pa:fill-choices fill-names)
-        fill-pick "")
-  ;; fill-pick is the list's selection as list_box gives it: the indices of the ticked layers.
-  (foreach o fill-items
-    (if (pa:name-in (car o) fill-names)
-      (setq fill-pick (strcat fill-pick " " (itoa (vl-position o fill-items))))))
+        fill-items (pa:fill-choices)
+        fill-on (mapcar '(lambda (o) (if (pa:name-in (car o) fill-names) T)) fill-items))
+  ;; The шари заливки are a list of ■ ticked and □ unticked layers, since a list_box has no check
+  ;; boxes and selecting several needs Ctrl. A click ticks or unticks a layer, then the selection is
+  ;; cleared so that the next click on it counts too; the list is multiple_select only because a
+  ;; selection there can be cleared.
+  (defun fill-text (i)
+    (if (nth i fill-on)
+      (pa:msg "settings.fill-on" (list "layer" (cadr (nth i fill-items))))
+      (pa:msg "settings.fill-off" (list "layer" (cadr (nth i fill-items))))))
+  (defun toggle-fill (value / picked j)
+    (setq picked (read (strcat "(" value ")")) j -1)
+    (setq fill-on (mapcar '(lambda (on) (setq j (1+ j)) (if (member j picked) (not on) on)) fill-on))
+    (foreach i picked (start_list "fills" 1 i) (add_list (fill-text i)) (end_list))
+    (set_tile "fills" ""))
   (defun refresh-sizes ()
     ;; The sizes and orientations the chosen document has, keeping the ones last picked where it
     ;; has them: a текстовий документ is A4 only, and going back to a лист brings its size back.
@@ -199,7 +209,7 @@
     (progn
       (set_tile "dialog" (pa:msg "settings.title" nil))
       (set_tile "note" (if (or (= mode 'fills) (null (pa:fill-layers fill-names)))
-                         (pa:msg "settings.fills-ask" (list "layers" (pa:names-shown fill-names)))
+                         (pa:msg "settings.fills-ask" nil)
                          (pa:msg "settings.note" nil)))
       (set_tile "h_doc" (pa:msg "settings.doc" nil))
       (set_tile "h_marka" (pa:msg "settings.marka" nil))
@@ -213,9 +223,9 @@
       (pa:dlg-list "line2" (list (pa:label "list-line2") (pa:msg "settings.custom" nil) (pa:msg "settings.no-line2" nil))
                    (pa:dlg-index line2 choices))
       (start_list "fills")
-      (mapcar 'add_list (mapcar 'cadr fill-items))
+      (setq j 0)
+      (repeat (length fill-items) (add_list (fill-text j)) (setq j (1+ j)))
       (end_list)
-      (set_tile "fills" (vl-string-trim " " fill-pick))
       (set_tile "marka" marka)
       (set_tile "prefix_text" prefix-text)
       (set_tile "line2_text" line2-text)
@@ -230,11 +240,12 @@
       (action_tile "line2" "(setq line2 (nth (atoi $value) choices)) (refresh)")
       (action_tile "prefix_text" "(setq prefix-text (vl-string-trim \" \" $value)) (draw)")
       (action_tile "line2_text" "(setq line2-text (vl-string-trim \" \" $value)) (draw)")
-      (action_tile "fills" "(setq fill-pick $value)")
+      (action_tile "fills" "(toggle-fill $value)")
       (action_tile "accept" "(check 1)")
       (action_tile "paste" "(check 2)")
       (setq result (start_dialog)
-            fill-names (mapcar '(lambda (i) (car (nth i fill-items))) (read (strcat "(" fill-pick ")"))))
+            fill-names (pa:fill-saved (vl-remove nil (mapcar '(lambda (o on) (if on (car o))) fill-items fill-on))
+                                      fill-names))
       (pa:log (list "dialog: closed with" result "| document" (pa:doc-id doc size orient) "| marka" marka
                     "| prefix" prefix prefix-text "| line2" line2 line2-text "| fill layers" fill-names))
       (unload_dialog id)
@@ -267,6 +278,6 @@
      (princ (strcat "\n" (pa:msg "settings.saved"
                                  (list "form" (pa:chosen-shown)
                                        "name" (pa:name-shown (pa:chosen-kind) (cond ((pa:last-marka)) ((pa:label "placeholder"))))
-                                       "fills" (pa:names-shown (pa:fill-names)))))))
+                                       "fills" (pa:names-shown (pa:fills-here (pa:fill-names))))))))
     (T (princ (strcat "\n" (pa:msg "settings.unchanged" nil)))))
   (princ))

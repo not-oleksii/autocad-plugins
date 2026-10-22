@@ -243,7 +243,7 @@
 
   ;; Old drawings have no шар заливки: their листи без заливки come out the same as the filled ones.
   (if (null fills)
-    (pa:warn (pa:msg "pdfall.no-fill-layer" (list "layers" (pa:names-shown (pa:fill-names))))))
+    (pa:warn (pa:msg "pdfall.no-fill-layer" nil)))
   ;; A рамка a few millimetres off its size, as in old drawings, is plotted at 1:1 all the same.
   (foreach r records
     (if (pa:off-size r)
