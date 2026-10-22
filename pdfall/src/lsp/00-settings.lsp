@@ -25,7 +25,7 @@
 
 ;;; ---- Settings ---------------------------------------------------------------
 
-;; Every name the шар заливки may have. Add the new name here if you ever rename it.
+;; The шари заливки until a user chooses their own in PDFSETTINGS (docs/adr/0011).
 (setq *pdfall-fill-layers* '("Цвет" "Колір"))
 
 ;; PDFALL.pc3 is AutoCAD PDF (General Documentation) with "open in viewer" off, so a run does

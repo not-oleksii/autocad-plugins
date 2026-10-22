@@ -1,8 +1,10 @@
 ;;; ---- PDFSETTINGS ------------------------------------------------------------
-;;; The settings dialog of the «Лист» button: what PDFLIST pastes (a лист or a текстовий документ),
+;;; The settings dialog: what the «Лист» button (PDFLIST) pastes (a лист or a текстовий документ),
 ;;; the марка and what goes in the name cell, with a preview of the chosen template and the name
-;;; cell's text (docs/adr/0009). Its «Вставити» button saves them and pastes at once.
-;;; Defines c:PDFSETTINGS; tests/run.ps1 also calls pa:preview-lines, since the console AutoCAD the
+;;; cell's text (docs/adr/0009), and the шари заливки PDFALL turns off (docs/adr/0011). Its
+;;; «Вставити» button saves them and pastes at once.
+;;; Defines c:PDFSETTINGS and pa:settings-dialog, which PDFALL opens when the drawing has none of the
+;;; шари заливки chosen; tests/run.ps1 also calls pa:preview-lines, since the console AutoCAD the
 ;;; tests run in has no dialogs.
 ;;;
 ;;; The DCL is written to a temporary file when the dialog opens. Every text is put in with set_tile
@@ -14,7 +16,7 @@
   "pdfall_settings : dialog {"
   "  key = \"dialog\";"
   "  label = @title@;"
-  "  : text { key = \"note\"; width = 92; }"
+  "  : text { key = \"note\"; width = 130; }"
   "  spacer;"
   "  : row {"
   "    : column {"
@@ -42,8 +44,12 @@
   "      : text { key = \"h_name\"; width = 46; }"
   "      : text { key = \"name\"; width = 46; }"
   "    }"
+  "    : column {"
+  "      : text { key = \"h_fills\"; width = 38; }"
+  "      : list_box { key = \"fills\"; width = 38; height = 24; multiple_select = true; }"
+  "    }"
   "  }"
-  "  : text { key = \"error\"; width = 92; }"
+  "  : text { key = \"error\"; width = 130; }"
   "  : row {"
   "    fixed_width = true;"
   "    alignment = centered;"
@@ -109,11 +115,13 @@
 
 (defun pa:dlg-index (x xs) (cond ((vl-position x xs)) (0)))
 
-(defun pa:settings-dialog (/ dcl f id docs doc sizes size want-size orients orient want-orient
+;; Shows the dialog; mode 'fills when PDFALL opens it because the drawing has none of the шари
+;; заливки chosen, which also turns «Вставити» off. Returns 0 when it was cancelled, 1 when the
+;; settings were saved, 2 when they were saved to paste at once, and nil when there is no dialog.
+(defun pa:settings-dialog (mode / dcl f id docs doc sizes size want-size orients orient want-orient
                              choices marka prefix prefix-text line2 line2-text result chosen tp
-                             line2-empty refresh-sizes refresh draw check)
-  ;; Shows the dialog. Returns 0 when it was cancelled, 1 when the settings were saved, 2 when
-  ;; they were saved to paste at once.
+                             line2-empty fill-names fill-items fill-on refresh-sizes refresh draw check
+                             fill-text toggle-fill j)
   (setq docs (pa:docs)
         choices '("std" "custom" "none")
         chosen (pa:chosen)
@@ -124,7 +132,23 @@
         marka (cond ((pa:last-marka)) (""))
         prefix (pa:setting "Prefix") prefix-text (vl-string-trim " " (pa:setting "PrefixText"))
         line2 (pa:setting "Line2") line2-text (vl-string-trim " " (pa:setting "Line2Text"))
-        line2-empty (pa:msg "settings.line2-empty" nil))
+        line2-empty (pa:msg "settings.line2-empty" nil)
+        fill-names (pa:fill-names)
+        fill-items (pa:fill-choices)
+        fill-on (mapcar '(lambda (o) (if (pa:name-in (car o) fill-names) T)) fill-items))
+  ;; The шари заливки are a list of ■ ticked and □ unticked layers, since a list_box has no check
+  ;; boxes and selecting several needs Ctrl. A click ticks or unticks a layer, then the selection is
+  ;; cleared so that the next click on it counts too; the list is multiple_select only because a
+  ;; selection there can be cleared.
+  (defun fill-text (i)
+    (if (nth i fill-on)
+      (pa:msg "settings.fill-on" (list "layer" (cadr (nth i fill-items))))
+      (pa:msg "settings.fill-off" (list "layer" (cadr (nth i fill-items))))))
+  (defun toggle-fill (value / picked j)
+    (setq picked (read (strcat "(" value ")")) j -1)
+    (setq fill-on (mapcar '(lambda (on) (setq j (1+ j)) (if (member j picked) (not on) on)) fill-on))
+    (foreach i picked (start_list "fills" 1 i) (add_list (fill-text i)) (end_list))
+    (set_tile "fills" ""))
   (defun refresh-sizes ()
     ;; The sizes and orientations the chosen document has, keeping the ones last picked where it
     ;; has them: a текстовий документ is A4 only, and going back to a лист brings its size back.
@@ -173,60 +197,77 @@
         f (open dcl "w"))
   (foreach l (pa:dcl-lines) (write-line l f))
   (close f)
-  (setq id (load_dialog dcl))
-  (pa:log (list "dialog:" dcl "load_dialog" id))
-  (if (not (new_dialog "pdfall_settings" id))
+  ;; the console AutoCAD has no load_dialog at all
+  (setq id (if load_dialog (load_dialog dcl) -1))
+  (pa:log (list "dialog:" dcl "load_dialog" id "| mode" mode "| fill layers" fill-names))
+  (if (not (and (> id 0) (new_dialog "pdfall_settings" id)))
     (progn
       (pa:log "dialog: new_dialog failed")
-      (unload_dialog id) (vl-file-delete dcl) (princ (strcat "\n" (pa:msg "settings.no-dialog" nil))) (exit)))
-  (set_tile "dialog" (pa:msg "settings.title" nil))
-  (set_tile "note" (pa:msg "settings.note" nil))
-  (set_tile "h_doc" (pa:msg "settings.doc" nil))
-  (set_tile "h_marka" (pa:msg "settings.marka" nil))
-  (set_tile "h_prefix" (pa:msg "settings.prefix" nil))
-  (set_tile "h_line2" (pa:msg "settings.line2" nil))
-  (set_tile "h_name" (pa:msg "settings.name" nil))
-  (pa:dlg-list "doc" (mapcar 'pa:doc-name docs) (pa:dlg-index doc docs))
-  (pa:dlg-list "prefix" (list (pa:label "prefix") (pa:msg "settings.custom" nil) (pa:msg "settings.no-prefix" nil))
-               (pa:dlg-index prefix choices))
-  (pa:dlg-list "line2" (list (pa:label "list-line2") (pa:msg "settings.custom" nil) (pa:msg "settings.no-line2" nil))
-               (pa:dlg-index line2 choices))
-  (set_tile "marka" marka)
-  (set_tile "prefix_text" prefix-text)
-  (set_tile "line2_text" line2-text)
-  (refresh-sizes)
-  (refresh)
-  (action_tile "doc" "(setq doc (nth (atoi $value) docs)) (refresh-sizes) (refresh)")
-  (action_tile "size" "(setq size (nth (atoi $value) sizes) want-size size) (refresh-sizes) (refresh)")
-  (action_tile "orient" "(setq orient (nth (atoi $value) orients) want-orient orient) (refresh)")
-  (action_tile "marka" "(setq marka (vl-string-trim \" \" $value)) (draw)")
-  (action_tile "prefix" "(setq prefix (nth (atoi $value) choices)) (refresh)")
-  (action_tile "line2" "(setq line2 (nth (atoi $value) choices)) (refresh)")
-  (action_tile "prefix_text" "(setq prefix-text (vl-string-trim \" \" $value)) (draw)")
-  (action_tile "line2_text" "(setq line2-text (vl-string-trim \" \" $value)) (draw)")
-  (action_tile "accept" "(check 1)")
-  (action_tile "paste" "(check 2)")
-  (setq result (start_dialog))
-  (pa:log (list "dialog: closed with" result "| document" (pa:doc-id doc size orient) "| marka" marka
-                "| prefix" prefix prefix-text "| line2" line2 line2-text))
-  (unload_dialog id)
-  (vl-file-delete dcl)
-  (if (member result '(1 2))
+      (if (> id 0) (unload_dialog id))
+      (vl-file-delete dcl)
+      nil)
     (progn
-      (pa:set-setting "Paste" (pa:doc-id doc size orient))
-      (if (/= marka "") (pa:remember-marka marka))
-      (pa:set-setting "Prefix" prefix)
-      (pa:set-setting "PrefixText" prefix-text)
-      (pa:set-setting "Line2" line2)
-      (pa:set-setting "Line2Text" line2-text)
-      result)
-    0))
+      (set_tile "dialog" (pa:msg "settings.title" nil))
+      (set_tile "note" (if (or (= mode 'fills) (null (pa:fill-layers fill-names)))
+                         (pa:msg "settings.fills-ask" nil)
+                         (pa:msg "settings.note" nil)))
+      (set_tile "h_doc" (pa:msg "settings.doc" nil))
+      (set_tile "h_marka" (pa:msg "settings.marka" nil))
+      (set_tile "h_prefix" (pa:msg "settings.prefix" nil))
+      (set_tile "h_line2" (pa:msg "settings.line2" nil))
+      (set_tile "h_name" (pa:msg "settings.name" nil))
+      (set_tile "h_fills" (pa:msg "settings.fills" nil))
+      (pa:dlg-list "doc" (mapcar 'pa:doc-name docs) (pa:dlg-index doc docs))
+      (pa:dlg-list "prefix" (list (pa:label "prefix") (pa:msg "settings.custom" nil) (pa:msg "settings.no-prefix" nil))
+                   (pa:dlg-index prefix choices))
+      (pa:dlg-list "line2" (list (pa:label "list-line2") (pa:msg "settings.custom" nil) (pa:msg "settings.no-line2" nil))
+                   (pa:dlg-index line2 choices))
+      (start_list "fills")
+      (setq j 0)
+      (repeat (length fill-items) (add_list (fill-text j)) (setq j (1+ j)))
+      (end_list)
+      (set_tile "marka" marka)
+      (set_tile "prefix_text" prefix-text)
+      (set_tile "line2_text" line2-text)
+      (refresh-sizes)
+      (refresh)
+      (if (= mode 'fills) (progn (mode_tile "paste" 1) (mode_tile "fills" 2)))
+      (action_tile "doc" "(setq doc (nth (atoi $value) docs)) (refresh-sizes) (refresh)")
+      (action_tile "size" "(setq size (nth (atoi $value) sizes) want-size size) (refresh-sizes) (refresh)")
+      (action_tile "orient" "(setq orient (nth (atoi $value) orients) want-orient orient) (refresh)")
+      (action_tile "marka" "(setq marka (vl-string-trim \" \" $value)) (draw)")
+      (action_tile "prefix" "(setq prefix (nth (atoi $value) choices)) (refresh)")
+      (action_tile "line2" "(setq line2 (nth (atoi $value) choices)) (refresh)")
+      (action_tile "prefix_text" "(setq prefix-text (vl-string-trim \" \" $value)) (draw)")
+      (action_tile "line2_text" "(setq line2-text (vl-string-trim \" \" $value)) (draw)")
+      (action_tile "fills" "(toggle-fill $value)")
+      (action_tile "accept" "(check 1)")
+      (action_tile "paste" "(check 2)")
+      (setq result (start_dialog)
+            fill-names (pa:fill-saved (vl-remove nil (mapcar '(lambda (o on) (if on (car o))) fill-items fill-on))
+                                      fill-names))
+      (pa:log (list "dialog: closed with" result "| document" (pa:doc-id doc size orient) "| marka" marka
+                    "| prefix" prefix prefix-text "| line2" line2 line2-text "| fill layers" fill-names))
+      (unload_dialog id)
+      (vl-file-delete dcl)
+      (if (member result '(1 2))
+        (progn
+          (pa:set-setting "Paste" (pa:doc-id doc size orient))
+          (if (/= marka "") (pa:remember-marka marka))
+          (pa:set-setting "Prefix" prefix)
+          (pa:set-setting "PrefixText" prefix-text)
+          (pa:set-setting "Line2" line2)
+          (pa:set-setting "Line2Text" line2-text)
+          (pa:set-fill-names fill-names)
+          result)
+        0))))
 
 (defun c:PDFSETTINGS (/ *error* sysvars fill-state undo-open marka placed result)
   (defun *error* (msg) (pa:list-failed "PDFSETTINGS" msg))
   (pa:log-start "PDFSETTINGS")
-  (setq result (pa:settings-dialog))
+  (setq result (pa:settings-dialog nil))
   (cond
+    ((null result) (princ (strcat "\n" (pa:msg "settings.no-dialog" nil))))
     ((= result 2)
      (pa:paste-start)
      (setq marka (pa:last-marka))
@@ -236,6 +277,7 @@
     ((= result 1)
      (princ (strcat "\n" (pa:msg "settings.saved"
                                  (list "form" (pa:chosen-shown)
-                                       "name" (pa:name-shown (pa:chosen-kind) (cond ((pa:last-marka)) ((pa:label "placeholder")))))))))
+                                       "name" (pa:name-shown (pa:chosen-kind) (cond ((pa:last-marka)) ((pa:label "placeholder"))))
+                                       "fills" (pa:names-shown (pa:fills-here (pa:fill-names))))))))
     (T (princ (strcat "\n" (pa:msg "settings.unchanged" nil)))))
   (princ))

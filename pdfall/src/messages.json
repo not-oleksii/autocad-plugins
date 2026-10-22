@@ -49,7 +49,8 @@
     "pdfall.plotting": "Друкую:",
     "pdfall.cannot-write": "не вдалося записати {path}",
     "pdfall.paper-refused": "AutoCAD не прийняв розмір паперу {paper} для {device}, тому PDFALL зупинився. Повідомте розробникові PDFALL",
-    "pdfall.no-fill-layer": "у кресленні немає шару заливки (шукав: {layers}), тому листи без заливки такі самі, як із заливкою. Якщо шар перейменували, додайте нову назву до *pdfall-fill-layers* у pdfall.lsp",
+    "pdfall.no-fill-layer": "у кресленні не вибрано шару заливки, тому листи без заливки такі самі, як із заливкою. Шари заливки вибирають у «Налаштування» (PDFSETTINGS).",
+    "pdfall.fills-cancelled": "PDFALL: скасовано, нічого не надруковано.",
     "pdfall.off-size": "{marka}: рамка має розмір {size} замість {nominal}, надруковано в масштабі 1:1  ({where})",
     "pdfall.plotted": "PDFALL: {n} PDF у {folder}",
     "pdfall.not-plotted": "ці PDF не вдалося створити:",
@@ -104,7 +105,13 @@
     "orient.p": "вертикальний",
 
     "settings.title": "Налаштування PDFALL",
-    "settings.note": "Ці налаштування — для кнопки «Лист»: вона вставлятиме вибраний документ із цією назвою.",
+    "settings.note": "Ліворуч — що вставляє кнопка «Лист». Праворуч — шари заливки: у листах без заливки їх не буде.",
+    "settings.fills-ask": "У цьому кресленні не вибрано шару заливки. Позначте праворуч шар або шари, на яких заливка кольором, і натисніть OK.",
+    "settings.fills": "Шари заливки (клацніть, щоб позначити)",
+    "settings.fill-on": "■  {layer}",
+    "settings.fill-off": "□  {layer}",
+    "settings.fill-xref": "{layer} (у зовнішньому посиланні)",
+    "settings.no-fills": "жодного",
     "settings.doc": "Документ, формат, орієнтація",
     "settings.doc-list": "Лист {std}",
     "settings.doc-text": "Текстовий документ {std}",
@@ -122,7 +129,7 @@
     "settings.preview-list": "Лист {form}:",
     "settings.preview-text": "Текстовий документ {std}, перший аркуш:",
     "settings.no-dialog": "PDFSETTINGS: не вдалося відкрити вікно налаштувань.",
-    "settings.saved": "PDFSETTINGS: збережено. «Лист» вставлятиме: {form}, назва: {name}",
+    "settings.saved": "PDFSETTINGS: збережено. «Лист» вставлятиме: {form}, назва: {name}. Шари заливки: {fills}.",
     "settings.unchanged": "PDFSETTINGS: нічого не змінено.",
 
     "log.turn-on": "Увімкнути",
@@ -232,7 +239,7 @@
     "ribbon.spec": "Специфікація",
     "ribbon.spec-help": "Команда PDFSPEC. Вставляє порожню рамку специфікації (A4) з основним написом і вписує марку",
     "ribbon.settings": "Налаштування",
-    "ribbon.settings-help": "Команда PDFSETTINGS. Що вставляє кнопка «Лист»: документ, формат, марка й назва в рамці. «Вставити» вставляє одразу"
+    "ribbon.settings-help": "Команда PDFSETTINGS. Що вставляє кнопка «Лист»: документ, формат, марка й назва в рамці; і шари заливки, яких не буде в листах без заливки. «Вставити» вставляє одразу"
   },
 
   "labels": {

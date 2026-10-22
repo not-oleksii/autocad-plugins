@@ -210,6 +210,13 @@
   (if (= 0 (getvar "DWGTITLED"))
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
+  ;; None of the шари заливки chosen is in the drawing: the user ticks the right ones first. Without
+  ;; a dialog (as in the console AutoCAD of the tests) PDFALL goes on and warns below.
+  (if (and (null fills) (setq ans (pa:settings-dialog 'fills)))
+    (if (= ans 0)
+      (progn (princ (strcat "\n" (pa:msg "pdfall.fills-cancelled" nil))) (exit))
+      (setq fills (pa:fill-layers (pa:fill-names)))))
+
   (princ (strcat "\n" (pa:msg "reading" (list "cmd" "PDFALL"))))
   (pa:log (list "pdfall: fill layers" fills "| device" device "| plotters" (pa:plotters) "| merge" *pdfall-merge*))
   (setq drawing (pa:read-drawing)
@@ -236,8 +243,7 @@
 
   ;; Old drawings have no шар заливки: their листи без заливки come out the same as the filled ones.
   (if (null fills)
-    (pa:warn (pa:msg "pdfall.no-fill-layer"
-                     (list "layers" (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (n) (strcat n ", ")) *pdfall-fill-layers*)))))))
+    (pa:warn (pa:msg "pdfall.no-fill-layer" nil)))
   ;; A рамка a few millimetres off its size, as in old drawings, is plotted at 1:1 all the same.
   (foreach r records
     (if (pa:off-size r)
@@ -359,7 +365,7 @@
     (princ))
   (pa:install-pc3)
   (setq plotted 0
-        fills (vl-remove-if-not '(lambda (n) (tblsearch "LAYER" n)) *pdfall-fill-layers*)
+        fills (pa:fill-layers (pa:fill-names))
         device (cond ((vl-some '(lambda (n) (if (findfile (strcat (pa:plotters) "\\" n)) n))
                                *pdfall-devices*))
                      ((last *pdfall-devices*))))
