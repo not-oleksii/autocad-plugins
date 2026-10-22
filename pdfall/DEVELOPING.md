@@ -44,7 +44,7 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 35-date.lsp       the export date PDFALL writes into the Дата cell while it plots
 40-pdfall.lsp     c:PDFALL: марка checks, PDF names, layers, plotting, merge.exe
 50-pdfnum.lsp     c:PDFNUM: fills and fixes Аркуш/Аркушів (ADR 0010)
-55-settings.lsp   the user's settings: which templates to paste, what goes in the name cell
+55-settings.lsp   the user's settings: which templates to paste, what goes in the name cell, the шари заливки (ADR 0011)
 60-paste.lsp      c:PDFLIST, c:PDFSPEC
 62-previews.lsp   every template and its outline (made by make_templates.ps1, not edited by hand)
 65-dialog.lsp     c:PDFSETTINGS, the settings dialog
@@ -75,7 +75,7 @@ A key no code uses is only a warning. The bundle carries no JSON: the LISP texts
 
 ## Settings
 
-Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. The one you're most likely to change is `*pdfall-fill-layers*`, every name the шар заливки may have; add the new name there if the layer is ever renamed. `*pdfall-sizes*` are the sheet sizes a рамка may have, and `*pdfall-paper*` the pattern of their paper's canonical name, which AutoCAD doesn't translate; never replace it with the names the Plot dialog shows ([ADR 0008](docs/adr/0008-read-old-drawings.md), [ADR 0009](docs/adr/0009-every-a-size-and-settings-for-pasting.md)). `*pdfall-cancel-words*` is how AutoCAD words Esc in languages other than English (Russian: «Функция прервана»); if Esc in some other language prints `Помилка <команда>: …`, add that wording there.
+Settings live in `src\lsp\00-settings.lsp`, which also opens the installed `pdfall.lsp`. `*pdfall-fill-layers*` are the шари заливки a user starts with; each user then chooses their own in PDFSETTINGS ([ADR 0011](docs/adr/0011-choose-the-fill-layers.md)). `*pdfall-sizes*` are the sheet sizes a рамка may have, and `*pdfall-paper*` the pattern of their paper's canonical name, which AutoCAD doesn't translate; never replace it with the names the Plot dialog shows ([ADR 0008](docs/adr/0008-read-old-drawings.md), [ADR 0009](docs/adr/0009-every-a-size-and-settings-for-pasting.md)). `*pdfall-cancel-words*` is how AutoCAD words Esc in languages other than English (Russian: «Функция прервана»); if Esc in some other language prints `Помилка <команда>: …`, add that wording there.
 
 Exporting has no settings for colleagues: PDFALL recognises every form and the old title block by itself (ADR 0008, 0009), so a drawing that differs in a new way needs a change to the reader, `src\lsp\20-reader.lsp`, and a drawing for `examples\old`. Colleagues' settings (PDFSETTINGS, `55-settings.lsp`) only choose what PDFLIST pastes (a лист or a текстовий документ), the марка it offers, and what goes in the name cell; they are kept per user with `setenv` (`PDFALL_Paste`, `PDFALL_Marka`, `PDFALL_Prefix`, ...). The dialog is the one thing the tests can't run: check it by hand in AutoCAD after changing `65-dialog.lsp`.
 

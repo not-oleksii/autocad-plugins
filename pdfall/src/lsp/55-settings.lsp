@@ -1,6 +1,7 @@
 ;;; ---- Settings ---------------------------------------------------------------
-;;; What the «Лист» button (PDFLIST) pastes and what goes in the name cell, kept per user with setenv
-;;; so an update keeps them; nothing about exporting is a setting (docs/adr/0009). Other files may call:
+;;; What the «Лист» button (PDFLIST) pastes and what goes in the name cell (docs/adr/0009), and which
+;;; layers are шари заливки (docs/adr/0011), kept per user with setenv so an update keeps them.
+;;; Other files may call:
 ;;;   pa:setting pa:set-setting  read and write one setting
 ;;;   pa:template      a template of *pa-templates*
 ;;;   pa:chosen pa:chosen-kind pa:list-file pa:text-file  what PDFLIST pastes
@@ -10,6 +11,8 @@
 ;;;   pa:prefix-of pa:line2-of pa:prefix pa:line2  the name cell's first words and second line
 ;;;   pa:name-text pa:name-line pa:name-shown  the name cell's text, and as the dialog and messages show it
 ;;;   pa:prefix-error  why a custom prefix can't be used, or nil
+;;;   pa:fill-names pa:set-fill-names pa:fill-layers  the шари заливки chosen, and the layers they name
+;;;   pa:fill-choices pa:names-shown  the layers the dialog lists, and names as messages show them
 ;;;
 ;;; Settings and their values:
 ;;;   Paste       what PDFLIST pastes: a лист as list_<standard>_<size><orientation>, e.g.
@@ -19,12 +22,19 @@
 ;;;   PrefixText  the custom prefix, kept when another choice is made
 ;;;   Line2       std (the label "list-line2", Складальне креслення), custom or none
 ;;;   Line2Text   the custom second line
+;;;   FillLayers  the names of the шари заливки, separated by ; (a layer name can't hold one);
+;;;               *pdfall-fill-layers* until the user chooses
 ;;;   Debug       1 while PDFDEBUG has the debug log on (12-log.lsp)
 ;;; A document is list_<standard> or text_<standard>.
 
+(defun pa:join-names (names)
+  (vl-string-right-trim ";" (apply 'strcat (mapcar '(lambda (n) (strcat n ";")) names))))
+
 (setq *pa-setting-defaults*
-  '(("Paste" . "list_spdbv_A3l") ("Marka" . "") ("Prefix" . "std") ("PrefixText" . "")
-    ("Line2" . "std") ("Line2Text" . "") ("Debug" . "0")))
+  (append
+    '(("Paste" . "list_spdbv_A3l") ("Marka" . "") ("Prefix" . "std") ("PrefixText" . "")
+      ("Line2" . "std") ("Line2Text" . "") ("Debug" . "0"))
+    (list (cons "FillLayers" (pa:join-names *pdfall-fill-layers*)))))
 
 (defun pa:setting (key / v)
   (setq v (getenv (strcat "PDFALL_" key)))
@@ -157,3 +167,56 @@
   (setq p (pa:prefix) l (if (= kind "list") (pa:line2) ""))
   (strcat (if (= p "") "" (strcat (pa:mtext-escape p) " ")) (pa:mtext-escape marka)
           (if (= l "") "" (strcat "\\P" (pa:mtext-escape l)))))
+
+;;; ---- The шари заливки -------------------------------------------------------
+;;; PDFALL plots every лист a second time with them off, as the лист без заливки. A chosen name also
+;;; names that layer in any xref: «Колір» takes in «план|Колір».
+
+(defun pa:fill-names ()
+  ;; The names of the шари заливки chosen, as typed.
+  (vl-remove "" (mapcar '(lambda (n) (vl-string-trim " " n)) (pa:split (pa:setting "FillLayers") ";"))))
+
+(defun pa:set-fill-names (names) (pa:set-setting "FillLayers" (pa:join-names names)))
+
+(defun pa:layer-base (name / p)
+  ;; A layer's name without the xref it comes from: "план|Колір" is "Колір".
+  (while (setq p (vl-string-search "|" name)) (setq name (substr name (+ p 2))))
+  name)
+
+(defun pa:name-in (name names)
+  ;; Whether names has name, in any case, as AutoCAD compares layer names.
+  (member (pa:lower name) (mapcar 'pa:lower names)))
+
+(defun pa:fill-layers (names / d nm out)
+  ;; The drawing's layers that names name, its own or an xref's, in table order.
+  (setq d (tblnext "LAYER" T))
+  (while d
+    (setq nm (cdr (assoc 2 d)))
+    (if (pa:name-in (pa:layer-base nm) names) (setq out (cons nm out)))
+    (setq d (tblnext "LAYER")))
+  (reverse out))
+
+(defun pa:fill-choices (names / d nm own xref all)
+  ;; The layers the dialog offers, sorted: the drawing's own but 0 and Defpoints, an xref's by its
+  ;; own name, and the chosen names the drawing has none of, each once and spelled as the drawing
+  ;; has it. Each is (name text), the text saying when the layer is only in an xref or not in the
+  ;; drawing at all.
+  (setq d (tblnext "LAYER" T))
+  (while d
+    (setq nm (cdr (assoc 2 d)))
+    (cond ((vl-string-search "|" nm) (setq xref (cons (pa:layer-base nm) xref)))
+          ((not (pa:name-in nm '("0" "DEFPOINTS"))) (setq own (cons nm own))))
+    (setq d (tblnext "LAYER")))
+  (foreach n (append own xref names)
+    (if (not (pa:name-in n all)) (setq all (cons n all))))
+  (mapcar '(lambda (n)
+             (list n (cond ((pa:name-in n own) n)
+                           ((pa:name-in n xref) (pa:msg "settings.fill-xref" (list "layer" n)))
+                           ((pa:msg "settings.fill-missing" (list "layer" n))))))
+          (acad_strlsort all)))
+
+(defun pa:names-shown (names)
+  ;; "Цвет, Колір", or a word saying there are none.
+  (if names
+    (vl-string-right-trim ", " (apply 'strcat (mapcar '(lambda (n) (strcat n ", ")) names)))
+    (pa:msg "settings.no-fills" nil)))

@@ -6,7 +6,8 @@
 #   3. in an empty drawing: PDFLIST and PDFSPEC paste рамки, PDFNUM numbers them and PDFALL plots them;
 #   4. in another: every one of the 28 templates pasted, with each choice of name-cell text, then
 #      PDFNUM, PDFALL (each PDF on paper of its рамка's size) and merge.exe;
-#   5. the ribbon tab.
+#   5. the шари заливки chosen in the settings, an xref's among them;
+#   6. the ribbon tab.
 # Usage: powershell -ExecutionPolicy Bypass -File tests\run.ps1   (run build.bat first)
 param(
     [string]$Contents = (Join-Path $PSScriptRoot '..\dist\PDFALL.bundle\Contents'),
@@ -568,6 +569,44 @@ $formMerged = @(Get-ChildItem (Join-Path $formsDir 'exported files') -Recurse -F
 Check ($formMerged.Count -eq 6 -and $fmlog -notmatch 'Не вдалося звірити|НЕ збігається|Нерозпізнані|--force') "merge.exe reads every марка, Аркуш and текстовий документ back and builds 6 combined files (found $($formMerged.Count))"
 $n1 = @($expected | Where-Object { $_.Marka -eq '1ЧП' }).Count
 Check ($fmlog -match "1ЧП загальний\.pdf: файлів $n1, сторінок $n1") "1ЧП загальний holds its $n1 листи and текстові документи"
+
+# The шари заливки chosen in the settings: in any case, an xref's layer by its own name (forms.dwg,
+# saved above with a layer Цвет, attached as an xref), and switched off for the листи без заливки.
+Write-Host 'Fill layers chosen in the settings...'
+$formsDwg = (Join-Path $formsDir 'forms.dwg') -replace '\\', '/'
+$fillScr = @"
+(setvar "SECURELOAD" 0)
+(setq *pdfall-home* "$($pasteHome -replace '\\', '\\')")
+(load "$ph/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
+(princ (strcat "\nDEFAULT-FILLS=" (pa:join-names (pa:fill-names))))
+(command "_.-LAYER" "_M" "Заливка" "_M" "Штрих" "_S" "0" "")
+(command "_.-XREF" "_A" "$formsDwg" "0,0" "1" "1" "0")
+(pa:set-fill-names '("заливка" " Цвет " "Немає"))
+(princ (strcat "\nFILL-NAMES=" (pa:join-names (pa:fill-names))))
+(setq fills (pa:fill-layers (pa:fill-names)))
+(princ (strcat "\nFILL-LAYERS=" (pa:join-names fills)))
+(princ (strcat "\nFILL-CHOICES=" (pa:join-names (mapcar 'cadr (pa:fill-choices (pa:fill-names))))))
+(pa:set-fill nil)
+(princ (strcat "\nFILLS-OFF=" (pa:join-names (mapcar '(lambda (n) (if (minusp (cdr (assoc 62 (pa:layer n)))) "off" "on")) (append fills '("Штрих"))))))
+(princ (strcat "\nNO-DIALOG=" (vl-princ-to-string (pa:settings-dialog 'fills))))
+(pa:set-fill-names nil)
+(princ (strcat "\nNO-FILLS=" (pa:names-shown (pa:fill-names)) "|" (vl-princ-to-string (pa:fill-names))))
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+$xlog = Invoke-Acad 'fills' $fillScr $null
+Check ($xlog -match 'END-OF-TEST' -and $xlog -notmatch '; error|Помилка') 'the fill-layer script ran to the end without an error'
+Check ($xlog -match 'DEFAULT-FILLS=Цвет;Колір') 'the шари заливки are Цвет and Колір until the user chooses'
+Check ($xlog -match 'FILL-NAMES=заливка;Цвет;Немає') 'the chosen names are kept, trimmed'
+Check ($xlog -match '(?m)^FILL-LAYERS=Заливка;forms\|Цвет"') 'a chosen name finds the layer in any case, and the same layer in an xref'
+$choices = if ($xlog -match '(?m)^FILL-CHOICES=([^"]*)') { $Matches[1] } else { '' }
+Check ($choices -match '(^|;)Заливка;' -and $choices -match 'Цвет \(у зовнішньому посиланні\)' -and $choices -match 'Немає \(немає в кресленні\)' -and
+       $choices -match '(^|;)Штрих(;|$)' -and $choices -notmatch '(^|;)0(;|$)' -and $choices -cnotmatch 'заливка') "the dialog lists the drawing's layers but 0, an xref's by its own name, and a chosen layer the drawing lacks ($choices)"
+Check ($xlog -match 'FILLS-OFF=off;off;on') 'the листи без заливки have the chosen layers off, and only those'
+Check ($xlog -match 'NO-DIALOG=nil') 'without a dialog, PDFALL''s question about the шари заливки is skipped'
+Check ($xlog -match 'NO-FILLS=жодного\|nil') 'the user may choose no шар заливки at all'
 
 # The real command, ended by Esc (0x1B), which also ends the script.
 $esc = [string][char]27

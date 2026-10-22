@@ -13,7 +13,7 @@ One numbered drawing sheet of a марка, such as a Складальний к�
 _Avoid_: page, drawing
 
 **Без заливки**:
-The variant of a лист plotted with the шар заливки turned off, used for printing. Every лист has one, even a лист with no fills, and in a drawing with no шар заливки it is the same as the filled лист.
+The variant of a лист plotted with the шари заливки turned off, used for printing; which layers those are, each user chooses in PDFSETTINGS (ADR 0011). Every лист has one, even a лист with no fills, and in a drawing with no шар заливки it is the same as the filled лист.
 _Avoid_: print version, no-fill, unfilled
 
 **Шар заливки**:
