@@ -3,12 +3,13 @@
 ;;; the марка and what goes in the name cell, with a preview of the chosen template and the name
 ;;; cell's text (docs/adr/0009), and the шари заливки PDFALL turns off (docs/adr/0011). Its
 ;;; «Вставити» button saves them and pastes at once.
-;;; Defines c:PDFSETTINGS and pa:settings-dialog, which PDFALL opens when the drawing has none of the
-;;; шари заливки chosen; tests/run.ps1 also calls pa:preview-lines, since the console AutoCAD the
-;;; tests run in has no dialogs.
+;;; Also the window of «Друк у PDF» that asks which марки to plot (docs/adr/0012).
+;;; Defines c:PDFSETTINGS, and for PDFALL pa:settings-dialog (opened when the drawing has none of
+;;; the шари заливки chosen) and pa:pick-dialog; tests/run.ps1 also calls pa:preview-lines, since
+;;; the console AutoCAD the tests run in has no dialogs.
 ;;;
 ;;; The DCL is written to a temporary file when the dialog opens. Every text is put in with set_tile
-;;; and add_list, except the «Вставити» button's label and the title, which set_tile can't change:
+;;; and add_list, except the buttons' labels and the title, which set_tile can't change:
 ;;; they are written into the file in the PC's code page, which AutoCAD reads it in, when that code
 ;;; page can hold them (pa:code-page-p), and in English otherwise.
 
@@ -78,13 +79,52 @@
     (setq out (strcat out (if (member c '(34 92)) "\\" "") (chr c))))
   (strcat "\"" out "\""))
 
-(defun pa:dcl-lines (/ paste title)
-  ;; *pa-dcl* with the button's label and the title put in.
-  (setq paste (pa:msg "settings.paste" nil) title (pa:msg "settings.title" nil))
-  (if (not (pa:code-page-p (strcat paste title))) (setq paste "Paste" title "PDFALL"))
-  (pa:log (list "dialog: labels" paste "|" title "| SYSCODEPAGE" (getvar "SYSCODEPAGE")))
-  (mapcar '(lambda (l) (vl-string-subst (pa:dcl-string title) "@title@" (vl-string-subst (pa:dcl-string paste) "@paste@" l)))
-          *pa-dcl*))
+(defun pa:dcl-lines (lines labels / ok)
+  ;; lines with each @name@ of labels, ((name text english) ...), put in as a DCL string: the texts
+  ;; when the PC's code page holds them all, else the English ones.
+  (setq ok (pa:code-page-p (apply 'strcat (mapcar 'cadr labels))))
+  (pa:log (list "dialog: labels in" (if ok "Ukrainian" "English") "| SYSCODEPAGE" (getvar "SYSCODEPAGE")))
+  (mapcar '(lambda (l)
+             (foreach lb labels
+               (setq l (vl-string-subst (pa:dcl-string (if ok (cadr lb) (caddr lb))) (strcat "@" (car lb) "@") l)))
+             l)
+          lines))
+
+(defun pa:dlg-open (lines name / dcl f id)
+  ;; Writes lines to a temporary DCL file and opens its dialog name. Returns (id . file) for
+  ;; pa:dlg-close, or nil when there is no dialog: the console AutoCAD has no load_dialog at all.
+  (setq dcl (vl-filename-mktemp "pdfall.dcl") f (open dcl "w"))
+  (foreach l lines (write-line l f))
+  (close f)
+  (setq id (if load_dialog (load_dialog dcl) -1))
+  (pa:log (list "dialog:" name dcl "load_dialog" id))
+  (if (and (> id 0) (new_dialog name id))
+    (cons id dcl)
+    (progn (pa:log "dialog: new_dialog failed") (if (> id 0) (unload_dialog id)) (vl-file-delete dcl) nil)))
+
+(defun pa:dlg-close (d) (unload_dialog (car d)) (vl-file-delete (cdr d)))
+
+;;; A list_box of ■ ticked and □ unticked lines, since DCL has no list of check boxes and selecting
+;;; several in a list_box needs Ctrl. A click flips a line, then the selection is cleared so that the
+;;; next click on it counts too; the list_box is multiple_select only because that selection can be
+;;; cleared.
+
+(defun pa:check-line (on text)
+  (if on (pa:msg "dialog.on" (list "item" text)) (pa:msg "dialog.off" (list "item" text))))
+
+(defun pa:check-fill (key texts ons)
+  ;; Fills the list_box key with texts, each ticked as ons says.
+  (start_list key)
+  (mapcar '(lambda (tx on) (add_list (pa:check-line on tx))) texts ons)
+  (end_list))
+
+(defun pa:check-flip (key value texts ons / picked j)
+  ;; A click in the list_box key, value its $value: flips those lines. Returns the new ons.
+  (setq picked (read (strcat "(" value ")")) j -1
+        ons (mapcar '(lambda (on) (setq j (1+ j)) (if (member j picked) (not on) on)) ons))
+  (foreach i picked (start_list key 1 i) (add_list (pa:check-line (nth i ons) (nth i texts))) (end_list))
+  (set_tile key "")
+  ons)
 
 (defun pa:preview-lines (file wpx hpx / tp w h k dx dy c lines out px py)
   ;; The template file drawn into an image tile wpx by hpx pixels: (x1 y1 x2 y2 colour) per line,
@@ -118,10 +158,10 @@
 ;; Shows the dialog; mode 'fills when PDFALL opens it because the drawing has none of the шари
 ;; заливки chosen, which also turns «Вставити» off. Returns 0 when it was cancelled, 1 when the
 ;; settings were saved, 2 when they were saved to paste at once, and nil when there is no dialog.
-(defun pa:settings-dialog (mode / dcl f id docs doc sizes size want-size orients orient want-orient
+(defun pa:settings-dialog (mode / docs doc sizes size want-size orients orient want-orient
                              choices marka prefix prefix-text line2 line2-text result chosen tp
-                             line2-empty fill-names fill-items fill-on refresh-sizes refresh draw check
-                             fill-text toggle-fill j)
+                             line2-empty fill-names fill-items fill-texts fill-on refresh-sizes refresh
+                             draw check d)
   (setq docs (pa:docs)
         choices '("std" "custom" "none")
         chosen (pa:chosen)
@@ -135,20 +175,8 @@
         line2-empty (pa:msg "settings.line2-empty" nil)
         fill-names (pa:fill-names)
         fill-items (pa:fill-choices)
+        fill-texts (mapcar 'cadr fill-items)
         fill-on (mapcar '(lambda (o) (if (pa:name-in (car o) fill-names) T)) fill-items))
-  ;; The шари заливки are a list of ■ ticked and □ unticked layers, since a list_box has no check
-  ;; boxes and selecting several needs Ctrl. A click ticks or unticks a layer, then the selection is
-  ;; cleared so that the next click on it counts too; the list is multiple_select only because a
-  ;; selection there can be cleared.
-  (defun fill-text (i)
-    (if (nth i fill-on)
-      (pa:msg "settings.fill-on" (list "layer" (cadr (nth i fill-items))))
-      (pa:msg "settings.fill-off" (list "layer" (cadr (nth i fill-items))))))
-  (defun toggle-fill (value / picked j)
-    (setq picked (read (strcat "(" value ")")) j -1)
-    (setq fill-on (mapcar '(lambda (on) (setq j (1+ j)) (if (member j picked) (not on) on)) fill-on))
-    (foreach i picked (start_list "fills" 1 i) (add_list (fill-text i)) (end_list))
-    (set_tile "fills" ""))
   (defun refresh-sizes ()
     ;; The sizes and orientations the chosen document has, keeping the ones last picked where it
     ;; has them: a текстовий документ is A4 only, and going back to a лист brings its size back.
@@ -193,19 +221,10 @@
        (set_tile "error" line2-empty) (mode_tile "line2_text" 2))
       (T (done_dialog code))))
 
-  (setq dcl (vl-filename-mktemp "pdfall.dcl")
-        f (open dcl "w"))
-  (foreach l (pa:dcl-lines) (write-line l f))
-  (close f)
-  ;; the console AutoCAD has no load_dialog at all
-  (setq id (if load_dialog (load_dialog dcl) -1))
-  (pa:log (list "dialog:" dcl "load_dialog" id "| mode" mode "| fill layers" fill-names))
-  (if (not (and (> id 0) (new_dialog "pdfall_settings" id)))
-    (progn
-      (pa:log "dialog: new_dialog failed")
-      (if (> id 0) (unload_dialog id))
-      (vl-file-delete dcl)
-      nil)
+  (pa:log (list "dialog: settings, mode" mode "| fill layers" fill-names))
+  (if (setq d (pa:dlg-open (pa:dcl-lines *pa-dcl* (list (list "title" (pa:msg "settings.title" nil) "PDFALL")
+                                                         (list "paste" (pa:msg "settings.paste" nil) "Paste")))
+                           "pdfall_settings"))
     (progn
       (set_tile "dialog" (pa:msg "settings.title" nil))
       (set_tile "note" (if (or (= mode 'fills) (null (pa:fill-layers fill-names)))
@@ -222,10 +241,7 @@
                    (pa:dlg-index prefix choices))
       (pa:dlg-list "line2" (list (pa:label "list-line2") (pa:msg "settings.custom" nil) (pa:msg "settings.no-line2" nil))
                    (pa:dlg-index line2 choices))
-      (start_list "fills")
-      (setq j 0)
-      (repeat (length fill-items) (add_list (fill-text j)) (setq j (1+ j)))
-      (end_list)
+      (pa:check-fill "fills" fill-texts fill-on)
       (set_tile "marka" marka)
       (set_tile "prefix_text" prefix-text)
       (set_tile "line2_text" line2-text)
@@ -240,7 +256,7 @@
       (action_tile "line2" "(setq line2 (nth (atoi $value) choices)) (refresh)")
       (action_tile "prefix_text" "(setq prefix-text (vl-string-trim \" \" $value)) (draw)")
       (action_tile "line2_text" "(setq line2-text (vl-string-trim \" \" $value)) (draw)")
-      (action_tile "fills" "(toggle-fill $value)")
+      (action_tile "fills" "(setq fill-on (pa:check-flip \"fills\" $value fill-texts fill-on))")
       (action_tile "accept" "(check 1)")
       (action_tile "paste" "(check 2)")
       (setq result (start_dialog)
@@ -248,8 +264,7 @@
                                       fill-names))
       (pa:log (list "dialog: closed with" result "| document" (pa:doc-id doc size orient) "| marka" marka
                     "| prefix" prefix prefix-text "| line2" line2 line2-text "| fill layers" fill-names))
-      (unload_dialog id)
-      (vl-file-delete dcl)
+      (pa:dlg-close d)
       (if (member result '(1 2))
         (progn
           (pa:set-setting "Paste" (pa:doc-id doc size orient))
@@ -261,6 +276,64 @@
           (pa:set-fill-names fill-names)
           result)
         0))))
+
+;;; ---- Which марки to plot ----------------------------------------------------
+
+(setq *pa-pick-dcl* '(
+  "pdfall_pick : dialog {"
+  "  key = \"dialog\";"
+  "  label = @title@;"
+  "  : text { key = \"note\"; width = 70; }"
+  "  : list_box { key = \"markas\"; width = 70; height = 16; multiple_select = true; }"
+  "  : row {"
+  "    fixed_width = true;"
+  "    : button { key = \"all\"; label = @all@; width = 14; }"
+  "    : button { key = \"none\"; label = @none@; width = 14; }"
+  "  }"
+  "  : text { key = \"error\"; width = 70; }"
+  "  : row {"
+  "    fixed_width = true;"
+  "    alignment = centered;"
+  "    : button { key = \"accept\"; label = @plot@; width = 16; is_default = true; }"
+  "    : spacer { width = 2; }"
+  "    cancel_button;"
+  "  }"
+  "}"))
+
+(defun pa:marka-line (marka records / parts n)
+  ;; A марка as the window lists it: "1ЧП — листів: 3, специфікацій: 1".
+  (foreach k (reverse *pa-kinds*)
+    (if (> (setq n (length (pa:of marka k records))) 0)
+      (setq parts (cons (cond ((= k "list") (pa:msg "pick.lists" (list "n" n)))
+                              ((= k "spec") (pa:msg "pick.specs" (list "n" n)))
+                              ((pa:msg "pick.texts" (list "n" n))))
+                        parts))))
+  (pa:msg "pick.line" (list "marka" marka "kinds" (pa:names-shown parts))))
+
+(defun pa:pick-dialog (markas records / d texts ons result check)
+  ;; Asks which of markas to plot, all of them ticked at first. Returns the ones ticked, in the order
+  ;; of markas; 'cancel when the user cancelled; nil when there is no dialog.
+  (setq texts (mapcar '(lambda (m) (pa:marka-line m records)) markas)
+        ons (mapcar '(lambda (m) T) markas))
+  (defun check ()
+    (if (vl-some '(lambda (on) on) ons) (done_dialog 1) (set_tile "error" (pa:msg "pick.none-ticked" nil))))
+  (if (setq d (pa:dlg-open (pa:dcl-lines *pa-pick-dcl* (list (list "title" (pa:msg "pick.title" nil) "PDFALL")
+                                                             (list "all" (pa:msg "pick.all" nil) "All")
+                                                             (list "none" (pa:msg "pick.none" nil) "None")
+                                                             (list "plot" (pa:msg "pick.plot" nil) "Plot")))
+                           "pdfall_pick"))
+    (progn
+      (set_tile "dialog" (pa:msg "pick.title" nil))
+      (set_tile "note" (pa:msg "pick.note" nil))
+      (pa:check-fill "markas" texts ons)
+      (action_tile "markas" "(setq ons (pa:check-flip \"markas\" $value texts ons)) (set_tile \"error\" \"\")")
+      (action_tile "all" "(setq ons (mapcar '(lambda (m) T) markas)) (pa:check-fill \"markas\" texts ons) (set_tile \"error\" \"\")")
+      (action_tile "none" "(setq ons (mapcar '(lambda (m) nil) markas)) (pa:check-fill \"markas\" texts ons)")
+      (action_tile "accept" "(check)")
+      (setq result (start_dialog))
+      (pa:dlg-close d)
+      (pa:log (list "dialog: pick closed with" result "| ticked" (vl-remove nil (mapcar '(lambda (m on) (if on m)) markas ons))))
+      (if (= result 1) (vl-remove nil (mapcar '(lambda (m on) (if on m)) markas ons)) 'cancel))))
 
 (defun c:PDFSETTINGS (/ *error* sysvars fill-state undo-open marka placed result)
   (defun *error* (msg) (pa:list-failed "PDFSETTINGS" msg))
