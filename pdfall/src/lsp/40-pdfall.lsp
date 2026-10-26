@@ -1,4 +1,5 @@
 ;;; ---- PDFALL -----------------------------------------------------------------
+;;; With two марки or more, asks which to plot (docs/adr/0012).
 ;;; Checks every марка, plots every рамка to PDF with the day's date in its Дата cell and runs
 ;;; merge.exe. When the check finds problems, the user may plot anyway: the рамки are then numbered
 ;;; in the file names as PDFNUM would number them, and a рамка without a марка is named after its
@@ -206,7 +207,8 @@
   (initget (strcat yes " " no))
   (= yes (getkword (strcat "\n\n" (pa:msg "pdfall.force-ask" (list "yes" yes "no" no))))))
 
-(defun pa:run (/ hidden yes no ans r drawing records markas groups base dir files locked e renamed shown)
+(defun pa:run (/ hidden yes no ans r drawing records markas all-markas groups base dir files locked e renamed
+                 shown)
   (if (= 0 (getvar "DWGTITLED"))
     (progn (princ (strcat "\n" (pa:msg "pdfall.unsaved" nil))) (exit)))
 
@@ -214,14 +216,25 @@
   ;; a dialog (as in the console AutoCAD of the tests) PDFALL goes on and warns below.
   (if (and (null fills) (setq ans (pa:settings-dialog 'fills)))
     (if (= ans 0)
-      (progn (princ (strcat "\n" (pa:msg "pdfall.fills-cancelled" nil))) (exit))
+      (progn (princ (strcat "\n" (pa:msg "pdfall.cancelled" nil))) (exit))
       (setq fills (pa:fill-layers (pa:fill-names)))))
 
   (princ (strcat "\n" (pa:msg "reading" (list "cmd" "PDFALL"))))
   (pa:log (list "pdfall: fill layers" fills "| device" device "| plotters" (pa:plotters) "| merge" *pdfall-merge*))
   (setq drawing (pa:read-drawing)
         records (car drawing)
-        markas (pa:markas records))
+        markas (pa:markas records)
+        all-markas markas)
+  ;; With two марки or more the user picks which to plot (docs/adr/0012). The rest is then left
+  ;; alone, checks and PDFs, and so are рамки without a марка, which belong to none of the ticked.
+  (if (and (cdr markas) (setq ans (pa:pick-dialog markas records)))
+    (cond
+      ((= ans 'cancel) (princ (strcat "\n" (pa:msg "pdfall.cancelled" nil))) (exit))
+      ((/= (length ans) (length markas))
+       (setq markas ans
+             records (vl-remove-if-not '(lambda (r) (member (pa:get 'marka r) ans)) records)
+             drawing (list records nil)))))
+  (pa:log (list "pdfall: plotting" markas "of" all-markas))
   (foreach p (cadr drawing) (setq errors (cons p errors)))
 
   ;; Check each марка.
@@ -295,7 +308,7 @@
       (exit)))
   (foreach path files (vl-file-delete path))
   (foreach name (vl-directory-files base nil -1)
-    (if (not (member name (append '("." "..") markas)))
+    (if (not (member name (append '("." "..") all-markas)))
       (pa:warn (pa:msg "pdfall.not-a-marka" (list "folder" (pa:file "folder") "name" name)))))
 
   ;; Plot: everything with the шар заливки on, then every лист again with it off.
@@ -329,13 +342,23 @@
     ((and *pdfall-merge* (findfile *pdfall-merge*))
      (princ (strcat "\n" (pa:msg "pdfall.merging" nil)))
      (pa:log (list "pdfall: merging" base))
-     ;; --force: the user already chose to go on despite the numbers, so merge.exe needn't ask again;
-     ;; --open: merge.exe opens the folder once the combined files are in it
-     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" \"" base "\"" (if forced " --force" "")
-                                 (if shown (strcat " --open \"" shown "\"") "") "\"")))
+     (startapp "cmd.exe" (strcat "/c \"\"" *pdfall-merge* "\" "
+                                 (pa:merge-args base (if (/= (length markas) (length all-markas)) markas) forced shown)
+                                 "\"")))
     (T
      (if *pdfall-merge* (princ (strcat "\n! " (pa:msg "pdfall.no-merge" (list "path" *pdfall-merge*)))))
      (if shown (startapp "explorer.exe" (strcat "\"" shown "\""))))))
+
+(defun pa:merge-args (base only forced shown)
+  ;; merge.exe's arguments after a run that plotted into base:
+  ;; --only, once per марка, when only some of the drawing's марки were picked, so the combined files
+  ;;   of the others stay as they are;
+  ;; --force: the user already chose to go on despite the numbers, so merge.exe needn't ask again;
+  ;; --open: merge.exe opens the folder once the combined files are in it.
+  (strcat "\"" base "\""
+          (apply 'strcat (mapcar '(lambda (m) (strcat " --only \"" m "\"")) only))
+          (if forced " --force" "")
+          (if shown (strcat " --open \"" shown "\"") "")))
 
 (defun pa:shown-folder (base markas)
   ;; The folder PDFALL opens after a run: the марка's folder when one марка was plotted, else base.

@@ -1,6 +1,7 @@
 ﻿# End-to-end test of the built PDFALL.bundle without opening AutoCAD:
 #   1. on examples\Креслення приклад.dxf: PDFNUM (to fill the empty counters) and PDFALL in accoreconsole
 #      with a throwaway AutoCAD profile, then merge.exe on the PDFs;
+#      then PDFALL again with only some of its марки picked;
 #   2. on the old project drawings in examples\old, if there are any: PDFNUM, PDFALL and merge.exe,
 #      and a paper size AutoCAD refuses;
 #   3. in an empty drawing: PDFLIST and PDFSPEC paste рамки, PDFNUM numbers them and PDFALL plots them;
@@ -160,6 +161,52 @@ if (-not $m2.WaitForExit(120000)) { $m2.Kill(); $script:failures += 'merge.exe (
 $oldNow = @(Get-ChildItem $oldDir | Where-Object { $_.Name -cmatch 'лист \d[ .]|специфікація лист' })
 Check ($oldNow.Count -eq 0 -and (Test-Path (Join-Path $oldDir 'К1 лист 01.pdf')) -and (Test-Path (Join-Path $oldDir 'К1 специфікація 01.pdf'))) "merge.exe renamed the $oldCount PDFs under earlier names to the new ones"
 Check ((Test-Path (Join-Path $oldDir 'К1 загальний.pdf')) -and (Test-Path (Join-Path $oldDir 'К1 загальний друк.pdf'))) 'and built загальний and загальний друк from them'
+
+# PDFALL on the sample again, with the window that picks марки replaced by a stand-in that ticks
+# 1П and К1: only those are plotted, and the PDFs and folders of the others are left alone. Then
+# with one that cancels.
+Write-Host 'Plotting only the марки picked...'
+$pickDir = Join-Path $Work 'pick'
+New-Item (Join-Path $pickDir 'exported files\1ЧП') -ItemType Directory -Force | Out-Null
+Copy-Item (Join-Path $Work 'sample.dwg') (Join-Path $pickDir 'pick.dwg')
+Set-Content (Join-Path $pickDir 'exported files\1ЧП\1ЧП лист 01.pdf') 'old'
+$pickScr = @"
+(setvar "SECURELOAD" 0)
+(setenv "PrinterConfigDir" "$($plotters -replace '\\', '\\')")
+(setq *pdfall-home* "$($Contents -replace '\\', '\\')")
+(load "$c/pdfall.lsp")
+(foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
+(setq *pdfall-merge* nil)
+(princ (strcat "\nLINE=" (pa:marka-line "К1" (car (pa:read-drawing)))))
+(princ (strcat "\nMERGE-ARGS=" (pa:merge-args "D:\\x" '("1П" "К1") nil "D:\\x\\1П") "|" (pa:merge-args "D:\\x" nil T nil) "|"))
+(defun pa:pick-dialog (markas records) (setq asked markas) '("1П" "К1"))
+PDFALL
+(princ (strcat "\nASKED=" (vl-princ-to-string asked)))
+(princ "\nPICKED-DONE")
+(defun pa:pick-dialog (markas records) 'cancel)
+PDFALL
+(princ "\nEND-OF-TEST")
+QUIT
+Y
+"@
+$klog = Invoke-Acad 'pick' $pickScr (Join-Path $pickDir 'pick.dwg')
+$pickedLog, $cancelLog = $klog -split 'PICKED-DONE', 2
+$pickOut = Join-Path $pickDir 'exported files'
+$pickDirs = @(Get-ChildItem $pickOut -Directory | ForEach-Object { $_.Name } | Sort-Object)
+$pickPdfs = @(Get-ChildItem (Join-Path $pickOut '1П'), (Join-Path $pickOut 'К1') -Filter '*.pdf' -ErrorAction SilentlyContinue)
+Check ($klog -match '(?m)^LINE=К1 — листів: \d+, специфікацій: \d+"') 'the window lists a марка with its листи and специфікації'
+Check ($pickedLog -match '(?m)^ASKED=\(1ЖП 1П 1ЧП 2П К1 К2\)') 'the window is offered every марка of the drawing'
+Check (($pickDirs -join ',') -eq ((@('1П', '1ЧП', 'К1') | Sort-Object) -join ',')) "only the picked 1П and К1 are plotted (folders: $($pickDirs -join ', '))"
+Check ($pickedLog -match "PDFALL: $($pickPdfs.Count) PDF у" -and $pickPdfs.Count -gt 0) "PDFALL reports the $($pickPdfs.Count) PDFs of the picked марки"
+Check ((Get-Item (Join-Path $pickOut '1ЧП\1ЧП лист 01.pdf')).Length -lt 100 -and $pickedLog -notmatch '1ЧП'' — не марка') 'an unpicked марка keeps its old PDFs, without a warning about its folder'
+Check ($cancelLog -match 'PDFALL: скасовано, нічого не надруковано') 'Cancel in the window plots nothing'
+Check ($klog -match [regex]::Escape('MERGE-ARGS="D:\x" --only "1П" --only "К1" --open "D:\x\1П"|"D:\x" --force|')) 'PDFALL asks merge.exe for only the марки picked, and for all of them otherwise'
+$m5 = Start-Process (Join-Path $Contents 'merge.exe') -ArgumentList "`"$pickOut`" --only 1П" -RedirectStandardInput $answers `
+    -RedirectStandardOutput (Join-Path $Work 'merge-pick.txt') -PassThru -NoNewWindow
+$null = $m5.Handle
+if (-not $m5.WaitForExit(120000)) { $m5.Kill(); $script:failures += 'merge.exe (picked) timed out' }
+$pickMerged = @(Get-ChildItem $pickOut -Recurse -Filter '*загальний*.pdf' | ForEach-Object { $_.Name } | Sort-Object)
+Check (($pickMerged -join ',') -eq '1П загальний друк.pdf,1П загальний.pdf' -or ($pickMerged -join ',') -eq '1П загальний.pdf,1П загальний друк.pdf') "merge.exe --only 1П builds the combined files of 1П alone (found: $($pickMerged -join ', '))"
 
 # Old project drawings (examples\old\*.dwg, real drawings kept out of git): the марка alone in the
 # name cell, Аркушів spelled with a Latin i and its number after it in the same row, no шар заливки,

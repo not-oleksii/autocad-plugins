@@ -47,7 +47,7 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 55-settings.lsp   the user's settings: which templates to paste, what goes in the name cell, the шари заливки (ADR 0011)
 60-paste.lsp      c:PDFLIST, c:PDFSPEC
 62-previews.lsp   every template and its outline (made by make_templates.ps1, not edited by hand)
-65-dialog.lsp     c:PDFSETTINGS, the settings dialog
+65-dialog.lsp     c:PDFSETTINGS, the settings dialog, and PDFALL's window that picks the марки (ADR 0012)
 90-loaded.lsp     the line AutoCAD shows when it loads PDFALL
 ```
 

@@ -572,9 +572,10 @@ def home_folder():
 
 
 def parse_args(args, check=False):
-    """(check, forced, folder to open, roots) from the command line:
-    merge.exe [--check] [--force] [--open <folder>] [<folder> ...]"""
-    forced, shown, roots = False, None, []
+    """(check, forced, folder to open, марки, roots) from the command line:
+    merge.exe [--check] [--force] [--open <folder>] [--only <марка> ...] [<folder> ...]
+    --only, given once per марка, merges only the folders of those марки: PDFALL plotted only them."""
+    forced, shown, only, roots = False, None, [], []
     rest = iter(args)
     for arg in rest:
         if arg == "--check":
@@ -583,9 +584,11 @@ def parse_args(args, check=False):
             forced = True
         elif arg == "--open":
             shown = next(rest, None)
+        elif arg == "--only":
+            only.append(next(rest, ""))
         else:
             roots.append(Path(arg).resolve())
-    return check, forced, shown, roots or [home_folder()]
+    return check, forced, shown, only, roots or [home_folder()]
 
 
 def main(check=False):
@@ -595,7 +598,7 @@ def main(check=False):
     # AutoCAD's PDFs trip harmless pypdf parser warnings on every file.
     logging.getLogger("pypdf").setLevel(logging.ERROR)
     args = sys.argv[1:]
-    check, forced, shown, roots = parse_args(args, check)
+    check, forced, shown, only, roots = parse_args(args, check)
     if check:
         print(msg("merge.check-only"))
     for root in roots:
@@ -603,7 +606,7 @@ def main(check=False):
             print(f"\n=== {root}\n  ! " + msg("merge.not-a-folder"))
             continue
         print(msg("merge.scanning", folder=root))
-        folders = [f for f in map(scan, walk(root)) if f]
+        folders = [f for f in map(scan, walk(root)) if f and (not only or f.path.name in only)]
         if not folders:
             print("  " + msg("merge.no-sheets"))
             continue
