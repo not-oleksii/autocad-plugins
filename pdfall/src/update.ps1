@@ -236,6 +236,14 @@ try {
         # AutoCAD writes its settings to the registry as it closes; let it finish first.
         Start-Sleep 3
     }
+    # A merge.exe window left open after PDFALL keeps merge.exe from being replaced.
+    $bundleDir = Join-Path $PluginsDir 'PDFALL.bundle'
+    $mergeOpen = { [bool](Get-Process merge -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith("$bundleDir\", [StringComparison]::OrdinalIgnoreCase) }) }
+    if (& $mergeOpen) {
+        Write-Host (Msg 'update.close-merge')
+        while (& $mergeOpen) { Start-Sleep 2 }
+    }
     Write-Host ''
     $installArgs = @{ AcadKey = $AcadKey; PluginsDir = $PluginsDir; StartMenuDir = $StartMenuDir; IgnoreRunningAutoCAD = [bool]$IgnoreRunningAutoCAD }
     $global:LASTEXITCODE = 0

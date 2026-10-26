@@ -34,6 +34,13 @@ $shortcuts = @(
     @{ Name = (Msg 'install.shortcut-guide'); File = 'Instruktsiia.html' })
 function Get-ShortcutPath($s) { Join-Path $StartMenuDir "$($s.Name).lnk" }
 
+# Whether a merge.exe of the installed bundle still runs: its window stays open until Enter, and
+# Windows won't let a running merge.exe be replaced or removed.
+function Test-MergeOpen {
+    [bool](Get-Process merge -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith("$dest\", [StringComparison]::OrdinalIgnoreCase) })
+}
+
 # Every AutoCAD R24 (2021) or later profile of this user, e.g. ...\R24.3\ACAD-7101:409\Profiles\<<Unnamed Profile>>
 function Get-AcadProfiles {
     Get-ChildItem $AcadKey -ErrorAction SilentlyContinue |
@@ -90,6 +97,7 @@ try {
     if (-not $IgnoreRunningAutoCAD -and (Get-Process acad, accoreconsole -ErrorAction SilentlyContinue)) {
         throw (Msg 'install.acad-running')
     }
+    if (Test-MergeOpen) { throw (Msg 'install.merge-running') }
     $profiles = @(Get-AcadProfiles)
 
     if ($Uninstall) {

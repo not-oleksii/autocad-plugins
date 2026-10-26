@@ -76,6 +76,25 @@ function Invoke-Update($keys) {
     @{ Code = $p.ExitCode; Text = "$text" }
 }
 
+# The installed merge.exe with nothing to merge, left waiting for Enter as its window is after PDFALL.
+function Start-OpenMerge {
+    $empty = Join-Path $env:TEMP 'pdfall-test-empty'
+    New-Item $empty -ItemType Directory -Force | Out-Null
+    $psi = New-Object Diagnostics.ProcessStartInfo (Join-Path $contents 'merge.exe'), "`"$empty`""
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.CreateNoWindow = $true
+    $m = [Diagnostics.Process]::Start($psi)
+    Start-Sleep 3
+    $m
+}
+function Stop-OpenMerge($m) {
+    $m.StandardInput.WriteLine()
+    $m.StandardInput.Close()
+    if (-not $m.WaitForExit(30000)) { $m.Kill() }
+}
+
 foreach ($p in $root, $plugins, $startMenu, $releases) { if (Test-Path $p) { Remove-Item $p -Recurse -Force } }
 $p24 = Profile2024
 $p23 = "$acad\R23.1\ACAD-3001:419\Profiles\<<Old Profile>>"
@@ -157,6 +176,35 @@ try {
     $u = Invoke-Update 'Enter'
     Check ($u.Code -eq 0 -and (Installed) -eq $built -and $u.Text -match "Завантажую PDFALL-$([regex]::Escape($built))\.zip" -and
            $u.Text -match 'NOTES-NEW' -and $u.Text -notmatch 'NOTES-BETWEEN') "Enter in the picker shows only the newest version's notes and installs it ($built) over 1.7.0"
+
+    Write-Host 'An open merge.exe window...'
+    $merge = Start-OpenMerge
+    try {
+        $o = & $installer @common *>&1 | Out-String
+        Check ($LASTEXITCODE -eq 1 -and $o -match 'Відкрите вікно збирання PDF' -and (Test-Path (Join-Path $contents 'merge.exe'))) `
+            'install stops while a merge.exe window of the bundle is open, and says to close it'
+        Set-Installed '1.7.0'
+        $out = Join-Path $env:TEMP 'pdfall-test-update-merge.txt'
+        $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $plugins 'PDFALL.bundle\update.ps1')`"",
+            '-AcadKey', "`"$acad`"", '-PluginsDir', "`"$plugins`"", '-StartMenuDir', "`"$startMenu`"",
+            '-ReleasesUrl', (Uri (Join-Path $releases 'releases.json')), '-IgnoreRunningAutoCAD', '-Yes')
+        $up = Start-Process powershell -ArgumentList $argList -WorkingDirectory $env:TEMP -RedirectStandardOutput $out -PassThru -NoNewWindow
+        $null = $up.Handle   # without it, ExitCode stays empty
+        $deadline = (Get-Date).AddSeconds(60)
+        $text = ''
+        while ((Get-Date) -lt $deadline -and $text -notmatch 'Закрийте вікно збирання PDF') {
+            Start-Sleep 1
+            $text = try {
+                $fs = [IO.File]::Open($out, 'Open', 'Read', 'ReadWrite')
+                try { (New-Object IO.StreamReader($fs, [Text.Encoding]::UTF8)).ReadToEnd() } finally { $fs.Close() }
+            } catch { '' }
+        }
+        Check (-not $up.HasExited -and $text -match 'Закрийте вікно збирання PDF') 'the update waits for the merge.exe window to close'
+    }
+    finally { Stop-OpenMerge $merge }
+    if (-not $up.WaitForExit(120000)) { $up.Kill() }
+    Check ($up.ExitCode -eq 0 -and (Installed) -eq $built) "and installs once it is closed (exit $($up.ExitCode), now $(Installed))"
+    Remove-Item $out -ErrorAction SilentlyContinue
 
     Write-Host 'Uninstall...'
     & $installer -Uninstall @common
