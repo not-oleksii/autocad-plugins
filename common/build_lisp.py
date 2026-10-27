@@ -1,17 +1,29 @@
-"""Check messages.json against the code that uses it, then build the bundle's pdfall.lsp.
+"""Check a plugin's messages against the code that uses them, then build its LISP file and messages.json.
 
 Usage:
-    py -3 build_lisp.py OUT
+    py -3 common/build_lisp.py PLUGIN OUT
 
-build.bat runs it. It fails, and writes nothing, when:
-  - the code uses a key that messages.json doesn't have, in the section it reads it from;
+PLUGIN is the plugin's folder (pdfall); its src/plugin.json names it and its LISP prefix:
+    {"name": "PDFALL", "prefix": "pa", "debug": "PDFDEBUG"}
+OUT is a folder; the build writes into it:
+    <name>.lsp      common/lsp/*.lsp and PLUGIN/src/lsp/*.lsp in name order (common first on a tie),
+                    with the messages written as LISP lists right after the plugin's 00-settings.lsp
+    messages.json   common/messages.json and PLUGIN/src/messages.json in one file, for install.ps1,
+                    the ribbon and merge.exe
+
+The common LISP files are written once for every plugin (../docs/adr/0002-share-code-between-plugins.md).
+AutoLISP has one namespace, so each plugin gets its own copy under its own prefix: in them
+    @@NAME@@  becomes the plugin's name (PDFALL)     @@DEBUG@@  its debug command (PDFDEBUG)
+    *@@-      becomes *pdfall-                       @:  becomes pa:      *@-  becomes *pa-
+
+It fails, and writes nothing, when:
+  - the code uses a key that the messages don't have, in the section it reads it from;
   - a message and the code that shows it disagree on its {names};
-  - a Ukrainian string is written in src/lsp outside 00-settings.lsp (it belongs in messages.json);
+  - common and the plugin both have a key (a plugin can't change a common text by accident);
+  - a Ukrainian string is written in LISP outside the plugin's 00-settings.lsp (it belongs in messages.json);
   - the version in 00-settings.lsp and PackageContents.xml differ or isn't <major>.<minor>.<patch>.
-A key that no code uses is only a warning.
-
-pdfall.lsp is src/lsp/*.lsp in name order, with messages.json written as LISP lists right after
-00-settings.lsp, so the settings still open the file.
+The updater is checked against common/messages.json alone, since that is all it has.
+A key that no code uses is only a warning; program.<exe> keys are read by install.ps1 by name.
 """
 
 import ast
@@ -20,8 +32,7 @@ import re
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parent
-LSP = SRC / "lsp"
+COMMON = Path(__file__).resolve().parent
 SECTIONS = ("messages", "labels", "files")
 CYRILLIC = re.compile("[\u0400-\u04ff]")
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
@@ -93,8 +104,9 @@ def walk(form):
 
 
 class Checker:
-    def __init__(self, data):
+    def __init__(self, data, prefix):
         self.data = data
+        self.prefix = prefix
         self.used = {s: set() for s in SECTIONS}
         self.errors = []
 
@@ -113,39 +125,40 @@ class Checker:
         if wanted != set(given):
             self.errors.append(f"{where}: message '{key}' takes {sorted(wanted)}, the code gives {sorted(given)}")
 
-    def lisp(self, path):
-        tokens = list(lisp_tokens(path.read_text(encoding="utf-8")))
-        if path.name != "00-settings.lsp":
+    def lisp(self, name, text, ukrainian_ok):
+        tokens = list(lisp_tokens(text))
+        if not ukrainian_ok:
             for kind, value, line in tokens:
                 if kind == "str" and CYRILLIC.search(value):
-                    self.errors.append(f"{path.name}:{line}: Ukrainian text \"{value}\" belongs in messages.json")
+                    self.errors.append(f"{name}:{line}: Ukrainian text \"{value}\" belongs in messages.json")
+        msg, label, file = (f"{self.prefix}:{f}" for f in ("msg", "label", "file"))
         for form in walk(lisp_forms(tokens)):
             if not (isinstance(form, list) and form and form[0][:2] in
-                    (("atom", "pa:msg"), ("atom", "pa:label"), ("atom", "pa:file"))):
+                    (("atom", msg), ("atom", label), ("atom", file))):
                 continue
             func, line = form[0][1], form[0][2]
-            where = f"{path.name}:{line}"
+            where = f"{name}:{line}"
             if len(form) < 2 or not isinstance(form[1], tuple) or form[1][0] != "str":
                 self.errors.append(f"{where}: ({func} ...) needs a literal key so the build can check it")
                 continue
             key = form[1][1]
-            if func == "pa:label":
+            if func == label:
                 self.key("labels", key, where)
-            elif func == "pa:file":
+            elif func == file:
                 self.key("files", key, where)
             elif len(form) != 3:
-                self.errors.append(f"{where}: (pa:msg \"{key}\" ...) takes the key and one list of values")
-            elif form[2] == ("atom", "nil", line) or form[2][:2] == ("atom", "nil"):
+                self.errors.append(f"{where}: ({msg} \"{key}\" ...) takes the key and one list of values")
+            elif form[2][:2] == ("atom", "nil"):
                 self.names(key, [], where)
             elif (isinstance(form[2], list) and form[2] and form[2][0][:2] == ("atom", "list")
                   and len(form[2]) % 2 == 1
                   and all(isinstance(x, tuple) and x[0] == "str" for x in form[2][1::2])):
                 self.names(key, [x[1] for x in form[2][1::2]], where)
             else:
-                self.errors.append(f"{where}: (pa:msg \"{key}\" ...) needs nil or a literal (list \"name\" value ...)")
+                self.errors.append(f"{where}: ({msg} \"{key}\" ...) needs nil or a literal (list \"name\" value ...)")
 
     def python(self, path):
-        """Calls msg("key", name=value), label("key") and file_word("key") in merge_blueprints.py."""
+        """Calls msg("key", name=value), label("key") and file_word("key") in the plugin's Python."""
         tree = ast.parse(path.read_text(encoding="utf-8"))
         funcs = {"msg": "messages", "label": "labels", "file_word": "files"}
         for node in ast.walk(tree):
@@ -170,17 +183,37 @@ class Checker:
             self.names(m.group(1), given, where)
 
 
-def version_errors():
+def read_messages(path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for section in SECTIONS:
+        data.setdefault(section, {})
+        for key, value in data[section].items():
+            ok = isinstance(value, str) or (isinstance(value, list) and all(isinstance(v, str) for v in value))
+            if not ok:
+                sys.exit(f"{path}: {section}.{key} must be text or a list of texts")
+    return data
+
+
+def version_errors(src, lower):
     """The version must be the same in 00-settings.lsp and PackageContents.xml, and a release number."""
-    lisp = re.search(r'\(setq \*pdfall-version\* "([^"]*)"\)', (LSP / "00-settings.lsp").read_text(encoding="utf-8"))
-    xml = re.search(r'AppVersion="([^"]*)"', (SRC / "PackageContents.xml").read_text(encoding="utf-8"))
+    lisp = re.search(r'\(setq \*' + lower + r'-version\* "([^"]*)"\)', (src / "lsp" / "00-settings.lsp").read_text(encoding="utf-8"))
+    xml = re.search(r'AppVersion="([^"]*)"', (src / "PackageContents.xml").read_text(encoding="utf-8"))
     if not (lisp and xml):
-        return ["the version is missing from 00-settings.lsp or PackageContents.xml"]
+        return [f"the version is missing from 00-settings.lsp (*{lower}-version*) or PackageContents.xml"]
     if lisp.group(1) != xml.group(1):
         return [f"version {lisp.group(1)} in 00-settings.lsp but {xml.group(1)} in PackageContents.xml"]
     if not re.fullmatch(r"\d+\.\d+\.\d+", lisp.group(1)):
         return [f"version {lisp.group(1)} is not <major>.<minor>.<patch>"]
     return []
+
+
+def own_copy(text, plugin):
+    """A common LISP file as the plugin's own: its name, debug command and prefix put in."""
+    lower = plugin["name"].lower()
+    for old, new in (("@@NAME@@", plugin["name"]), ("@@DEBUG@@", plugin["debug"]),
+                     ("*@@-", f"*{lower}-"), ("@:", f"{plugin['prefix']}:"), ("*@-", f"*{plugin['prefix']}-")):
+        text = text.replace(old, new)
+    return text
 
 
 def lisp_string(s):
@@ -198,46 +231,63 @@ def lisp_table(name, section):
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         sys.exit(__doc__)
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(errors="replace")  # Ukrainian in a report must not crash a non-UTF-8 console
-    out = Path(sys.argv[1])
-    data = json.loads((SRC / "messages.json").read_text(encoding="utf-8"))
-    for section in SECTIONS:
-        for key, value in data[section].items():
-            ok = isinstance(value, str) or (isinstance(value, list) and all(isinstance(v, str) for v in value))
-            if not ok:
-                sys.exit(f"messages.json: {section}.{key} must be text or a list of texts")
+    plugin_dir, out = Path(sys.argv[1]).resolve(), Path(sys.argv[2])
+    src = plugin_dir / "src"
+    plugin = json.loads((src / "plugin.json").read_text(encoding="utf-8"))
+    lower, prefix = plugin["name"].lower(), plugin["prefix"]
 
-    files = sorted(LSP.glob("*.lsp"))
-    checker = Checker(data)
-    for path in files:
-        checker.lisp(path)
-    checker.python(SRC / "merge_blueprints.py")
-    for script in ("install.ps1", "update.ps1", "ribbon.ps1", "../release.ps1"):
-        checker.powershell(SRC / script)
-    checker.errors += version_errors()
+    common = read_messages(COMMON / "messages.json")
+    own = read_messages(src / "messages.json")
+    errors = [f"{section}.{key} is in both common/messages.json and {plugin_dir.name}/src/messages.json"
+              for section in SECTIONS for key in sorted(set(common[section]) & set(own[section]))]
+    data = {"_note": own.get("_note", common.get("_note", ""))}
+    for section in SECTIONS:
+        data[section] = {**common[section], **own[section]}
+
+    # (name in the built file, text, whether Ukrainian is allowed); common first on a tie
+    files = [(f"common/{p.name}", own_copy(p.read_text(encoding="utf-8"), plugin), False, p.name, 0)
+             for p in (COMMON / "lsp").glob("*.lsp")]
+    files += [(p.name, p.read_text(encoding="utf-8"), p.name == "00-settings.lsp", p.name, 1)
+              for p in (src / "lsp").glob("*.lsp")]
+    files.sort(key=lambda f: (f[3], f[4]))
+
+    checker = Checker(data, prefix)
+    for name, text, ukrainian_ok, _, _ in files:
+        checker.lisp(name, text, ukrainian_ok)
+    for script in sorted(src.glob("*.py")):
+        checker.python(script)
+    for script in [COMMON / "install.ps1", COMMON / "release.ps1", *sorted(src.glob("*.ps1"))]:
+        checker.powershell(script)
+    updater = Checker(common, prefix)
+    updater.powershell(COMMON / "updater" / "update.ps1")
+    checker.errors = errors + checker.errors + [f"updater: {e}" for e in updater.errors] + version_errors(src, lower)
     if checker.errors:
-        print("messages.json and the code disagree:", file=sys.stderr)
+        print("the messages and the code disagree:", file=sys.stderr)
         for e in checker.errors:
             print(f"  {e}", file=sys.stderr)
         sys.exit(1)
     for section in SECTIONS:
-        for key in sorted(set(data[section]) - checker.used[section]):
+        unused = set(data[section]) - checker.used[section] - updater.used[section]
+        for key in sorted(k for k in unused if not k.startswith("program.")):
             print(f"warning: {section}.{key} in messages.json is not used anywhere")
 
-    parts = [";;; Built by build.bat from src\\lsp\\*.lsp and src\\messages.json. Edit those, not this file.\n\n"]
-    for path in files:
-        parts.append(f";;; ==== {path.name} {'=' * (80 - len(path.name))}\n")
-        parts.append(path.read_text(encoding="utf-8").rstrip() + "\n\n")
-        if path.name.startswith("00-"):
+    parts = [f";;; Built by build.bat from common\\lsp, {plugin_dir.name}\\src\\lsp and the messages.json files. Edit those, not this file.\n\n"]
+    for name, text, _, _, _ in files:
+        parts.append(f";;; ==== {name} {'=' * max(0, 80 - len(name))}\n")
+        parts.append(text.rstrip() + "\n\n")
+        if name == "00-settings.lsp":
             parts.append(";;; ==== messages.json " + "=" * 68 + "\n")
-            parts.append(lisp_table("*pa-messages*", data["messages"]))
-            parts.append(lisp_table("*pa-labels*", data["labels"]))
-            parts.append(lisp_table("*pa-files*", data["files"]) + "\n")
-    out.write_text("".join(parts), encoding="utf-8", newline="\n")
-    print(f"Built {out}")
+            parts.append(lisp_table(f"*{prefix}-messages*", data["messages"]))
+            parts.append(lisp_table(f"*{prefix}-labels*", data["labels"]))
+            parts.append(lisp_table(f"*{prefix}-files*", data["files"]) + "\n")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{lower}.lsp").write_text("".join(parts), encoding="utf-8", newline="\n")
+    (out / "messages.json").write_text(json.dumps(data, ensure_ascii=False, indent=4) + "\n", encoding="utf-8", newline="\n")
+    print(f"Built {out / (lower + '.lsp')} and {out / 'messages.json'}")
 
 
 if __name__ == "__main__":

@@ -16,8 +16,9 @@
 ;;;        <марка> текстовий документ NN.pdf
 ;;;   5. Runs merge.exe on "exported files" to build Загальний and Загальний друк.
 ;;;
-;;; The source is split into src\lsp\*.lsp, which build.bat joins in name order into one pdfall.lsp
-;;; that AutoCAD loads (docs/adr/0004). Each file's header lists the functions the other files may call.
+;;; The source is split into src\lsp\*.lsp and the helpers every plugin shares, ..\common\lsp\*.lsp,
+;;; which build.bat joins in name order into one pdfall.lsp that AutoCAD loads (docs/adr/0004,
+;;; ../docs/adr/0002). Each file's header lists the functions the other files may call.
 
 (vl-load-com)
 

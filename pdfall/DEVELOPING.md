@@ -1,25 +1,23 @@
 # Developing PDFALL
 
-How PDFALL is built, tested and released. What it does for colleagues is in the step-by-step guide [src/Instruktsiia.html](src/Instruktsiia.html) and, in short, [README.md](README.md) (both in Ukrainian), the terms in [GLOSSARY.md](GLOSSARY.md), and why it works this way in [docs/adr](docs/adr).
+How PDFALL is built, tested and released. What it does for colleagues is in the step-by-step guide [src/Instruktsiia.html](src/Instruktsiia.html) and, in short, [README.md](README.md) (both in Ukrainian), the terms in [GLOSSARY.md](GLOSSARY.md), and why it works this way in [docs/adr](docs/adr). PDFALL shares its installer, updater, release script and LISP helpers with the repository's other plugins; those live in [../common](../common), and why in [../docs/adr](../docs/adr).
 
 ## Files
 
 ```
 src\lsp\*.lsp             the PDFALL, PDFNUM, PDFLIST, PDFSPEC and PDFSETTINGS commands, one module per file
-src\messages.json         every text the commands, merge.exe, the installer and the ribbon show or look for
-src\build_lisp.py         checks messages.json against the code, then joins src\lsp\*.lsp and it into the bundle's pdfall.lsp
+src\messages.json         every text the commands, merge.exe and the ribbon show or look for
+src\plugin.json           PDFALL's name, LISP prefix (pa) and debug command, for the shared build
 src\merge_blueprints.py   builds загальний and загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle
-src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with AutoCAD's own AcCui.dll
+src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with ..\common\ribbon.ps1
 src\templates\*.dwg       the 28 empty рамки that PDFLIST and PDFSPEC paste
 src\make_templates.ps1    makes those templates and 62-previews.lsp from examples\formats (only when the forms change),
 src\make_templates.lsp    with this LISP
-src\install.ps1           what install.bat and uninstall.bat run
-src\update.ps1            what update.bat (Start menu: Оновити PDFALL) runs: updates from the GitHub releases
 src\Instruktsiia.html     the step-by-step guide for colleagues: zip root, bundle, Start menu (Інструкція PDFALL)
 build.bat                 builds dist\PDFALL.zip
-release.ps1               raises the version (-Prepare) and publishes a GitHub release
+release.ps1               raises the version (-Prepare) and publishes a GitHub release, with ..\common\release.ps1
 CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
 tests\run.ps1             runs the built PDFNUM, PDFALL, merge.exe and the paste commands without opening AutoCAD,
                           on the sample drawing, the old drawings in examples\old and every template
@@ -28,28 +26,47 @@ merge.bat, check.bat      run the Python merge by hand (check.bat only reports p
 ..\.github                the pull request template and the CI check
 ```
 
+Shared with the other plugins, in `..\common` ([../docs/adr/0002](../docs/adr/0002-share-code-between-plugins.md)):
+
+```
+lsp\*.lsp                 text, settings, debug log and dialog helpers, built into pdfall.lsp under the pa: prefix
+messages.json             the texts of the installer, the updater, the debug log and the dialogs' check boxes
+build_lisp.py             checks both messages.json files against the code, then builds pdfall.lsp and the joined messages.json
+install.ps1, *.bat        what install.bat and uninstall.bat run: the bundle, the shared updater, the Start menu
+updater\                  the shared updater: «Оновити плагіни AutoCAD» (../docs/adr/0001)
+package.ps1               build.bat's last step: puts those next to PDFALL.bundle and zips it all
+ribbon.ps1                builds a ribbon tab with AutoCAD's own AcCui.dll
+release.ps1               what release.ps1 runs
+```
+
 `examples\` (the sample drawing, old project drawings in `examples\old`, the company's forms in `examples\formats`, and hand-made PDFs that the tests use) is kept out of git because it contains real drawings. The repository is public: never commit drawings, PDFs, names from title blocks or anything else from real projects. The templates in `src\templates` hold only the empty title-block form.
 
 ## The LISP modules
 
-`build_lisp.py` joins `src\lsp\*.lsp` in name order into the one `pdfall.lsp` that AutoCAD loads from the bundle, so the number prefix of a file sets its place ([ADR 0004](docs/adr/0004-split-the-lisp-and-build-in-its-texts.md)). Each file's header lists the functions the other files may call.
+`..\common\build_lisp.py` joins `..\common\lsp\*.lsp` and `src\lsp\*.lsp` in name order into the one `pdfall.lsp` that AutoCAD loads from the bundle, so the number prefix of a file sets its place ([ADR 0004](docs/adr/0004-split-the-lisp-and-build-in-its-texts.md)). The common files are written with `@:` for the prefix; PDFALL's copy of them says `pa:` ([../docs/adr/0002](../docs/adr/0002-share-code-between-plugins.md)). Each file's header lists the functions the other files may call.
 
 ```
-00-settings.lsp   version, settings, *pdfall-home*   (opens the joined file)
-                  <- messages.json goes here, as *pa-messages*, *pa-labels* and *pa-files*
-10-text.lsp       pa:msg, pa:label, pa:file and the string helpers
-12-log.lsp        the debug log (pa:log) and c:PDFDEBUG
-20-reader.lsp     Model space -> records: pa:read-drawing; title-block cells and the look of their texts
-30-command.lsp    errors, warnings, reports, restoring layers and system variables
-35-date.lsp       the export date PDFALL writes into the Дата cell while it plots
-40-pdfall.lsp     c:PDFALL: марка checks, PDF names, layers, plotting, merge.exe
-50-pdfnum.lsp     c:PDFNUM: fills and fixes Аркуш/Аркушів (ADR 0010)
-55-settings.lsp   the user's settings: which templates to paste, what goes in the name cell, the шари заливки (ADR 0011)
-60-paste.lsp      c:PDFLIST, c:PDFSPEC
-62-previews.lsp   every template and its outline (made by make_templates.ps1, not edited by hand)
-65-dialog.lsp     c:PDFSETTINGS, the settings dialog, and PDFALL's window that picks the марки (ADR 0012)
-90-loaded.lsp     the line AutoCAD shows when it loads PDFALL
+00-settings.lsp           version, settings, *pdfall-home*   (opens the joined file)
+                          <- messages.json goes here, as *pa-messages*, *pa-labels* and *pa-files*
+common: 10-text.lsp       pa:msg, pa:label, pa:file and the string helpers
+10-text.lsp               the марка helpers: pa:marka-p, pa:marka-error, pa:cyr, pa:title-name
+common: 12-log.lsp        the debug log (pa:log) and c:PDFDEBUG
+common: 14-settings.lsp   pa:setting, pa:set-setting
+common: 16-dialog.lsp     writing and opening DCL dialogs, and the ■/□ lists
+20-reader.lsp             Model space -> records: pa:read-drawing; title-block cells and the look of their texts
+30-command.lsp            errors, warnings, reports, restoring layers and system variables
+35-date.lsp               the export date PDFALL writes into the Дата cell while it plots
+40-pdfall.lsp             c:PDFALL: марка checks, PDF names, layers, plotting, merge.exe
+50-pdfnum.lsp             c:PDFNUM: fills and fixes Аркуш/Аркушів (ADR 0010)
+55-settings.lsp           the user's settings: which templates to paste, what goes in the name cell, the шари заливки (ADR 0011)
+60-paste.lsp              c:PDFLIST, c:PDFSPEC
+62-previews.lsp           every template and its outline (made by make_templates.ps1, not edited by hand)
+65-dialog.lsp             c:PDFSETTINGS, the settings dialog, and PDFALL's window that picks the марки (ADR 0012)
+80-public.lsp             pdfall:marka-at, the one function other plugins may call (../docs/adr/0003)
+90-loaded.lsp             the line AutoCAD shows when it loads PDFALL
 ```
+
+`pdfall:marka-at` is a promise to BPTOOLS: keep its name, arguments and result, and add a new function rather than change it. `tests/run.ps1` checks it.
 
 `pa:read-drawing` is the one way to read a drawing. It returns `(records problems)`: a record for every рамка with a readable марка, carrying its title-block texts (`zone`), its Аркуш/Аркушів/Арк. cells (`counters`) and its cell edges (`cells`, `rows`), all measured from the рамка's bottom-right corner. The lines and texts it collects stay inside it.
 
@@ -59,19 +76,20 @@ When something works here but not on a colleague's PC, ask them to run `PDFDEBUG
 
 ## Texts: messages.json
 
-Every Ukrainian word the user sees or PDFALL looks for is in `src\messages.json`, in three sections:
+Every Ukrainian word the user sees or PDFALL looks for is in `src\messages.json`, or, when every plugin shows it (the installer, the updater, the debug log, the dialogs' check boxes), in `..\common\messages.json`. Both have three sections:
 
 - `messages`: what the user reads. Free to edit; `{name}` is filled in by the program.
 - `labels`: words read from title blocks (`Аркуш`, `Аркушів`, `Арк.`, the `МАРКА` placeholder, ...). Changing one stops PDFALL from reading drawings that use the old word.
 - `files`: the words of the PDF names (`лист`, `без заливки`, `загальний друк`, ...), all in lower case ([ADR 0006](docs/adr/0006-one-file-name-pattern.md)). PDFALL writes them and merge.exe reads them, so changing one makes PDFs already exported unrecognisable.
 
-The code reads them with `pa:msg`/`pa:label`/`pa:file` in LISP, `msg`/`label`/`file_word` in merge_blueprints.py and `Msg` in install.ps1 and ribbon.ps1, always with a literal key. `build.bat` runs `build_lisp.py` first, which fails the build when:
+The code reads them with `pa:msg`/`pa:label`/`pa:file` in LISP, `msg`/`label`/`file_word` in merge_blueprints.py and `Msg` in the installer, the updater and ribbon.ps1, always with a literal key. `build.bat` runs `..\common\build_lisp.py` first, which fails the build when:
 
 - the code uses a key that the section doesn't have;
 - a message and the code that shows it disagree on its `{names}`;
-- a Ukrainian string is written in `src\lsp` outside `00-settings.lsp`.
+- a key is in both files;
+- a Ukrainian string is written in LISP outside `00-settings.lsp`.
 
-A key no code uses is only a warning. The bundle carries no JSON: the LISP texts are built into `pdfall.lsp`, merge.exe has its copy packed in, and the zip carries one next to `install.ps1`.
+A key no code uses is only a warning. `program.merge` is how the installer names merge.exe when its window is still open; it reads `program.<exe>` by name. The bundle carries no JSON: the LISP texts are built into `pdfall.lsp`, merge.exe has the joined copy packed in, the zip carries it next to `install.ps1`, and the updater has the common one. `check.bat` runs merge_blueprints.py with `src\messages.json` alone, so merge_blueprints.py uses no common text.
 
 ## Settings
 
@@ -107,7 +125,9 @@ powershell -ExecutionPolicy Bypass -File tests/install.ps1
 
 Each accoreconsole run of `tests/run.ps1` gets its own isolated profile, but AutoCAD seeds it with the settings of your own AutoCAD, PDFALL's among them (`setenv` keeps them under `FixedProfile\General`). So every test script first resets PDFALL's settings to `*pa-setting-defaults*`; a new script must do the same, or what you chose in PDFSETTINGS (a шар заливки, say) changes its results.
 
-GitHub Actions (`.github/workflows/check.yml`) can't build or test without AutoCAD, so on every pull request it only runs `build_lisp.py`'s checks: `messages.json` against the code, and the version.
+`tests/install.ps1` also tests the shared updater, since PDFALL is the plugin that ships it first: the plugin list, the versions of one plugin, «Оновити все», a newer updater not being replaced by an older one, and the old **Оновити PDFALL** entry being removed. A change to `..\common` must pass every plugin's tests.
+
+GitHub Actions (`.github/workflows/check.yml`) can't build or test without AutoCAD, so on every pull request it only runs `build_lisp.py`'s checks: the messages against the code, and the version.
 
 ## Pull requests
 
@@ -121,7 +141,7 @@ Versions follow [Semantic Versioning](https://semver.org): *major.minor.patch*, 
 - **minor** (1.8.1 → 1.9.0): something new, while drawings, PDFs and habits keep working.
 - **major** (1.9.0 → 2.0.0): something works differently and colleagues must know, e.g. PDF names, command names or the title-block words in `labels` change.
 
-A release is a GitHub release tagged `pdfall-v<version>` (the prefix keeps each plugin's versions apart in this repository) with two files: `PDFALL-<version>.zip` and `PDFALL-<version>.zip.sha256`. Its notes are the version's section of `CHANGELOG.md`, plus install help after a `---` line. `update.ps1` reads the repository's releases from the GitHub API, lists every `pdfall-v*` that is neither a draft nor a pre-release, lets the user pick one with the arrow keys, newer or older (tests drive it with `-Keys DownArrow,Enter`), and installs the zip only if it matches the `.sha256` ([ADR 0007](docs/adr/0007-update-from-github-releases.md)). So a release must never be edited to point at a different zip: publish a new version instead. Don't delete old releases either: colleagues go back to them when a new version breaks something.
+A release is a GitHub release tagged `pdfall-v<version>` (the prefix keeps each plugin's versions apart in this repository) with two files: `PDFALL-<version>.zip` and `PDFALL-<version>.zip.sha256`. Its notes are the version's section of `CHANGELOG.md`, plus install help after a `---` line (`release.footer`). The shared updater reads the repository's releases from the GitHub API, lists every plugin with a `<name>-v*` release that is neither a draft nor a pre-release, lets the user pick a plugin and then one of its versions with the arrow keys, newer or older, or «Оновити все» (tests drive it with `-Keys Enter,DownArrow,Enter`), and installs a zip only if it matches its `.sha256` ([ADR 0007](docs/adr/0007-update-from-github-releases.md), [../docs/adr/0001](../docs/adr/0001-one-updater-for-every-plugin.md)). So a release must never be edited to point at a different zip: publish a new version instead. Don't delete old releases either: colleagues go back to them when a new version breaks something.
 
 1. Prepare the version in a pull request. On a branch from `main`:
 
@@ -139,6 +159,6 @@ A release is a GitHub release tagged `pdfall-v<version>` (the prefix keeps each 
 
    It refuses unless `main` is clean and equal to `origin/main`, the tag is new, and `CHANGELOG.md` has the version's section. Then it runs `build.bat` and both tests, writes the zip, its `.sha256` and the notes to `dist\release`, creates and pushes the annotated tag, and publishes the release with the [GitHub CLI](https://cli.github.com) (`winget install GitHub.cli`, then `gh auth login` once). Without `gh` it prints a link to a pre-filled release page; attach the two files there and publish. `-DryRun` stops before the tag.
 
-3. Colleagues on 1.8.0 or later run **Оновити PDFALL** from the Start menu. Older installs take this zip by hand once.
+3. Colleagues run **Оновити плагіни AutoCAD** from the Start menu; on PDFALL 1.8.0–1.11.0 it is still **Оновити PDFALL**, which installs the shared updater with 1.12.0. Older installs take the zip by hand once.
 
 `build_lisp.py` fails the build if the two version numbers differ, so a half-raised version can't be built.

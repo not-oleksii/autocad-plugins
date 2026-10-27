@@ -14,14 +14,14 @@
 ## Checklist
 
 - [ ] `CHANGELOG.md`: a line under **Невипущене**, in Ukrainian, written for colleagues (skip for "none")
-- [ ] User-facing texts are in `src/messages.json`, in Ukrainian; code and developer docs in English
+- [ ] User-facing texts are in the plugin's `src/messages.json` (or `common/messages.json` when every plugin shows them), in Ukrainian; code and developer docs in English
 - [ ] The colleagues' guide `src/Instruktsiia.html` (plus `README.md` if the basics change) and `DEVELOPING.md` describe the change
-- [ ] A design decision has an ADR in `docs/adr`
+- [ ] A design decision has an ADR in the plugin's `docs/adr`, or in the root `docs/adr` when it concerns every plugin
 - [ ] No real drawings, PDFs, names or other private data added (`examples/` stays out of git)
 
 ## Test plan
 
 <!-- CI only checks messages.json; build and tests need AutoCAD 2024 on Windows. -->
 
-- [ ] `build.bat`, then `tests\run.ps1` and `tests\install.ps1` report "All passed"
+- [ ] `build.bat`, then `tests\run.ps1` and `tests\install.ps1` report "All passed" (for a change to `common/`, in every plugin)
 - [ ] Checked by hand in AutoCAD:
