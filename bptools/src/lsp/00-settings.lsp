@@ -17,7 +17,7 @@
 
 (vl-load-com)
 
-(setq *bptools-version* "0.0.0")
+(setq *bptools-version* "1.0.0")
 
 ;;; ---- Стиль оформлення -------------------------------------------------------
 ;;; One text style per kind of label, ISOCPEUR italic (ГОСТ 2.304 type B), at a fixed height in mm
