@@ -39,10 +39,14 @@
   (entupd ins))
 
 (defun bp:turned-box (entry rot scale / b a c s pts)
-  ;; The вигляд's extents once turned by rot and scaled, as ((x1 y1) (x2 y2)) from its base point.
+  ;; The вигляд's extents once turned by rot and scaled, as ((x1 y1) (x2 y2)) from its base point:
+  ;; its outline, and its pin numbers, which stay upright and their size (1.2 around each centre).
   (setq b (nth 3 entry) a (* pi (/ rot 180.0)) c (cos a) s (sin a))
   (setq pts (mapcar '(lambda (p) (list (* scale (- (* (car p) c) (* (cadr p) s))) (* scale (+ (* (car p) s) (* (cadr p) c)))))
                     (list (list (car b) (cadr b)) (list (caddr b) (cadr b)) (list (car b) (cadddr b)) (list (caddr b) (cadddr b)))))
+  (foreach n (nth 5 entry)
+    (setq b (list (* scale (- (* (car n) c) (* (cadr n) s))) (* scale (+ (* (car n) s) (* (cadr n) c))))
+          pts (append pts (list (mapcar '- b '(1.2 1.2)) (mapcar '+ b '(1.2 1.2))))))
   (bp:corners pts))
 
 (defun bp:part-labels (entry ins rot scale / p b x y hn hv)
@@ -118,18 +122,18 @@
                       (fix (+ x (* 0.1 hp) (* hp (caddr g)))) (fix (- py (* hp (cadddr g)))) 1)))
     (setq x (+ x w))))
 
-(defun bp:preview (entry rot / w h k dx dy b segs a c s x1 y1 x2 y2)
+(defun bp:preview (entry rot / w h k dx dy b segs a c s x1 y1 x2 y2 hp)
   ;; The вигляд's outline turned by rot, as big as fits the image tile and centred, y downwards:
   ;; dark grey (250) on white (255), since colour 7 shows white on the dialog's grey; its pin numbers
   ;; in red, upright as they are pasted.
   (setq w (dimx_tile "preview") h (dimy_tile "preview") b (nth 3 entry) segs (nth 4 entry)
         a (* pi (/ rot 180.0)) c (cos a) s (sin a))
   (defun bp:turn (x y) (list (- (* x c) (* y s)) (+ (* x s) (* y c))))
-  (setq b (mapcar '(lambda (p) (bp:turn (car p) (cadr p)))
-                  (list (list (car b) (cadr b)) (list (caddr b) (cadr b)) (list (car b) (cadddr b)) (list (caddr b) (cadddr b)))))
-  (setq x1 (apply 'min (mapcar 'car b)) x2 (apply 'max (mapcar 'car b))
-        y1 (apply 'min (mapcar 'cadr b)) y2 (apply 'max (mapcar 'cadr b))
+  ;; the same extents as the pasted part, numbers included, so none falls outside the tile
+  (setq b (bp:turned-box entry rot 1.0))
+  (setq x1 (caar b) x2 (caadr b) y1 (cadar b) y2 (cadadr b)
         k (* 0.9 (min (/ w (max 1.0 (- x2 x1))) (/ h (max 1.0 (- y2 y1)))))
+        hp (* k 1.8)
         dx (- (/ w 2.0) (* k (/ (+ x1 x2) 2.0)))
         dy (+ (/ h 2.0) (* k (/ (+ y1 y2) 2.0))))
   (start_image "preview")
@@ -139,7 +143,7 @@
     (vector_image (fix (+ dx (* k (car a)))) (fix (- dy (* k (cadr a)))) (fix (+ dx (* k (car b)))) (fix (- dy (* k (cadr b)))) 250))
   (foreach n (nth 5 entry)
     (setq a (bp:turn (car n) (cadr n)))
-    (bp:preview-number (caddr n) (+ dx (* k (car a))) (- dy (* k (cadr a))) (max 6.0 (* k 1.8))))
+    (bp:preview-number (caddr n) (+ dx (* k (car a))) (- dy (* k (cadr a))) hp))
   (end_image))
 
 (defun bp:part-dialog (/ d names shown part views view rot scale done)

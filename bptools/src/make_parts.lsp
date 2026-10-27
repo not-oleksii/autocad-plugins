@@ -106,6 +106,20 @@
                     (list (+ x (/ c 2.0)) (/ c 2.0)) (list (- x (/ c 2.0)) (/ c 2.0))))
     (mk:number i (list x (- (/ h -2.0) *mk-number-gap*)) "pin-small")))
 
+;; From the side, after JST's side drawing of the housing: as (part length height lock-length lock-height
+;; front-length front-height), in mm, the front (mating end) to the right, the wires coming in on the
+;; left, the lock on top. Its height with the lock is the face's depth, 4.15 for GH.
+(setq *mk-row-sides* '(("JST GH 1.25 3 pin" 5.70 3.65 4.20 0.50 1.60 3.10)
+                       ("JST GH 1.25 4 pin" 5.70 3.65 4.20 0.50 1.60 3.10)))
+
+(defun mk:row-side (spec / len h ll lh fl fh)
+  ;; Base point: the centre of the front end.
+  (setq len (nth 1 spec) h (nth 2 spec) ll (nth 3 spec) lh (nth 4 spec) fl (nth 5 spec) fh (nth 6 spec))
+  (mk:pline (list (list (- len) (/ h -2.0)) (list (- fl) (/ h -2.0)) (list (- fl) (/ fh -2.0)) (list 0.0 (/ fh -2.0))
+                  (list 0.0 (/ fh 2.0)) (list (- fl) (/ fh 2.0)) (list (- fl) (/ h 2.0)) (list (- len) (/ h 2.0))))
+  (mk:pline (list (list (- len) (/ h 2.0)) (list (+ (- len) ll) (/ h 2.0)) (list (+ (- len) ll) (+ (/ h 2.0) lh))
+                  (list (- len) (+ (/ h 2.0) lh)))))
+
 (defun mk:rows (/ name)
   ;; «Futaba - F — з лицьового боку» and the rest, from the front and the back; a block of that name
   ;; the drawing already has is kept.
@@ -116,7 +130,14 @@
         (progn
           (entmake (list '(0 . "BLOCK") (cons 2 name) '(70 . 2) '(10 0.0 0.0 0.0)))
           (mk:row-part spec view)
-          (entmake '((0 . "ENDBLK"))))))))
+          (entmake '((0 . "ENDBLK")))))))
+  (foreach spec *mk-row-sides*
+    (setq name (strcat (car spec) *bptools-part-dash* (mk:view-name "side")))
+    (if (not (tblobjname "BLOCK" name))
+      (progn
+        (entmake (list '(0 . "BLOCK") (cons 2 name) '(70 . 2) '(10 0.0 0.0 0.0)))
+        (mk:row-side spec)
+        (entmake '((0 . "ENDBLK")))))))
 
 ;;; ---- D-Sub from the top and the side ----------------------------------------
 ;; A solder-cup D-Sub seen from above and from the side, as (part shell d-depth body-width body-height

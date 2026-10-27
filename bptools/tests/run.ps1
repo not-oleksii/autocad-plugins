@@ -136,7 +136,9 @@ BPPART
 (defun pin-y (ins tag) (vl-some '(lambda (a) (if (= (cdr (assoc 2 a)) tag) (cadr (cdr (assoc 11 a))))) (attribs ins)))
 (setq fu (bp:paste-part (car (bp:part-views "Futaba - F")) '(600.0 300.0 0.0) 0 1))
 (show "FUTABA" (list (mapcar 'cadr (bp:part-views "Futaba - F")) (> (pin-y fu "PIN1") (pin-y fu "PIN3")) (> (pin-x fu "PIN1") 600.0)
-                     (mapcar 'cadr (bp:part-views "D-Sub DB-15F")) (length (attribs (bp:paste-part (car (bp:part-views "JST GH 1.25 4 pin")) '(700.0 300.0 0.0) 0 1)))))
+                     (mapcar 'cadr (bp:part-views "D-Sub DB-15F")) (length (attribs (bp:paste-part (car (bp:part-views "JST GH 1.25 4 pin")) '(700.0 300.0 0.0) 0 1))) (mapcar 'cadr (bp:part-views "JST GH 1.25 4 pin"))))
+(setq gh (car (bp:part-views "JST GH 1.25 4 pin")) gb (bp:turned-box gh 90 1.0))
+(show "BOX-HOLDS-NUMBERS" (vl-every '(lambda (n / x y) (setq x (- (cadr n)) y (car n)) (and (< (caar gb) x (caadr gb)) (< (cadar gb) y (cadadr gb)))) (nth 5 gh)))
 (setq f (bp:paste-part (car (bp:part-views "D-Sub DB-09F")) '(300.0 300.0 0.0) 0 1)
       b (bp:paste-part (cadr (bp:part-views "D-Sub DB-09F")) '(400.0 300.0 0.0) 0 1)
       m (bp:paste-part (car (bp:part-views "D-Sub DB-09M")) '(500.0 300.0 0.0) 0 1))
@@ -199,7 +201,8 @@ Check ((Value 'PARTS') -eq '("D-Sub DB-09F" "D-Sub DB-09M" "D-Sub DB-15F" "D-Sub
     "the library has the generated D-Sub, Futaba and JST GH parts ($(Value 'PARTS'))"
 Check ((Value 'LABELS') -eq '(("D-Sub DB-15F" "Назва роз''єму" T) ("Вигляд з лицьового боку" "Вигляд" T))') "the part's name and its «Вигляд з …» note are placed under it ($(Value 'LABELS'))"
 Check ((Value 'SEARCH') -eq '(("JST GH 1.25 3 pin" "JST GH 1.25 4 pin") ("Futaba - F" "Futaba - M") nil)') "the window's search finds parts by any part of their name, ignoring case ($(Value 'SEARCH'))"
-Check ((Value 'FUTABA') -eq '(("front" "back" "side") T T ("front" "back" "top" "side") 4)') "Futaba has front, back and side, pin 1 at the top and numbers on the right; DB-15F has top and side views too; JST GH 4 pin has 4 numbers ($(Value 'FUTABA'))"
+Check ((Value 'FUTABA') -eq '(("front" "back" "side") T T ("front" "back" "top" "side") 4 ("front" "back" "side"))') "Futaba has front, back and side, pin 1 at the top and numbers on the right; DB-15F has top and side views too; JST GH 4 pin has 4 numbers and a side view ($(Value 'FUTABA'))"
+Check ((Value 'BOX-HOLDS-NUMBERS') -eq 'T') 'the extents BPPART fits its preview and the labels to include the pin numbers, turned too'
 Check ((Value 'PASTED') -eq '("D-Sub DB-15F — з лицьового боку" "0" 90 2.0 15)') "BPPART pastes the вигляд picked, turned and scaled as asked, on the current layer, with its 15 pin numbers ($(Value 'PASTED'))"
 Check ((Value 'UPRIGHT') -eq '((0.0 1.8 "Номер контакту малий"))') "the pin numbers stay upright and 1.8 high whatever the rotation and scale ($(Value 'UPRIGHT'))"
 Check ((Value 'NAME-NEXT') -eq '"D-Sub DB-15F"') 'BPNAME then offers the name of the part pasted'
