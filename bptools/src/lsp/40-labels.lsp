@@ -1,16 +1,36 @@
 ;;; ---- Labels -----------------------------------------------------------------
 ;;; The commands that place labels, each in the style of its kind, on the «Написи» layer, centred
 ;;; on the point clicked (so a label lines up with its pin, wire or part), and BPSTYLE, which gives
-;;; texts already drawn the style of a kind. Defines c:BPPOS, c:BPPIN, c:BPWIRE, c:BPNAME,
+;;; texts already drawn the style of a kind. Names, «Вигляд з …» notes, captions and notes are
+;;; multiline text (*bptools-multiline*): one row as wide as the text, which the user may narrow
+;;; so it wraps; the short labels are single-line text. Defines c:BPPOS, c:BPPIN, c:BPWIRE, c:BPNAME,
 ;;; c:BPVIEW, c:BPFIG and c:BPSTYLE. tests/run.ps1 also calls:
 ;;;   bp:add-text (kind s pt)        a text of a kind, centred at pt (world coordinates)
 ;;;   bp:add-pos (n arrow shelf)     a позиційний номер from the part at arrow to its shelf (UCS points)
 ;;;   bp:restyle (ents kind)         gives texts the style of a kind; returns how many
 
 (defun bp:add-text (kind s pt)
-  (entmakex (list '(0 . "TEXT") '(100 . "AcDbEntity") (cons 8 *bptools-layer*) '(100 . "AcDbText")
-                  (cons 10 pt) (cons 40 (bp:kind-height kind)) (cons 1 s) '(50 . 0.0) '(41 . 1.0)
-                  (cons 7 (bp:kind-style kind)) '(72 . 1) (cons 11 pt) '(100 . "AcDbText") '(73 . 2))))
+  (if (member kind *bptools-multiline*)
+    (bp:add-mtext kind s pt)
+    (entmakex (list '(0 . "TEXT") '(100 . "AcDbEntity") (cons 8 *bptools-layer*) '(100 . "AcDbText")
+                    (cons 10 pt) (cons 40 (bp:kind-height kind)) (cons 1 s) '(50 . 0.0) '(41 . 1.0)
+                    (cons 7 (bp:kind-style kind)) '(72 . 1) (cons 11 pt) '(100 . "AcDbText") '(73 . 2)))))
+
+(defun bp:mtext-escape (s)
+  ;; s as MTEXT shows it literally: \, { and } mean formatting there.
+  (apply 'strcat (mapcar '(lambda (c) (cond ((= c 92) "\\\\") ((= c 123) "\\{") ((= c 125) "\\}") ((chr c)))) (vl-string->list s))))
+
+(defun bp:text-width (kind s / b)
+  ;; How wide s is in a kind's style, from the box AutoCAD would give it as one line.
+  (setq b (textbox (list (cons 1 s) (cons 7 (bp:kind-style kind)) (cons 40 (bp:kind-height kind)))))
+  (- (car (cadr b)) (car (car b))))
+
+(defun bp:add-mtext (kind s pt / h)
+  ;; Attached at its middle centre, one row wide plus a little, so it doesn't wrap until narrowed.
+  (setq h (bp:kind-height kind))
+  (entmakex (list '(0 . "MTEXT") '(100 . "AcDbEntity") (cons 8 *bptools-layer*) '(100 . "AcDbMText")
+                  (cons 10 pt) (cons 40 h) (cons 41 (+ (bp:text-width kind s) h)) '(71 . 5) '(72 . 1)
+                  (cons 1 (bp:mtext-escape s)) (cons 7 (bp:kind-style kind)) '(50 . 0.0) '(73 . 1) '(44 . 1.0))))
 
 (defun bp:acad (/ a)
   ;; AutoCAD's ActiveX object, or nil in the console AutoCAD, which has none.

@@ -6,6 +6,8 @@
 ;;;   BPVIEW    the «Вигляд з …» note
 ;;;   BPFIG     the «Рис. N» caption, numbered on across the марка
 ;;;   BPSTYLE   gives texts already drawn the style of a kind of label
+;;;   BPPART    pastes a вигляд of a part of the library
+;;;   BPCENTER  centres texts between the outermost points of other objects
 ;;;   BPNEW     a new drawing from the BPTOOLS template
 ;;; The ribbon tab also has TEXTALIGN and MLEADERALIGN, AutoCAD's own alignment commands.
 ;;;
@@ -34,11 +36,25 @@
     ("note"      "Примітка"             3.5 "Примітка")
     ("dim"       "Розміри"              3.5 "Розміри")))
 
+;; The kinds of label written as multiline text (MTEXT): pasted as one row, as wide as their text,
+;; but their width can be dragged narrower at any time and they wrap. The others are single-line TEXT.
+(setq *bptools-multiline* '("name" "view" "figure" "note"))
+
 ;; The font of every style: ISOCPEUR italic, which AutoCAD installs into Windows\Fonts.
 (setq *bptools-font* "isocpeui.ttf")
 
 ;; The layer every label goes on: never a шар заливки, so no label is lost from the листи без заливки.
 (setq *bptools-layer* "Написи")
+
+;; The вигляди a part of the library may have, as (key how-the-block-name-ends). A library block is
+;; named «<part> — <вигляд>», such as «D-Sub DB-09F — з лицьового боку» (docs/adr/0002).
+(setq *bptools-views*
+  '(("front" "з лицьового боку")
+    ("back" "з монтажного боку")
+    ("contacts" "з боку контактів")
+    ("top" "зверху")
+    ("side" "збоку")))
+(setq *bptools-part-dash* " — ")
 
 ;; The multileader style of позиційні номери (the number on a shelf, a dot on the part, ГОСТ 2.109)
 ;; and the dimension style, both named after their text style.

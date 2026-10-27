@@ -5,7 +5,7 @@ AutoCAD 2024 plugins, one folder each. Every plugin builds a zip with an `instal
 | Plugin | What it does |
 | --- | --- |
 | [pdfall](pdfall/README.md) (in Ukrainian; the step-by-step guide for colleagues is `guide.html` in the zip; developers: [DEVELOPING.md](pdfall/DEVELOPING.md); changes: [CHANGELOG.md](pdfall/CHANGELOG.md)) | `PDFALL`: plots every лист, специфікація and текстовий документ in Model space (any A0–A5 рамка) to PDF, with the day's date in its Дата cell, and merges them per марка. `PDFNUM`: fills in empty Аркуш/Аркушів cells. `PDFLIST`, `PDFSPEC`: paste an empty рамка; `PDFSETTINGS`: which document `PDFLIST` pastes and name-cell text they paste |
-| [bptools](bptools/README.md) (in Ukrainian; the guide is `guide.html` in the zip; developers: [DEVELOPING.md](bptools/DEVELOPING.md); changes: [CHANGELOG.md](bptools/CHANGELOG.md)) | The «Креслення» ribbon tab: `BPPOS`, `BPPIN`, `BPWIRE`, `BPNAME`, `BPVIEW`, `BPFIG` place позиційні номери, pin numbers, wire colours, connector names, «Вигляд з …» notes and figure captions in one style, numbered across the марка; `BPSTYLE` restyles texts; `BPNEW` opens a drawing from its template |
+| [bptools](bptools/README.md) (in Ukrainian; the guide is `guide.html` in the zip; developers: [DEVELOPING.md](bptools/DEVELOPING.md); changes: [CHANGELOG.md](bptools/CHANGELOG.md)) | The «Креслення» ribbon tab: `BPPOS`, `BPPIN`, `BPWIRE`, `BPNAME`, `BPVIEW`, `BPFIG` place позиційні номери, pin numbers, wire colours, connector names, «Вигляд з …» notes and figure captions in one style, numbered across the марка; `BPPART` pastes connector views from its library; `BPCENTER` centres texts between objects; `BPSTYLE` restyles texts; `BPNEW` opens a drawing from its template |
 
 ## Download
 

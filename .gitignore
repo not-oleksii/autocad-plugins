@@ -6,3 +6,6 @@ __pycache__/
 
 # Real drawings and PDFs used by the tests; keep them out of git.
 examples/
+
+# Makers' datasheets used to draw parts; not ours to publish.
+datasheets/

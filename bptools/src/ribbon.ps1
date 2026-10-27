@@ -23,6 +23,8 @@ New-RibbonIcon $Out 'BPNAME' 'JST' $blue
 New-RibbonIcon $Out 'BPVIEW' 'Вид' $blue
 New-RibbonIcon $Out 'BPFIG' 'Рис.' $blue
 New-RibbonIcon $Out 'BPSTYLE' 'Aa' $grey
+New-RibbonIcon $Out 'BPPART' 'D-Sub' ([Drawing.Color]::FromArgb(210, 120, 30))
+New-RibbonIcon $Out 'BPCENTER' '|A|' $green
 New-RibbonIcon $Out 'TEXTALIGN' '≡' $green
 New-RibbonIcon $Out 'MLEADERALIGN' '1 2' $green
 New-RibbonIcon $Out 'BPNEW' 'DWT' $grey
@@ -37,7 +39,11 @@ Add-RibbonPanel $ribbon (Msg 'ribbon.labels-panel') 'BPLABELS' @(
     @{ Name = 'BPFIG'; Text = (Msg 'ribbon.figure'); Help = (Msg 'ribbon.figure-help') },
     @{ Name = 'BPSTYLE'; Text = (Msg 'ribbon.style'); Help = (Msg 'ribbon.style-help') }
 )
+Add-RibbonPanel $ribbon (Msg 'ribbon.parts-panel') 'BPPARTS' @(
+    @{ Name = 'BPPART'; Text = (Msg 'ribbon.part'); Help = (Msg 'ribbon.part-help') }
+)
 Add-RibbonPanel $ribbon (Msg 'ribbon.align-panel') 'BPALIGN' @(
+    @{ Name = 'BPCENTER'; Text = (Msg 'ribbon.center'); Help = (Msg 'ribbon.center-help') },
     @{ Name = 'TEXTALIGN'; Text = (Msg 'ribbon.textalign'); Help = (Msg 'ribbon.textalign-help') },
     @{ Name = 'MLEADERALIGN'; Text = (Msg 'ribbon.mleaderalign'); Help = (Msg 'ribbon.mleaderalign-help') }
 )

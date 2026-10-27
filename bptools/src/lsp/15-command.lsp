@@ -5,9 +5,10 @@
 ;;;   bp:set-var      sets a system variable until the command ends
 ;;;   bp:kind-style bp:kind-height  the text style and height of a kind of label (*bptools-styles*)
 ;;;   bp:wcs          a point the user picked, in world coordinates
-;;; Settings (common\lsp\14-settings.lsp): Debug, and Name, the назва роз'єму typed last.
+;;; Settings (common\lsp\14-settings.lsp): Debug; Name, the назва роз'єму typed or pasted last; Part,
+;;; View, Rotation and Scale, what BPPART pasted last.
 
-(setq *bp-setting-defaults* '(("Debug" . "0") ("Name" . "")))
+(setq *bp-setting-defaults* '(("Debug" . "0") ("Name" . "") ("Part" . "") ("View" . "front") ("Rotation" . "0") ("Scale" . "1")))
 (setq *bp-log-on* (= (bp:setting "Debug") "1"))
 
 (defun bp:cancelled-p (msg)
