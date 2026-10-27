@@ -4,7 +4,8 @@ AutoCAD 2024 plugins, one folder each. Every plugin builds a zip with an `instal
 
 | Plugin | What it does |
 | --- | --- |
-| [pdfall](pdfall/README.md) (in Ukrainian; the step-by-step guide for colleagues is `Instruktsiia.html` in the zip; developers: [DEVELOPING.md](pdfall/DEVELOPING.md); changes: [CHANGELOG.md](pdfall/CHANGELOG.md)) | `PDFALL`: plots every лист, специфікація and текстовий документ in Model space (any A0–A5 рамка) to PDF, with the day's date in its Дата cell, and merges them per марка. `PDFNUM`: fills in empty Аркуш/Аркушів cells. `PDFLIST`, `PDFSPEC`: paste an empty рамка; `PDFSETTINGS`: which document `PDFLIST` pastes and name-cell text they paste |
+| [pdfall](pdfall/README.md) (in Ukrainian; the step-by-step guide for colleagues is `guide.html` in the zip; developers: [DEVELOPING.md](pdfall/DEVELOPING.md); changes: [CHANGELOG.md](pdfall/CHANGELOG.md)) | `PDFALL`: plots every лист, специфікація and текстовий документ in Model space (any A0–A5 рамка) to PDF, with the day's date in its Дата cell, and merges them per марка. `PDFNUM`: fills in empty Аркуш/Аркушів cells. `PDFLIST`, `PDFSPEC`: paste an empty рамка; `PDFSETTINGS`: which document `PDFLIST` pastes and name-cell text they paste |
+| [bptools](bptools/README.md) (in Ukrainian; the guide is `guide.html` in the zip; developers: [DEVELOPING.md](bptools/DEVELOPING.md); changes: [CHANGELOG.md](bptools/CHANGELOG.md)) | The «Креслення» ribbon tab: `BPPOS`, `BPPIN`, `BPWIRE`, `BPNAME`, `BPVIEW`, `BPFIG` place позиційні номери, pin numbers, wire colours, connector names, «Вигляд з …» notes and figure captions in one style, numbered across the марка; `BPSTYLE` restyles texts; `BPNEW` opens a drawing from its template |
 
 ## Download
 
@@ -18,10 +19,10 @@ Work on a branch and open a pull request; its template asks for the version impa
 
 Give it its own folder with the same layout as `pdfall`:
 
-- `src\` holds the plugin itself: `plugin.json` (its name, LISP prefix and debug command), `PackageContents.xml`, `lsp\*.lsp` (one module per file, numbered; `00-settings.lsp` first, with `*<name>-version*`), `messages.json` and `ribbon.ps1`;
+- `src\` holds the plugin itself: `plugin.json` (its name, LISP prefix and debug command, and the plugins its install offers, `suggests`), `PackageContents.xml`, `lsp\*.lsp` (one module per file, numbered; `00-settings.lsp` first, with `*<name>-version*`), `messages.json` and `ribbon.ps1`;
 - `build.bat` builds the plugin's `<NAME>.bundle` in `dist\` and ends with `common\package.ps1`, which adds the installer and the updater and makes `dist\<NAME>.zip`;
 - `release.ps1` runs `common\release.ps1 -Plugin <folder>`;
-- `tests\` holds the tests;
+- `tests\` holds the tests; `common\tests\acad.ps1` runs scripts in the console AutoCAD;
 - `CHANGELOG.md` lists what changed in each version, `GLOSSARY.md` its terms (see [CONTEXT-MAP.md](CONTEXT-MAP.md)) and `docs\adr` its decisions.
 
 What every plugin shares is in `common\` ([docs/adr/0002](docs/adr/0002-share-code-between-plugins.md)): the LISP helpers (`common\lsp`, built into each plugin under its own prefix), the texts they show (`common\messages.json`), the build check, the installer, the updater, the ribbon builder and the release script. Put a helper there only when it holds no plugin's knowledge; a plugin that needs another's knowledge calls its public function ([docs/adr/0003](docs/adr/0003-plugins-talk-through-one-function.md)).

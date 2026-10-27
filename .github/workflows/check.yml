@@ -23,3 +23,13 @@ jobs:
         run: python common/build_lisp.py pdfall "$RUNNER_TEMP/pdfall"
       - name: merge_blueprints.py compiles
         run: python -m py_compile pdfall/src/merge_blueprints.py
+
+  bptools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: messages.json and the version
+        run: python common/build_lisp.py bptools "$RUNNER_TEMP/bptools"

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Інструкція PDFALL</title>
-<!-- The guide for colleagues. build.bat ships it as Instruktsiia.html next to install.bat and in
+<!-- The guide for colleagues. build.bat ships it as guide.html next to install.bat and in
      PDFALL.bundle; the Start menu entry "Інструкція PDFALL" opens the bundle's copy. It must work
      offline, so everything is in this one file. -->
 <style>
@@ -136,6 +136,9 @@
   <li><strong>Запустіть AutoCAD.</strong> У command line (командному рядку) з'явиться <code>PDFALL 1.8.0 завантажено…</code>, а на ribbon (стрічці) — вкладка <strong>PDFALL</strong> (<a href="#ribbon">розділ 3</a>).</li>
 </ol>
 <p>Розпаковану папку після цього можна видалити: PDFALL скопійовано в <code>%APPDATA%\Autodesk\ApplicationPlugins\PDFALL.bundle</code>, звідки AutoCAD завантажує його в кожне креслення. У меню Пуск з'являються два пункти: <strong>Оновити плагіни AutoCAD</strong> (одне оновлення для PDFALL та інших плагінів AutoCAD з того самого сховища) і <strong>Інструкція PDFALL</strong> (ця сторінка).</p>
+<div class="note">
+  <p>Наприкінці встановлення чи оновлення PDFALL один раз питає <code>Також встановити BPTOOLS — інструменти оформлення креслень…? Enter — так, н — ні</code>. BPTOOLS додає вкладку «Креслення», яка ставить позиційні номери, номери контактів, кольори проводів і написи «Вигляд з …» в одному стилі (його інструкція — «Інструкція BPTOOLS» у меню Пуск). <kbd>Enter</kbd> встановлює його; «н» — ні, і питання більше не з'явиться, а встановити BPTOOLS можна й пізніше через «Оновити плагіни AutoCAD».</p>
+</div>
 <div class="note">
   <p>Встановлення також додає папку PDFALL до <em>Trusted Locations</em> (довірених розташувань), щоб AutoCAD не питав, чи завантажувати плагін, і прибирає старий <code>pdfall.lsp</code> зі <em>Startup Suite</em> (списку автозавантаження), якщо його туди колись додавали вручну.</p>
 </div>

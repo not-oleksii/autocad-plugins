@@ -15,7 +15,7 @@
 
 - [ ] `CHANGELOG.md`: a line under **Невипущене**, in Ukrainian, written for colleagues (skip for "none")
 - [ ] User-facing texts are in the plugin's `src/messages.json` (or `common/messages.json` when every plugin shows them), in Ukrainian; code and developer docs in English
-- [ ] The colleagues' guide `src/Instruktsiia.html` (plus `README.md` if the basics change) and `DEVELOPING.md` describe the change
+- [ ] The colleagues' guide `src/guide.html` (plus `README.md` if the basics change) and `DEVELOPING.md` describe the change
 - [ ] A design decision has an ADR in the plugin's `docs/adr`, or in the root `docs/adr` when it concerns every plugin
 - [ ] No real drawings, PDFs, names or other private data added (`examples/` stays out of git)
 

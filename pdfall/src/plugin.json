@@ -1,5 +1,8 @@
 {
   "name": "PDFALL",
   "prefix": "pa",
-  "debug": "PDFDEBUG"
+  "debug": "PDFDEBUG",
+  "suggests": [
+    "BPTOOLS"
+  ]
 }
