@@ -17,7 +17,7 @@ The variant of a лист plotted with the шари заливки turned off, u
 _Avoid_: print version, no-fill, unfilled
 
 **Шар заливки**:
-The one layer that holds the colour fills of a лист, such as the coloured wires. Turning it off is the only difference between a лист and its без заливки variant. Old drawings have none.
+A layer that holds the colour fills of a лист, such as the coloured wires; a drawing may have several, and each user chooses which in PDFSETTINGS. Turning them off is the only difference between a лист and its без заливки variant. Old drawings have none.
 _Avoid_: colour layer, fill
 
 **Специфікація**:
@@ -63,3 +63,7 @@ _Avoid_: merged, combined, full set
 **Загальний друк**:
 The combined print document of a марка: every лист без заливки in order, followed by every специфікація and then every текстовий документ in order. Its file is `<марка> загальний друк.pdf`.
 _Avoid_: print set, merged print
+
+**Джгут**:
+The cable assembly that one марка describes: its wires, their connectors and heat-shrinks. Hence the prefix «Джгут» in the name cell.
+_Avoid_: cable, harness, кабель

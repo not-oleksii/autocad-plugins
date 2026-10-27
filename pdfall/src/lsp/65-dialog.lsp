@@ -8,10 +8,9 @@
 ;;; the шари заливки chosen) and pa:pick-dialog; tests/run.ps1 also calls pa:preview-lines, since
 ;;; the console AutoCAD the tests run in has no dialogs.
 ;;;
-;;; The DCL is written to a temporary file when the dialog opens. Every text is put in with set_tile
-;;; and add_list, except the buttons' labels and the title, which set_tile can't change:
-;;; they are written into the file in the PC's code page, which AutoCAD reads it in, when that code
-;;; page can hold them (pa:code-page-p), and in English otherwise.
+;;; The DCL is written to a temporary file when the dialog opens (pa:dlg-open). Every text is put
+;;; in with set_tile and add_list, except the buttons' labels and the title, which pa:dcl-lines
+;;; writes into the file (common\lsp\16-dialog.lsp).
 
 (setq *pa-dcl* '(
   "pdfall_settings : dialog {"
@@ -62,70 +61,6 @@
   "  }"
   "}"))
 
-(defun pa:code-page-p (s / path f back)
-  ;; Whether a text file written here keeps s as it is: the PC's code page has its letters.
-  (setq path (vl-filename-mktemp "pdfall.txt") f (open path "w"))
-  (write-line s f)
-  (close f)
-  (setq f (open path "r") back (read-line f))
-  (close f)
-  (vl-file-delete path)
-  (= back s))
-
-(defun pa:dcl-string (s / out)
-  ;; s as a DCL string, in quotes.
-  (setq out "")
-  (foreach c (vl-string->list s)
-    (setq out (strcat out (if (member c '(34 92)) "\\" "") (chr c))))
-  (strcat "\"" out "\""))
-
-(defun pa:dcl-lines (lines labels / ok)
-  ;; lines with each @name@ of labels, ((name text english) ...), put in as a DCL string: the texts
-  ;; when the PC's code page holds them all, else the English ones.
-  (setq ok (pa:code-page-p (apply 'strcat (mapcar 'cadr labels))))
-  (pa:log (list "dialog: labels in" (if ok "Ukrainian" "English") "| SYSCODEPAGE" (getvar "SYSCODEPAGE")))
-  (mapcar '(lambda (l)
-             (foreach lb labels
-               (setq l (vl-string-subst (pa:dcl-string (if ok (cadr lb) (caddr lb))) (strcat "@" (car lb) "@") l)))
-             l)
-          lines))
-
-(defun pa:dlg-open (lines name / dcl f id)
-  ;; Writes lines to a temporary DCL file and opens its dialog name. Returns (id . file) for
-  ;; pa:dlg-close, or nil when there is no dialog: the console AutoCAD has no load_dialog at all.
-  (setq dcl (vl-filename-mktemp "pdfall.dcl") f (open dcl "w"))
-  (foreach l lines (write-line l f))
-  (close f)
-  (setq id (if load_dialog (load_dialog dcl) -1))
-  (pa:log (list "dialog:" name dcl "load_dialog" id))
-  (if (and (> id 0) (new_dialog name id))
-    (cons id dcl)
-    (progn (pa:log "dialog: new_dialog failed") (if (> id 0) (unload_dialog id)) (vl-file-delete dcl) nil)))
-
-(defun pa:dlg-close (d) (unload_dialog (car d)) (vl-file-delete (cdr d)))
-
-;;; A list_box of ■ ticked and □ unticked lines, since DCL has no list of check boxes and selecting
-;;; several in a list_box needs Ctrl. A click flips a line, then the selection is cleared so that the
-;;; next click on it counts too; the list_box is multiple_select only because that selection can be
-;;; cleared.
-
-(defun pa:check-line (on text)
-  (if on (pa:msg "dialog.on" (list "item" text)) (pa:msg "dialog.off" (list "item" text))))
-
-(defun pa:check-fill (key texts ons)
-  ;; Fills the list_box key with texts, each ticked as ons says.
-  (start_list key)
-  (mapcar '(lambda (tx on) (add_list (pa:check-line on tx))) texts ons)
-  (end_list))
-
-(defun pa:check-flip (key value texts ons / picked j)
-  ;; A click in the list_box key, value its $value: flips those lines. Returns the new ons.
-  (setq picked (read (strcat "(" value ")")) j -1
-        ons (mapcar '(lambda (on) (setq j (1+ j)) (if (member j picked) (not on) on)) ons))
-  (foreach i picked (start_list key 1 i) (add_list (pa:check-line (nth i ons) (nth i texts))) (end_list))
-  (set_tile key "")
-  ons)
-
 (defun pa:preview-lines (file wpx hpx / tp w h k dx dy c lines out px py)
   ;; The template file drawn into an image tile wpx by hpx pixels: (x1 y1 x2 y2 colour) per line,
   ;; y downwards as image tiles count it, the рамка as big as fits and centred, the name cell in red.
@@ -145,15 +80,6 @@
                    (list (caddr c) (cadddr c) (car c) (cadddr c)) (list (car c) (cadddr c) (car c) (cadr c)))
     (setq out (cons (list (px (car s)) (py (cadr s)) (px (caddr s)) (py (cadddr s)) 1) out)))
   (reverse out))
-
-(defun pa:dlg-list (key items index)
-  ;; Fills the popup list key with items and selects the one at index.
-  (start_list key)
-  (mapcar 'add_list items)
-  (end_list)
-  (set_tile key (itoa index)))
-
-(defun pa:dlg-index (x xs) (cond ((vl-position x xs)) (0)))
 
 ;; Shows the dialog; mode 'fills when PDFALL opens it because the drawing has none of the шари
 ;; заливки chosen, which also turns «Вставити» off. Returns 0 when it was cancelled, 1 when the

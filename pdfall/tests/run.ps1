@@ -178,6 +178,10 @@ $pickScr = @"
 (foreach s *pa-setting-defaults* (pa:set-setting (car s) (cdr s)))
 (setq *pdfall-merge* nil)
 (princ (strcat "\nLINE=" (pa:marka-line "К1" (car (pa:read-drawing)))))
+(setq k1 (vl-some '(lambda (r) (if (= (pa:get 'marka r) "К1") r)) (car (pa:read-drawing)))
+      k1-mid (mapcar '(lambda (a b) (/ (+ a b) 2.0)) (pa:get 'll k1) (pa:get 'ur k1)))
+(princ (strcat "\nMARKA-AT=" (vl-princ-to-string (list (pdfall:marka-at k1-mid) (pdfall:marka-at '(-1000000.0 -1000000.0))
+                                                        (pdfall:marka-at (list (pa:get 'll k1) '(-1000000.0 -1000000.0 0.0)))))))
 (princ (strcat "\nMERGE-ARGS=" (pa:merge-args "D:\\x" '("1П" "К1") nil "D:\\x\\1П") "|" (pa:merge-args "D:\\x" nil T nil) "|"))
 (defun pa:pick-dialog (markas records) (setq asked markas) '("1П" "К1"))
 PDFALL
@@ -195,6 +199,7 @@ $pickOut = Join-Path $pickDir 'exported files'
 $pickDirs = @(Get-ChildItem $pickOut -Directory | ForEach-Object { $_.Name } | Sort-Object)
 $pickPdfs = @(Get-ChildItem (Join-Path $pickOut '1П'), (Join-Path $pickOut 'К1') -Filter '*.pdf' -ErrorAction SilentlyContinue)
 Check ($klog -match '(?m)^LINE=К1 — листів: \d+, специфікацій: \d+"') 'the window lists a марка with its листи and специфікації'
+Check ($klog -match '(?m)^MARKA-AT=\(К1 nil \(К1 nil\)\)"') 'pdfall:marka-at names the марка of the рамка a point is in, nil outside every рамка, and does a list of points at once'
 Check ($pickedLog -match '(?m)^ASKED=\(1ЖП 1П 1ЧП 2П К1 К2\)') 'the window is offered every марка of the drawing'
 Check (($pickDirs -join ',') -eq ((@('1П', '1ЧП', 'К1') | Sort-Object) -join ',')) "only the picked 1П and К1 are plotted (folders: $($pickDirs -join ', '))"
 Check ($pickedLog -match "PDFALL: $($pickPdfs.Count) PDF у" -and $pickPdfs.Count -gt 0) "PDFALL reports the $($pickPdfs.Count) PDFs of the picked марки"

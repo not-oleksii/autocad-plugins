@@ -2,7 +2,7 @@
 ;;; What the «Лист» button (PDFLIST) pastes and what goes in the name cell (docs/adr/0009), and which
 ;;; layers are шари заливки (docs/adr/0011), kept per user with setenv so an update keeps them.
 ;;; Other files may call:
-;;;   pa:setting pa:set-setting  read and write one setting
+;;;   pa:setting pa:set-setting  read and write one setting (common\lsp\14-settings.lsp)
 ;;;   pa:template      a template of *pa-templates*
 ;;;   pa:chosen pa:chosen-kind pa:list-file pa:text-file  what PDFLIST pastes
 ;;;   pa:docs pa:doc-sizes pa:doc-orients pa:doc-id pa:doc-file  the documents it may paste
@@ -26,7 +26,7 @@
 ;;;   Line2Text   the custom second line
 ;;;   FillLayers  the names of the шари заливки, separated by ; (a layer name can't hold one);
 ;;;               *pdfall-fill-layers* until the user chooses
-;;;   Debug       1 while PDFDEBUG has the debug log on (12-log.lsp)
+;;;   Debug       1 while PDFDEBUG has the debug log on (common\lsp\12-log.lsp)
 ;;; A document is list_<standard> or text_<standard>.
 
 (defun pa:join-names (names)
@@ -37,14 +37,6 @@
     '(("Paste" . "list_spdbv_A3l") ("Marka" . "") ("Prefix" . "std") ("PrefixText" . "")
       ("Line2" . "std") ("Line2Text" . "") ("Debug" . "0"))
     (list (cons "FillLayers" (pa:join-names *pdfall-fill-layers*)))))
-
-(defun pa:setting (key / v)
-  (setq v (getenv (strcat "PDFALL_" key)))
-  (if (and v (/= v "")) v (cdr (assoc key *pa-setting-defaults*))))
-
-(defun pa:set-setting (key value)
-  ;; An empty value would read back as the default, so it is stored as a single space.
-  (setenv (strcat "PDFALL_" key) (if (= value "") " " value)))
 
 (setq *pa-log-on* (= (pa:setting "Debug") "1"))
 

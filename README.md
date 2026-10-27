@@ -8,7 +8,7 @@ AutoCAD 2024 plugins, one folder each. Every plugin builds a zip with an `instal
 
 ## Download
 
-Take the zip from the newest release of the plugin on the [Releases](https://github.com/not-oleksii/autocad-plugins/releases) page. Once installed, PDFALL updates itself from there through **Оновити PDFALL** in the Start menu.
+Take the zip from the newest release of the plugin on the [Releases](https://github.com/not-oleksii/autocad-plugins/releases) page. Installing any plugin also installs **Оновити плагіни AutoCAD** in the Start menu, which updates every installed plugin from there and installs the others ([docs/adr/0001](docs/adr/0001-one-updater-for-every-plugin.md)).
 
 ## Contributing
 
@@ -18,9 +18,12 @@ Work on a branch and open a pull request; its template asks for the version impa
 
 Give it its own folder with the same layout as `pdfall`:
 
-- `src\` holds the plugin itself and its `PackageContents.xml`;
-- `build.bat` builds `dist\<NAME>.zip`;
+- `src\` holds the plugin itself: `plugin.json` (its name, LISP prefix and debug command), `PackageContents.xml`, `lsp\*.lsp` (one module per file, numbered; `00-settings.lsp` first, with `*<name>-version*`), `messages.json` and `ribbon.ps1`;
+- `build.bat` builds the plugin's `<NAME>.bundle` in `dist\` and ends with `common\package.ps1`, which adds the installer and the updater and makes `dist\<NAME>.zip`;
+- `release.ps1` runs `common\release.ps1 -Plugin <folder>`;
 - `tests\` holds the tests;
-- `CHANGELOG.md` lists what changed in each version.
+- `CHANGELOG.md` lists what changed in each version, `GLOSSARY.md` its terms (see [CONTEXT-MAP.md](CONTEXT-MAP.md)) and `docs\adr` its decisions.
 
-Install it as a `<NAME>.bundle` in `%APPDATA%\Autodesk\ApplicationPlugins`; see [pdfall/docs/adr/0002-install-as-a-bundle.md](pdfall/docs/adr/0002-install-as-a-bundle.md). Tag its releases `<name>-v<version>`, so that they don't mix with another plugin's ([pdfall/docs/adr/0007-update-from-github-releases.md](pdfall/docs/adr/0007-update-from-github-releases.md)).
+What every plugin shares is in `common\` ([docs/adr/0002](docs/adr/0002-share-code-between-plugins.md)): the LISP helpers (`common\lsp`, built into each plugin under its own prefix), the texts they show (`common\messages.json`), the build check, the installer, the updater, the ribbon builder and the release script. Put a helper there only when it holds no plugin's knowledge; a plugin that needs another's knowledge calls its public function ([docs/adr/0003](docs/adr/0003-plugins-talk-through-one-function.md)).
+
+It installs as a `<NAME>.bundle` in `%APPDATA%\Autodesk\ApplicationPlugins`; see [pdfall/docs/adr/0002-install-as-a-bundle.md](pdfall/docs/adr/0002-install-as-a-bundle.md). Tag its releases `<name>-v<version>` with the zip `<NAME>-<version>.zip`: that is how the updater finds it ([docs/adr/0001](docs/adr/0001-one-updater-for-every-plugin.md)).
