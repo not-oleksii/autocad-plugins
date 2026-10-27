@@ -53,12 +53,12 @@
   "  : row {"
   "    : column {"
   "      : text { key = \"h_parts\"; width = 34; }"
-  "      : list_box { key = \"parts\"; width = 34; height = 18; }"
+  "      : list_box { key = \"parts\"; width = 34; height = 22; }"
   "    }"
   "    : column {"
   "      : text { key = \"h_views\"; width = 44; }"
   "      : list_box { key = \"views\"; width = 44; height = 4; }"
-  "      : image { key = \"preview\"; width = 44; height = 12; color = -15; }"
+  "      : image { key = \"preview\"; width = 44; height = 16; color = 255; }"
   "      : row {"
   "        : popup_list { key = \"rotation\"; label = @rotation@; width = 22; }"
   "        : popup_list { key = \"scale\"; label = @scale@; width = 20; }"
@@ -71,7 +71,8 @@
 (setq *bp-rotations* '(0 90 180 270) *bp-scales* '(1 2 3 4 5))
 
 (defun bp:preview (entry rot / w h k dx dy b segs a c s x1 y1 x2 y2)
-  ;; The вигляд's outline turned by rot, as big as fits the image tile and centred, y downwards.
+  ;; The вигляд's outline turned by rot, as big as fits the image tile and centred, y downwards:
+  ;; dark grey (250) on white (255), since colour 7 shows white on the dialog's grey.
   (setq w (dimx_tile "preview") h (dimy_tile "preview") b (nth 3 entry) segs (nth 4 entry)
         a (* pi (/ rot 180.0)) c (cos a) s (sin a))
   (defun bp:turn (x y) (list (- (* x c) (* y s)) (+ (* x s) (* y c))))
@@ -83,10 +84,10 @@
         dx (- (/ w 2.0) (* k (/ (+ x1 x2) 2.0)))
         dy (+ (/ h 2.0) (* k (/ (+ y1 y2) 2.0))))
   (start_image "preview")
-  (fill_image 0 0 w h -15)
+  (fill_image 0 0 w h 255)
   (while segs
     (setq a (bp:turn (car segs) (cadr segs)) b (bp:turn (caddr segs) (cadddr segs)) segs (cddr (cddr segs)))
-    (vector_image (fix (+ dx (* k (car a)))) (fix (- dy (* k (cadr a)))) (fix (+ dx (* k (car b)))) (fix (- dy (* k (cadr b)))) 7))
+    (vector_image (fix (+ dx (* k (car a)))) (fix (- dy (* k (cadr a)))) (fix (+ dx (* k (car b)))) (fix (- dy (* k (cadr b)))) 250))
   (end_image))
 
 (defun bp:part-dialog (/ d names part views view rot scale done)
