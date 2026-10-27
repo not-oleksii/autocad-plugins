@@ -2,7 +2,7 @@
 <!-- AutoCAD loads BPTOOLS.bundle from %APPDATA%\Autodesk\ApplicationPlugins into every drawing.
      Keep AppVersion equal to *bptools-version* in src\lsp\00-settings.lsp. -->
 <ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application"
-                    Name="BPTOOLS" AppVersion="1.0.0"
+                    Name="BPTOOLS" AppVersion="1.1.0"
                     Description="Labels of blueprints in one style: позиційні номери, номери контактів, кольори проводів, назви роз'ємів."
                     ProductCode="{DC195242-7BAA-43B6-AE14-D1BC857FD612}"
                     UpgradeCode="{FC5E65D9-97D6-4D46-8E61-0A7612D20E51}">
