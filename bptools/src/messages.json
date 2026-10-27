@@ -1,0 +1,77 @@
+{
+  "_note": "Every text BPTOOLS shows or writes into drawings, apart from the style names in src/lsp/00-settings.lsp. messages: what the user reads, free to edit; {name} is filled in by the program. labels: words BPTOOLS writes into drawings and reads back (the Рис. of captions, the colours, the «Вигляд з …» notes). build.bat checks that every key and {name} the code uses is here; the texts every plugin shares are in common/messages.json.",
+
+  "messages": {
+    "loaded": "BPTOOLS {version} завантажено. Вкладка «Креслення»: позиційні номери, номери контактів, кольори проводів, назви роз'ємів, «Вигляд з …» і підписи рисунків в одному стилі.",
+    "command-error": "Помилка {cmd}: {msg}",
+    "numbers.whole-drawing": "PDFALL не завантажено, тому номери рахую по всьому кресленню, а не в межах марки.",
+    "label.where": "Де поставити «{text}» (Enter — кінець):",
+
+    "pos.arrow": "Клацніть деталь, на яку вказує позиційний номер (Enter — кінець):",
+    "pos.number": "Позиційний номер <{n}>:",
+    "pos.shelf": "Клацніть, де буде полиця з номером {n}:",
+
+    "pin.kw-number": "Номер",
+    "pin.kw-small": "Малий",
+    "pin.kw-normal": "Звичайний",
+    "pin.where": "Клацніть контакт {n} або [{number}/{size}] (Enter — кінець):",
+    "pin.ask-number": "З якого номера продовжити <{n}>:",
+
+    "wire.title": "Колір проводу",
+    "wire.list": "Кольори проводів:",
+    "wire.ask": "Колір проводу: номер зі списку або інша назва (Enter — скасувати):",
+
+    "name.ask": "Назва роз'єму (наприклад, JST GH 1.25 4 pin):",
+    "name.ask-last": "Назва роз'єму <{name}>:",
+
+    "view.ask": "З якого боку вигляд [{sides}]:",
+
+    "figure.where": "Де поставити підпис рисунка:",
+    "figure.number": "Номер рисунка <{n}>:",
+    "figure.caption": "Підпис після номера (Enter — без підпису):",
+
+    "style.select": "Виберіть тексти, яким дати стиль:",
+    "style.ask": "Який це напис [{kinds}]:",
+    "style.done": "Стиль «{style}» отримали написів: {n}.",
+
+    "new.no-template": "Немає шаблону {file}. Встановіть BPTOOLS ще раз.",
+    "new.no-documents": "Тут не можна відкрити нове креслення. Створіть його з шаблону BPTOOLS.dwt у папці BPTOOLS.",
+
+    "install.next": "Запустіть AutoCAD і відкрийте вкладку «Креслення»: «Позиційний номер», «Номер контакту», «Колір проводу» та інші кнопки ставлять написи в одному стилі.",
+    "release.footer": "Як отримати цю версію (AutoCAD закрийте):\n- є «Оновити плагіни AutoCAD» у меню Пуск: запустіть його й виберіть BPTOOLS;\n- інакше: завантажте {file} нижче, розпакуйте й запустіть install.bat.",
+
+    "ribbon.tab": "Креслення",
+    "ribbon.labels-panel": "Написи",
+    "ribbon.pos": "Позиційний номер",
+    "ribbon.pos-help": "Команда BPPOS. Виноска з позиційним номером на полиці й точкою на деталі; пропонує наступний номер у межах марки",
+    "ribbon.pin": "Номер контакту",
+    "ribbon.pin-help": "Команда BPPIN. Номери контактів по черзі, по одному на клацання, по центру точки; «Малий» — для малих роз'ємів",
+    "ribbon.wire": "Колір проводу",
+    "ribbon.wire-help": "Команда BPWIRE. Колір проводу зі списку, по центру точки; можна поставити кілька однакових",
+    "ribbon.name": "Назва роз'єму",
+    "ribbon.name-help": "Команда BPNAME. Назва роз'єму, наприклад Futaba - M; пропонує попередню",
+    "ribbon.view": "Вигляд з …",
+    "ribbon.view-help": "Команда BPVIEW. Напис «Вигляд з лицьового боку», «з монтажного боку» або «з боку контактів»",
+    "ribbon.figure": "Рис.",
+    "ribbon.figure-help": "Команда BPFIG. Підпис «Рис. N. …»; пропонує наступний номер у межах марки",
+    "ribbon.style": "Стиль напису",
+    "ribbon.style-help": "Команда BPSTYLE. Дає вибраним текстам стиль позиційного номера, номера контакту, кольору проводу тощо",
+    "ribbon.align-panel": "Вирівнювання",
+    "ribbon.textalign": "Вирівняти тексти",
+    "ribbon.textalign-help": "Команда TEXTALIGN. Вирівнює тексти в рядок або стовпчик за першим вибраним",
+    "ribbon.mleaderalign": "Вирівняти виноски",
+    "ribbon.mleaderalign-help": "Команда MLEADERALIGN. Вирівнює позиційні номери в рядок або стовпчик",
+    "ribbon.file-panel": "Файл",
+    "ribbon.new": "Нове креслення",
+    "ribbon.new-help": "Команда BPNEW. Нове креслення з шаблону BPTOOLS: усі стилі оформлення, шар «Написи», міліметри"
+  },
+
+  "labels": {
+    "figure": "Рис.",
+    "colours": ["Чорний", "Червоний", "Жовтий", "Зелений", "Синій", "Білий", "Коричневий", "Сірий", "Помаранчевий", "Фіолетовий", "Рожевий", "Блакитний", "Жовто-зелений"],
+    "view-keywords": ["Лицьовий", "Монтажний", "Контакти"],
+    "views": ["Вигляд з лицьового боку", "Вигляд з монтажного боку", "Вигляд з боку контактів"]
+  },
+
+  "files": {}
+}

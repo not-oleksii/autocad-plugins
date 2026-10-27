@@ -23,7 +23,8 @@ It fails, and writes nothing, when:
   - a Ukrainian string is written in LISP outside the plugin's 00-settings.lsp (it belongs in messages.json);
   - the version in 00-settings.lsp and PackageContents.xml differ or isn't <major>.<minor>.<patch>.
 The updater is checked against common/messages.json alone, since that is all it has.
-A key that no code uses is only a warning; program.<exe> keys are read by install.ps1 by name.
+A key that no code uses is only a warning; program.<exe> and suggest.<plugin> keys are read by
+install.ps1 by name.
 """
 
 import ast
@@ -272,7 +273,7 @@ def main():
         sys.exit(1)
     for section in SECTIONS:
         unused = set(data[section]) - checker.used[section] - updater.used[section]
-        for key in sorted(k for k in unused if not k.startswith("program.")):
+        for key in sorted(k for k in unused if not k.startswith(("program.", "suggest."))):
             print(f"warning: {section}.{key} in messages.json is not used anywhere")
 
     parts = [f";;; Built by build.bat from common\\lsp, {plugin_dir.name}\\src\\lsp and the messages.json files. Edit those, not this file.\n\n"]

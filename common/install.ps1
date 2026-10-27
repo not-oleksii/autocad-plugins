@@ -7,9 +7,13 @@
 #   - updater\ goes to %LOCALAPPDATA%\AutoCAD plugins, unless a newer one is there (version.txt);
 #   - the Start menu gets «Оновити плагіни AutoCAD» and the plugin's guide, and loses the plugin's
 #     own «Оновити <NAME>» that versions before the shared updater made.
+# Then it offers once each plugin that this one suggests (plugin.json "suggests"), unless it is
+# installed already or the user said no before, and the updater installs it.
 # Uninstalling removes the bundle, and the updater too once no other plugin is left.
-# -AcadKey, -PluginsDir, -StartMenuDir, -UpdaterDir and -IgnoreRunningAutoCAD exist for the tests;
-# -WaitForPrograms is passed by the updater: wait for the bundle's programs to close instead of stopping.
+# -AcadKey, -PluginsDir, -StartMenuDir, -UpdaterDir, -IgnoreRunningAutoCAD and -ReleasesUrl (handed
+# to the updater) exist for the tests; -SuggestAnswer answers the offer instead of the user (y, n,
+# or anything else to skip it). -WaitForPrograms is passed by the updater: wait for the bundle's
+# programs to close instead of stopping.
 param(
     [switch]$Uninstall,
     [string]$AcadKey = 'HKCU:\Software\Autodesk\AutoCAD',
@@ -17,7 +21,9 @@ param(
     [string]$StartMenuDir = (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
     [string]$UpdaterDir = (Join-Path $env:LOCALAPPDATA 'AutoCAD plugins'),
     [switch]$IgnoreRunningAutoCAD,
-    [switch]$WaitForPrograms
+    [switch]$WaitForPrograms,
+    [string]$SuggestAnswer = '',
+    [string]$ReleasesUrl = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -117,6 +123,36 @@ function Set-Shortcut($path, $target, $title) {
 
 function Remove-Link($path) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force } }
 
+# The plugins this one suggests, each offered once: not when it is installed already or the user said
+# no before, which declined.txt in the updater's folder remembers. A yes runs the updater on it.
+function Invoke-Suggestions {
+    $suggests = @((Get-Content (Join-Path $src.FullName 'plugin.json') -Raw -Encoding UTF8 | ConvertFrom-Json).suggests | Where-Object { $_ })
+    $declinedFile = Join-Path $UpdaterDir 'declined.txt'
+    $declined = if (Test-Path $declinedFile) { @(Get-Content $declinedFile) } else { @() }
+    foreach ($s in $suggests) {
+        if ((Test-Path (Join-Path $PluginsDir "$s.bundle")) -or $declined -contains $s) { continue }
+        $answer = $SuggestAnswer
+        if (-not $answer) {
+            if ([Console]::IsInputRedirected) { continue }
+            $about = $messages."suggest.$($s.ToLower())"
+            Write-Host ''
+            $answer = Read-Host (Msg 'install.suggest' @{ plugin = $(if ($about) { $about } else { $s }) })
+        }
+        $answer = "$answer".Trim().ToLower()
+        if (@('', 'т', 'так', 'y', 'yes') -contains $answer) {
+            $updateArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $UpdaterDir 'update.ps1'), '-Install', $s,
+                '-AcadKey', $AcadKey, '-PluginsDir', $PluginsDir, '-StartMenuDir', $StartMenuDir)
+            if ($ReleasesUrl) { $updateArgs += @('-ReleasesUrl', $ReleasesUrl) }
+            if ($IgnoreRunningAutoCAD) { $updateArgs += '-IgnoreRunningAutoCAD' }
+            & powershell @updateArgs
+        }
+        elseif (@('н', 'ні', 'n', 'no') -contains $answer) {
+            Add-Content $declinedFile $s
+            Write-Host (Msg 'install.suggest-later' @{ plugin = $s; shortcut = (Msg 'install.shortcut') })
+        }
+    }
+}
+
 # Whether another plugin that uses the shared updater is still installed.
 function Test-OtherPlugins {
     [bool](Get-ChildItem $PluginsDir -Directory -Filter '*.bundle' -ErrorAction SilentlyContinue |
@@ -168,12 +204,13 @@ try {
 
     Remove-Link $oldUpdateLink
     Set-Shortcut $updaterLink (Join-Path $UpdaterDir 'update.bat') (Msg 'install.shortcut')
-    $guide = Join-Path $dest 'Instruktsiia.html'
+    $guide = Join-Path $dest 'guide.html'
     if (Test-Path $guide) {
         Set-Shortcut $guideLink $guide (Msg 'install.shortcut-guide' @{ name = $name })
         Write-Host (Msg 'install.update-hint' @{ name = $name; shortcut = (Msg 'install.shortcut'); guide = (Msg 'install.shortcut-guide' @{ name = $name }) })
     }
     else { Write-Host (Msg 'install.update-hint-short' @{ name = $name; shortcut = (Msg 'install.shortcut') }) }
+    Invoke-Suggestions
 }
 catch {
     Write-Host (Msg 'install.failed' @{ msg = $_.Exception.Message })

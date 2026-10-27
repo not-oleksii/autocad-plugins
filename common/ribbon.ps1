@@ -49,8 +49,8 @@ function New-RibbonIcon($Out, $command, $label, $color) {
     }
 }
 
-# An empty tab named $name (also its menu group), with a key tip.
-function New-Ribbon($name, $keyTip) {
+# An empty tab named $name (also its menu group), with a key tip; $text is what the tab says, the name if left out.
+function New-Ribbon($name, $keyTip, $text) {
     $C = 'Autodesk.AutoCAD.Customization'
     $cs = New-Object "$C.CustomizationSection"
     $cs.MenuGroupName = $name
@@ -58,7 +58,7 @@ function New-Ribbon($name, $keyTip) {
     $macros = New-Object "$C.MacroGroup" "$($name)Macros", $mg
     if (-not $mg.MacroGroups.Contains($macros)) { $mg.MacroGroups.Add($macros) | Out-Null }
     $tab = New-Object "$C.RibbonTabSource" $mg.RibbonRoot
-    $tab.Text = $name
+    $tab.Text = if ($text) { $text } else { $name }
     $tab.Name = $name
     $tab.ElementID = "RBN_$($name)_TAB"
     $tab.KeyTip = $keyTip

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AutoCAD loads BPTOOLS.bundle from %APPDATA%\Autodesk\ApplicationPlugins into every drawing.
+     Keep AppVersion equal to *bptools-version* in src\lsp\00-settings.lsp. -->
+<ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application"
+                    Name="BPTOOLS" AppVersion="0.0.0"
+                    Description="Labels of blueprints in one style: позиційні номери, номери контактів, кольори проводів, назви роз'ємів."
+                    ProductCode="{DC195242-7BAA-43B6-AE14-D1BC857FD612}"
+                    UpgradeCode="{FC5E65D9-97D6-4D46-8E61-0A7612D20E51}">
+  <Components Description="BPTOOLS">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.0" SupportPath="./Contents" />
+    <ComponentEntry AppName="BPTOOLS" ModuleName="./Contents/bptools.lsp"
+                    AppDescription="BPPOS, BPPIN, BPWIRE, BPNAME, BPVIEW, BPFIG, BPSTYLE, BPNEW and BPDEBUG commands" LoadOnAutoCADStartup="True" PerDocument="True">
+      <Commands GroupName="BPTOOLS">
+        <Command Local="BPPOS" Global="BPPOS" />
+        <Command Local="BPPIN" Global="BPPIN" />
+        <Command Local="BPWIRE" Global="BPWIRE" />
+        <Command Local="BPNAME" Global="BPNAME" />
+        <Command Local="BPVIEW" Global="BPVIEW" />
+        <Command Local="BPFIG" Global="BPFIG" />
+        <Command Local="BPSTYLE" Global="BPSTYLE" />
+        <Command Local="BPNEW" Global="BPNEW" />
+        <Command Local="BPDEBUG" Global="BPDEBUG" />
+      </Commands>
+    </ComponentEntry>
+    <!-- The «Креслення» ribbon tab, built by src\ribbon.ps1. -->
+    <ComponentEntry AppName="BPTOOLS_Ribbon" ModuleName="./Contents/BPTOOLS.cuix"
+                    AppDescription="BPTOOLS ribbon tab" LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>

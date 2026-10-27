@@ -12,13 +12,15 @@ $plugins = Join-Path $env:TEMP 'pdfall-test-plugins'
 $startMenu = Join-Path $env:TEMP 'pdfall-test-startmenu'
 $updater = Join-Path $env:TEMP 'pdfall-test-updater'
 $releases = Join-Path $env:TEMP 'pdfall-test-releases'
+$fakeBp = Join-Path $env:TEMP 'pdfall-test-fakebp'
 $contents = Join-Path $plugins 'PDFALL.bundle\Contents'
 $manifest = Join-Path $plugins 'PDFALL.bundle\PackageContents.xml'
 $messages = (Get-Content (Join-Path $dist 'messages.json') -Raw -Encoding UTF8 | ConvertFrom-Json).messages
 $shortcut = Join-Path $startMenu "$($messages.'install.shortcut').lnk"
 $guideShortcut = Join-Path $startMenu "$($messages.'install.shortcut-guide'.Replace('{name}', 'PDFALL')).lnk"
 $oldShortcut = Join-Path $startMenu "$($messages.'install.old-shortcut'.Replace('{name}', 'PDFALL')).lnk"
-$common = @{ AcadKey = $acad; PluginsDir = $plugins; StartMenuDir = $startMenu; UpdaterDir = $updater; IgnoreRunningAutoCAD = $true }
+# SuggestAnswer skip: no install here offers BPTOOLS, except where the test says.
+$common = @{ AcadKey = $acad; PluginsDir = $plugins; StartMenuDir = $startMenu; UpdaterDir = $updater; IgnoreRunningAutoCAD = $true; SuggestAnswer = 'skip' }
 $failures = @()
 function Check($ok, $what) {
     if ($ok) { Write-Host "  ok    $what" } else { Write-Host "  FAIL  $what"; $script:failures += $what }
@@ -67,6 +69,35 @@ function Publish($version, $hash) {
     [IO.File]::WriteAllText((Join-Path $releases 'releases.json'), (ConvertTo-Json $list -Depth 5), (New-Object Text.UTF8Encoding($false)))
 }
 
+# Adds a BPTOOLS 1.0.0 release to the fake list: the built PDFALL zip with its bundle renamed, which
+# is all the offer needs to install.
+function Publish-Bptools {
+    $fake = $fakeBp
+    if (Test-Path $fake) { Remove-Item $fake -Recurse -Force }
+    New-Item $fake -ItemType Directory | Out-Null
+    Get-ChildItem $dist | Where-Object { $_.Name -ne 'PDFALL.zip' -and $_.Name -ne 'release' } | Copy-Item -Destination $fake -Recurse
+    Rename-Item (Join-Path $fake 'PDFALL.bundle') 'BPTOOLS.bundle'
+    $x = [xml](Get-Content (Join-Path $fake 'BPTOOLS.bundle\PackageContents.xml') -Encoding UTF8)
+    $x.ApplicationPackage.Name = 'BPTOOLS'
+    $x.ApplicationPackage.AppVersion = '1.0.0'
+    $x.Save((Join-Path $fake 'BPTOOLS.bundle\PackageContents.xml'))
+    Set-Content (Join-Path $fake 'BPTOOLS.bundle\plugin.json') '{"name": "BPTOOLS", "prefix": "bp"}'
+    $zip = Join-Path $releases 'BPTOOLS-1.0.0.zip'
+    & tar.exe -a -c -f $zip -C $fake @(Get-ChildItem $fake | ForEach-Object { $_.Name })
+    [IO.File]::WriteAllText("$zip.sha256", "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower())  BPTOOLS-1.0.0.zip`n")
+    $json = Join-Path $releases 'releases.json'
+    $list = @(Get-Content $json -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $list += [pscustomobject]@{ tag_name = 'bptools-v1.0.0'; published_at = '2026-10-20T10:00:00Z'; body = '- NOTES-BPTOOLS'
+        assets = @(@{ name = 'BPTOOLS-1.0.0.zip'; browser_download_url = (Uri $zip) }, @{ name = 'BPTOOLS-1.0.0.zip.sha256'; browser_download_url = (Uri "$zip.sha256") }) }
+    [IO.File]::WriteAllText($json, (ConvertTo-Json $list -Depth 5), (New-Object Text.UTF8Encoding($false)))
+}
+function Install-Answering($answer) {
+    $a = $common.Clone()
+    $a.SuggestAnswer = $answer
+    $a.ReleasesUrl = Uri (Join-Path $releases 'releases.json')
+    & $installer @a *>&1 | Out-String
+}
+
 function Get-UpdateArgs {
     @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$updater\update.ps1`"",
       '-AcadKey', "`"$acad`"", '-PluginsDir', "`"$plugins`"", '-StartMenuDir', "`"$startMenu`"",
@@ -105,7 +136,7 @@ function Stop-OpenMerge($m) {
     if (-not $m.WaitForExit(30000)) { $m.Kill() }
 }
 
-$cleanup = $root, $plugins, $startMenu, $updater, $releases
+$cleanup = $root, $plugins, $startMenu, $updater, $releases, $fakeBp
 foreach ($p in $cleanup) { if (Test-Path $p) { Remove-Item $p -Recurse -Force } }
 $p24 = Profile2024
 $p23 = "$acad\R23.1\ACAD-3001:419\Profiles\<<Old Profile>>"
@@ -131,7 +162,7 @@ try {
     $zipFile = [IO.Compression.ZipFile]::OpenRead((Join-Path $dist 'PDFALL.zip'))
     $names = @($zipFile.Entries | ForEach-Object { $_.FullName })
     $zipFile.Dispose()
-    Check ($names -contains 'Instruktsiia.html' -and $names -contains 'install.bat' -and $names -contains 'PDFALL.bundle/Instruktsiia.html') `
+    Check ($names -contains 'guide.html' -and $names -contains 'install.bat' -and $names -contains 'PDFALL.bundle/guide.html') `
         'the zip has the guide next to install.bat and in the bundle'
     Check (@('updater/update.bat', 'updater/update.ps1', 'updater/messages.json', 'updater/version.txt', 'PDFALL.bundle/plugin.json' |
         Where-Object { $names -notcontains $_ }).Count -eq 0) 'the zip has the shared updater, and the bundle says it is one of the plugins'
@@ -153,7 +184,7 @@ try {
         'the Start menu entry «Оновити плагіни AutoCAD» runs the shared update.bat from %TEMP%'
     Check (-not (Test-Path -LiteralPath $oldShortcut)) 'the old «Оновити PDFALL» entry is gone'
     $link = Link $guideShortcut
-    Check ($link -and $link.TargetPath -eq (Join-Path $plugins 'PDFALL.bundle\Instruktsiia.html')) 'the Start menu has the guide'
+    Check ($link -and $link.TargetPath -eq (Join-Path $plugins 'PDFALL.bundle\guide.html')) 'the Start menu has the guide'
     $built = Installed
 
     $stamp = (Get-Content (Join-Path $updater 'version.txt') -Raw).Trim()
@@ -240,6 +271,25 @@ try {
     if (-not $up.WaitForExit(120000)) { $up.Kill() }
     Check ($up.ExitCode -eq 0 -and (Installed) -eq $built) "and installs once it is closed (exit $($up.ExitCode), now $(Installed))"
     Remove-Item $out -ErrorAction SilentlyContinue
+
+    Write-Host 'Offering BPTOOLS...'
+    Publish-Bptools
+    $bundleBp = Join-Path $plugins 'BPTOOLS.bundle'
+    $declined = Join-Path $updater 'declined.txt'
+    $o = Install-Answering 'n'
+    Check (-not (Test-Path $bundleBp) -and (Test-Path $declined) -and (Get-Content $declined) -contains 'BPTOOLS' -and $o -match 'BPTOOLS не встановлено') `
+        'a no to BPTOOLS installs nothing and is remembered'
+    $o = Install-Answering 'y'
+    Check (-not (Test-Path $bundleBp)) 'so BPTOOLS is not offered again'
+    Remove-Item $declined
+    $o = Install-Answering 'y'
+    $bpVersion = if (Test-Path "$bundleBp\PackageContents.xml") { ([xml](Get-Content "$bundleBp\PackageContents.xml" -Encoding UTF8)).ApplicationPackage.AppVersion }
+    Check ($bpVersion -eq '1.0.0' -and $o -match 'Завантажую BPTOOLS-1\.0\.0\.zip') "a yes installs the newest BPTOOLS through the updater ($bpVersion)"
+    $o = Install-Answering 'y'
+    Check ($o -notmatch 'Завантажую BPTOOLS') 'and an installed BPTOOLS is not offered'
+    & (Join-Path $fakeBp 'install.ps1') -Uninstall @common | Out-Null
+    Check (-not (Test-Path $bundleBp) -and (Test-Path (Join-Path $updater 'update.ps1'))) 'uninstalling BPTOOLS leaves the updater to PDFALL'
+
 
     Write-Host 'Uninstall...'
     $other = Join-Path $plugins 'OTHER.bundle'

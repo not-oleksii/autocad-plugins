@@ -1,7 +1,7 @@
 @echo off
 rem Builds dist\PDFALL.zip to give to colleagues: PDFALL.bundle (pdfall.lsp, merge.exe, PDFALL.pc3,
 rem the frame templates, the ribbon tab, the guide) plus what every plugin's zip has: install.bat,
-rem uninstall.bat, the messages.json they read, the shared updater and the guide Instruktsiia.html
+rem uninstall.bat, the messages.json they read, the shared updater and the guide guide.html
 rem (..\common\package.ps1).
 rem The same files are left unzipped in dist\.
 rem Needs once: py -3 -m pip install pyinstaller pypdf

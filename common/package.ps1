@@ -2,7 +2,7 @@
 # <NAME>.bundle in dist\ and zips it all into dist\<NAME>.zip for colleagues:
 #   install.bat, install.ps1, uninstall.bat, messages.json   the installer and every text it says
 #   updater\                                                 the shared updater, with version.txt
-#   Instruktsiia.html                                        the plugin's guide, if it has one
+#   guide.html                                        the plugin's guide, if it has one
 # The bundle gets plugin.json, which marks it as one of these plugins for the installer, and the guide.
 # version.txt is the time of the last commit that changed common\, so the installer can tell an
 # older updater from a newer one without anyone keeping a number up to date.
@@ -21,7 +21,7 @@ if (-not (Test-Path (Join-Path $bundle 'PackageContents.xml'))) { throw "build $
 Copy-Item (Join-Path $src 'plugin.json') $bundle
 foreach ($f in 'install.bat', 'install.ps1', 'uninstall.bat') { Copy-Item (Join-Path $PSScriptRoot $f) $Dist }
 Copy-Item (Join-Path $Built 'messages.json') $Dist
-$guide = Join-Path $src 'Instruktsiia.html'
+$guide = Join-Path $src 'guide.html'
 if (Test-Path $guide) { Copy-Item $guide $Dist; Copy-Item $guide $bundle }
 
 $updater = Join-Path $Dist 'updater'

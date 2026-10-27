@@ -1,13 +1,14 @@
 # Developing PDFALL
 
-How PDFALL is built, tested and released. What it does for colleagues is in the step-by-step guide [src/Instruktsiia.html](src/Instruktsiia.html) and, in short, [README.md](README.md) (both in Ukrainian), the terms in [GLOSSARY.md](GLOSSARY.md), and why it works this way in [docs/adr](docs/adr). PDFALL shares its installer, updater, release script and LISP helpers with the repository's other plugins; those live in [../common](../common), and why in [../docs/adr](../docs/adr).
+How PDFALL is built, tested and released. What it does for colleagues is in the step-by-step guide [src/guide.html](src/guide.html) and, in short, [README.md](README.md) (both in Ukrainian), the terms in [GLOSSARY.md](GLOSSARY.md), and why it works this way in [docs/adr](docs/adr). PDFALL shares its installer, updater, release script and LISP helpers with the repository's other plugins; those live in [../common](../common), and why in [../docs/adr](../docs/adr).
 
 ## Files
 
 ```
 src\lsp\*.lsp             the PDFALL, PDFNUM, PDFLIST, PDFSPEC and PDFSETTINGS commands, one module per file
 src\messages.json         every text the commands, merge.exe and the ribbon show or look for
-src\plugin.json           PDFALL's name, LISP prefix (pa) and debug command, for the shared build
+src\plugin.json           PDFALL's name, LISP prefix (pa) and debug command, for the shared build, and the plugin its
+                          install offers (BPTOOLS, with its description in messages.json as suggest.bptools)
 src\merge_blueprints.py   builds загальний and загальний друк (shipped as merge.exe)
 src\PDFALL.pc3            the PDF printer without the viewer
 src\PackageContents.xml   tells AutoCAD how to load the bundle
@@ -15,7 +16,7 @@ src\ribbon.ps1            builds PDFALL.cuix (the ribbon tab) and its icons with
 src\templates\*.dwg       the 28 empty рамки that PDFLIST and PDFSPEC paste
 src\make_templates.ps1    makes those templates and 62-previews.lsp from examples\formats (only when the forms change),
 src\make_templates.lsp    with this LISP
-src\Instruktsiia.html     the step-by-step guide for colleagues: zip root, bundle, Start menu (Інструкція PDFALL)
+src\guide.html     the step-by-step guide for colleagues: zip root, bundle, Start menu (Інструкція PDFALL)
 build.bat                 builds dist\PDFALL.zip
 release.ps1               raises the version (-Prepare) and publishes a GitHub release, with ..\common\release.ps1
 CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
@@ -109,7 +110,7 @@ The рамки that PDFLIST and PDFSPEC paste are `src\templates\PDFALL_*.dwg`, 
 
 ## The guide
 
-Colleagues read `src\Instruktsiia.html`, not the Markdown files: it opens in any browser, offline, from the zip (next to `install.bat`) and from the Start menu (**Інструкція PDFALL**, the bundle's copy). Keep it one self-contained file, with no scripts, fonts or images from the internet, and update it in the same pull request as the behaviour it describes. Its name is in Latin letters because the zip `build.bat` makes stores Cyrillic file names in a way Windows Explorer garbles. `README.md` is only the short version for the GitHub page.
+Colleagues read `src\guide.html`, not the Markdown files: it opens in any browser, offline, from the zip (next to `install.bat`) and from the Start menu (**Інструкція PDFALL**, the bundle's copy). Keep it one self-contained file, with no scripts, fonts or images from the internet, and update it in the same pull request as the behaviour it describes. Its name is in Latin letters because the zip `build.bat` makes stores Cyrillic file names in a way Windows Explorer garbles. `README.md` is only the short version for the GitHub page.
 
 ## Building and testing
 

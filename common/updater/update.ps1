@@ -8,7 +8,9 @@
 # the newest version of every installed plugin that has a newer one; a plugin that isn't installed
 # is installed only when picked. Then it downloads each release's <NAME>-<version>.zip, checks it
 # against the release's .sha256, waits once for AutoCAD to close and runs each zip's install.ps1.
-# Without a keyboard (input redirected) it only offers «Оновити все».
+# Without a keyboard (input redirected) it only offers «Оновити все». With -Install <NAME> it
+# installs the newest version of that plugin and asks nothing: a plugin's install.ps1 runs it so
+# when the user says yes to a plugin it suggests.
 # A release counts when it is tagged <name>-v<major>.<minor>.<patch> and is neither a draft nor a
 # pre-release (../../pdfall/docs/adr/0007-update-from-github-releases.md).
 # -AcadKey, -PluginsDir, -StartMenuDir, -UpdaterDir, -IgnoreRunningAutoCAD, -ReleasesUrl, -Yes and
@@ -21,7 +23,8 @@ param(
     [string]$ReleasesUrl = 'https://api.github.com/repos/not-oleksii/autocad-plugins/releases?per_page=100',
     [switch]$IgnoreRunningAutoCAD,
     [switch]$Yes,
-    [string[]]$Keys
+    [string[]]$Keys,
+    [string]$Install
 )
 # -File passes "DownArrow,Enter" as one string.
 $Keys = @($Keys | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -284,7 +287,12 @@ try {
     $plugins = @(Get-Plugins)
     if (-not $plugins) { Write-Host (Msg 'update.none-published'); return }
 
-    if ($Keys -or (-not $Yes -and -not [Console]::IsInputRedirected)) {
+    if ($Install) {
+        $p = @($plugins | Where-Object { $_.Name -eq $Install.ToUpper() })
+        if (-not $p) { Write-Host (Msg 'update.not-published' @{ name = $Install.ToUpper() }); return }
+        $targets = @([pscustomobject]@{ Plugin = $p[0]; Release = $p[0].Releases[0] })
+    }
+    elseif ($Keys -or (-not $Yes -and -not [Console]::IsInputRedirected)) {
         $targets = $null
         while (-not $targets) {
             $choice = Select-Plugin
