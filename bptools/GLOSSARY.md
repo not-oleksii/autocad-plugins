@@ -17,7 +17,7 @@ How a part is seen on a лист, named by the side it is seen from: з лиць
 _Avoid_: view, проєкція
 
 **Деталь бібліотеки**:
-One вигляд of one роз'єм or other part, drawn once, correctly, with its номери контактів, and pasted onto листи as it is instead of being redrawn. Named «<part> — <вигляд>», such as «DB-15F — з лицьового боку». The set grows when a new part is needed, and every user has the same set.
+One вигляд of one роз'єм or other part, drawn once, correctly, with its номери контактів, and pasted onto листи as it is instead of being redrawn. Named «<part> — <вигляд>», such as «D-Sub DB-15F — з лицьового боку». The set grows when a new part is needed, and every user has the same set.
 _Avoid_: block, symbol, component
 
 **Позиційний номер**:

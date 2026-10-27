@@ -11,6 +11,10 @@ src\plugin.json           BPTOOLS's name, LISP prefix (bp) and debug command (BP
 src\PackageContents.xml   tells AutoCAD how to load the bundle
 src\ribbon.ps1            builds BPTOOLS.cuix, the «Креслення» tab, with ..\common\ribbon.ps1
 src\make_template.ps1     builds BPTOOLS.dwt in the console AutoCAD from the built bptools.lsp
+src\parts\library.dwg     the parts drawn by hand (see "Adding a part")
+src\make_parts.lsp        generates the D-Sub parts, and writes the library out (with make_parts.ps1)
+src\make_parts.ps1        makes src\parts\<file>.dwg, one per вигляд, and src\lsp\45-parts.lsp; run when a part changes
+src\parts\*.dwg           what make_parts.ps1 made: one drawing per вигляд, shipped in the bundle's parts folder
 src\guide.html     the guide for colleagues: zip root, bundle, Start menu (Інструкція BPTOOLS)
 build.bat                 builds dist\BPTOOLS.zip
 release.ps1               raises the version (-Prepare) and publishes a GitHub release, with ..\common\release.ps1
@@ -30,23 +34,45 @@ common: 10-text, 12-log, 14-settings, 16-dialog   bp:msg ..., the debug log and 
 15-command.lsp            bp:run, which every command goes through: the style first, one undo step, system variables put back
 20-styles.lsp             bp:ensure-styles: makes the styles and puts back what was changed (ADR 0001)
 30-numbers.lsp            the next позиційний номер and Рис. number in a марка, through pdfall:marka-at
-40-labels.lsp             c:BPPOS, c:BPPIN, c:BPWIRE, c:BPNAME, c:BPVIEW, c:BPFIG, c:BPSTYLE
+40-labels.lsp             c:BPPOS, c:BPPIN, c:BPWIRE, c:BPNAME, c:BPVIEW, c:BPFIG, c:BPSTYLE; names, views, captions
+                          and notes are MTEXT one row wide, the rest TEXT
+45-parts.lsp              the catalog of parts with their outlines (made by make_parts.ps1, not edited by hand)
 50-new.lsp                c:BPNEW
+60-parts.lsp              c:BPPART: the window, the preview, pasting with rotation and scale, numbers upright (ADR 0002)
+70-center.lsp             c:BPCENTER: texts centred between the outermost points of other objects
 90-loaded.lsp             the line AutoCAD shows when it loads BPTOOLS
 ```
 
-The style names and heights are in `00-settings.lsp`, the only LISP file where Ukrainian text may be written; the words BPTOOLS writes into drawings (the colours, the views, `Рис.`) are in the `labels` of `messages.json`.
+The style names and heights are in `00-settings.lsp`, which with the generated `45-parts.lsp` (`"generated"` in `plugin.json`) are the only LISP files where Ukrainian text may be written; the words BPTOOLS writes into drawings (the colours, the views, `Рис.`) are in the `labels` of `messages.json`.
 
 Two things differ between the console AutoCAD the tests run in and the real one:
 
 - **ActiveX.** The console has none. `bp:add-pos` makes a multileader with `vla-addmleader` when ActiveX is there, because `MLEADER` asks for its points in the order the user last chose; in the console it uses `MLEADER`, which there asks arrowhead first and takes one line of text. `BPNEW` needs ActiveX to open a document.
-- **Dialogs.** The console has none, so BPWIRE asks at the command line instead of in its list window.
+- **Dialogs.** The console has none, so BPWIRE and BPPART ask at the command line instead of in their windows.
+- **Extents.** BPCENTER measures objects with ActiveX's bounding box; in the console it measures lines, polylines, circles, arcs, texts and multiline texts by hand.
 
 Check both by hand in AutoCAD after changing them.
 
 ## Numbers across the марка
 
 BPTOOLS never reads title blocks: it asks PDFALL's `pdfall:marka-at` which марка each point is in ([../docs/adr/0003](../docs/adr/0003-plugins-talk-through-one-function.md)), and counts across the whole drawing when PDFALL isn't loaded. Every multileader whose text starts with a number counts as a позиційний номер, whoever drew it, and every text in the «Підпис рисунка» style that starts with `Рис. N` as a figure.
+
+## Adding a part
+
+The library is `src\parts\library.dwg` plus the generated D-Sub parts ([ADR 0002](docs/adr/0002-a-library-of-parts.md)). To add a part:
+
+1. Run `build.bat` once, so `dist` has a bptools.lsp. Open `src\parts\library.dwg` in AutoCAD (start it from `BPTOOLS.dwt` the first time; any BPTOOLS command brings in the styles).
+2. Draw each вигляд the sheets need, full size in mm, as seen from that side. Pin 1 must be where it really is from that side: from the back a face is mirrored.
+3. Draw the lines on layer **0** with colour **ByBlock**, so the part takes the layer it is pasted on.
+4. Write each pin number as an attribute definition (ATTDEF):
+   - tag `PIN<n>`, default `<n>`, mode **Preset**;
+   - text style «Номер контакту», or «Номер контакту малий» where 2.5 mm doesn't fit;
+   - justification **Middle center**, at the place the number should sit.
+5. Make each вигляд a block. Name it «<part> — <вигляд>», with an em dash between spaces and the вигляд exactly «з лицьового боку», «з монтажного боку» or «з боку контактів», for example «JST GH 1.25 4 pin — з лицьового боку». Put the base point at the centre of the face. Leave the part's name and the «Вигляд з …» note out of the block.
+6. Save `library.dwg`, run `src\make_parts.ps1`, then `build.bat` again, and check the part in BPPART's preview and pasted.
+7. Commit `library.dwg`, `src\parts\*.dwg` and `src\lsp\45-parts.lsp` together, and add a line to the changelog.
+
+A D-Sub of another size is a line in `*mk-dsubs*` in `make_parts.lsp`; check its dimensions against the роз'єм. To correct a generated part by hand, draw a block of the same name in `library.dwg`: it wins.
 
 ## Building and testing
 

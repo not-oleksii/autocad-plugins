@@ -1,7 +1,8 @@
 ﻿# End-to-end test of the built BPTOOLS.bundle without opening AutoCAD:
 #   1. in an empty metric drawing: the стиль оформлення is made, left alone when it is right, and
 #      put back when changed; then every label command, driven as a user would type at the command
-#      line (the console AutoCAD has no dialogs, so BPWIRE asks at the command line);
+#      line (the console AutoCAD has no dialogs, so BPWIRE and BPPART ask at the command line),
+#      the library's parts, and BPCENTER;
 #   2. on the PDFALL sample drawing (..\pdfall\examples\*.dxf), if it is there: позиційні номери and
 #      Рис. numbers are counted across the марка with PDFALL loaded, across the drawing without;
 #   3. the template BPTOOLS.dwt;
@@ -33,7 +34,16 @@ $load = @"
 (foreach s *bp-setting-defaults* (bp:set-setting (car s) (cdr s)))
 (defun show (tag x) (princ (strcat "\n" tag "=")) (prin1 x) (princ "|") (princ))
 (defun style-of (name / e) (setq e (entget (tblobjname "STYLE" name))) (list (cdr (assoc 40 e)) (strcase (cdr (assoc 3 e)))))
-(defun texts (/ out) (foreach e (bp:model '((0 . "TEXT"))) (setq out (cons (list (cdr (assoc 1 e)) (cdr (assoc 7 e)) (cdr (assoc 8 e)) (cdr (assoc 72 e)) (cdr (assoc 73 e))) out))) (reverse out))
+;; TEXT as (text style layer 72 73), MTEXT as (text style layer "M" attachment rows), rows from its height
+(defun texts (/ out) (foreach e (bp:model '((0 . "TEXT,MTEXT")))
+  (setq out (cons (if (= (cdr (assoc 0 e)) "TEXT")
+                    (list (cdr (assoc 1 e)) (cdr (assoc 7 e)) (cdr (assoc 8 e)) (cdr (assoc 72 e)) (cdr (assoc 73 e)))
+                    (list (cdr (assoc 1 e)) (cdr (assoc 7 e)) (cdr (assoc 8 e)) "M" (cdr (assoc 71 e)) (fix (+ 0.5 (/ (cdr (assoc 43 e)) (* 1.6 (cdr (assoc 40 e))))))))
+                  out))) (reverse out))
+(defun attribs (ins / e out) (setq e (entnext ins))
+  (while (and e (= (cdr (assoc 0 (entget e))) "ATTRIB")) (setq out (cons (entget e) out) e (entnext e))) (reverse out))
+(defun pin-x (ins tag) (vl-some '(lambda (a) (if (= (cdr (assoc 2 a)) tag) (car (cdr (assoc 11 a))))) (attribs ins)))
+(defun mid-of (e / b) (setq b (bp:box e)) (list (/ (+ (caar b) (caadr b)) 2.0) (/ (+ (cadar b) (cadadr b)) 2.0)))
 (defun mleaders (/ out) (foreach e (bp:model '((0 . "MULTILEADER"))) (setq out (cons (list (cdr (assoc 304 e)) (cdr (assoc 8 e))) out))) (reverse out))
 "@
 
@@ -103,6 +113,47 @@ _L
 
 Колір
 (show "TEXTS" (texts))
+(show "PARTS" (bp:part-names))
+(show "VIEWS" (mapcar 'cadr (bp:part-views "D-Sub DB-09F")))
+(setvar "CLAYER" "0")
+BPPART
+3
+1
+90
+2
+200,200
+(setq ins (entlast) d (entget ins))
+(show "PASTED" (list (cdr (assoc 2 d)) (cdr (assoc 8 d)) (fix (+ 0.5 (* 180 (/ (cdr (assoc 50 d)) pi)))) (cdr (assoc 41 d)) (length (attribs ins))))
+(setq seen nil)
+(foreach a (attribs ins) (if (not (member (setq x (list (cdr (assoc 50 a)) (cdr (assoc 40 a)) (cdr (assoc 7 a)))) seen)) (setq seen (cons x seen))))
+(show "UPRIGHT" seen)
+(show "NAME-NEXT" (bp:setting "Name"))
+(setq f (bp:paste-part (car (bp:part-views "D-Sub DB-09F")) '(300.0 300.0 0.0) 0 1)
+      b (bp:paste-part (cadr (bp:part-views "D-Sub DB-09F")) '(400.0 300.0 0.0) 0 1)
+      m (bp:paste-part (car (bp:part-views "D-Sub DB-09M")) '(500.0 300.0 0.0) 0 1))
+(show "PIN1" (list (> (pin-x f "PIN1") (pin-x f "PIN5")) (< (pin-x b "PIN1") (pin-x b "PIN5")) (< (pin-x m "PIN1") (pin-x m "PIN5"))))
+(entmake '((0 . "LINE") (10 0.0 -200.0 0.0) (11 100.0 -200.0 0.0)))
+(entmake '((0 . "LINE") (10 0.0 -240.0 0.0) (11 100.0 -240.0 0.0)))
+(entmake '((0 . "TEXT") (10 10.0 -230.0 0.0) (40 . 2.5) (1 . "ABC") (7 . "Standard") (8 . "0")))
+BPCENTER
+_L
+
+_W
+-1,-250
+101,-195
+
+
+(show "CENTER-H" (list (equal (car (mid-of (entlast))) 50.0 0.01) (mid-of (entlast))))
+(bp:add-text "name" "Futaba - M" '(20.0 -236.0 0.0))
+BPCENTER
+_L
+
+_W
+-1,-250
+101,-195
+
+Вертикально
+(show "CENTER-V" (list (equal (cadr (mid-of (entlast))) -220.0 0.01) (mid-of (entlast))))
 (princ "\nEND-OF-TEST")
 QUIT
 Y
@@ -129,12 +180,20 @@ $texts = Value 'TEXTS'
 Check (Holds $texts '("1" "Номер контакту" "Написи" 1 2)', '("2" "Номер контакту" "Написи" 1 2)', '("5" "Номер контакту" "Написи" 1 2)', '("6" "Номер контакту малий" "Написи" 1 2)') `
     'BPPIN numbers the pins one per click, centred, goes on from the number given, and switches to the small style'
 Check ([regex]::Matches($texts, [regex]::Escape('("Жовтий" "Колір проводу" "Написи" 1 2)')).Count -eq 2) 'BPWIRE puts colour 3 of the list wherever it is clicked'
-Check ([regex]::Matches($texts, [regex]::Escape('("JST GH 1.25 4 pin" "Назва роз''єму" "Написи" 1 2)')).Count -eq 2) 'BPNAME writes the name typed, and offers it again the next time'
-Check (Holds $texts '("Вигляд з монтажного боку" "Вигляд" "Написи" 1 2)') 'BPVIEW writes the note of the side picked'
-Check (Holds $texts '("Рис. 1. Схема з''єднань" "Підпис рисунка" "Написи" 1 2)', '("Рис. 5." "Підпис рисунка" "Написи" 1 2)') 'BPFIG numbers the captions and takes a number typed'
+Check ([regex]::Matches($texts, [regex]::Escape('("JST GH 1.25 4 pin" "Назва роз''єму" "Написи" "M" 5 1)')).Count -eq 2) 'BPNAME writes the name typed as one row of multiline text, centred, and offers it again the next time'
+Check (Holds $texts '("Вигляд з монтажного боку" "Вигляд" "Написи" "M" 5 1)') 'BPVIEW writes the note of the side picked'
+Check (Holds $texts '("Рис. 1. Схема з''єднань" "Підпис рисунка" "Написи" "M" 5 1)', '("Рис. 5." "Підпис рисунка" "Написи" "M" 5 1)') 'BPFIG numbers the captions and takes a number typed'
 Check (Holds $texts '("Ручний напис" "Колір проводу" "Написи" 0 0)') "BPSTYLE gives a text typed by hand the style picked ($texts)"
 Check ($log -match 'Стиль «Колір проводу» отримали написів: 1') 'and says how many'
 Check ($log -notmatch 'Помилка BP') 'no command stopped with an error'
+Check ((Value 'PARTS') -eq '("D-Sub DB-09F" "D-Sub DB-09M" "D-Sub DB-15F" "D-Sub DB-15M")' -and (Value 'VIEWS') -eq '("front" "back")') `
+    "the library has the generated D-Sub parts, each from the front and the back ($(Value 'PARTS'))"
+Check ((Value 'PASTED') -eq '("D-Sub DB-15F — з лицьового боку" "0" 90 2.0 15)') "BPPART pastes the вигляд picked, turned and scaled as asked, on the current layer, with its 15 pin numbers ($(Value 'PASTED'))"
+Check ((Value 'UPRIGHT') -eq '((0.0 1.8 "Номер контакту малий"))') "the pin numbers stay upright and 1.8 high whatever the rotation and scale ($(Value 'UPRIGHT'))"
+Check ((Value 'NAME-NEXT') -eq '"D-Sub DB-15F"') 'BPNAME then offers the name of the part pasted'
+Check ((Value 'PIN1') -eq '(T T T)') 'pin 1 is at the right of a female роз''єм seen from the front, at the left seen from the back, and at the left of a male one from the front'
+Check ((Value 'CENTER-H') -match '^\(T ') "BPCENTER moves a text across to midway between the objects' outermost points ($(Value 'CENTER-H'))"
+Check ((Value 'CENTER-V') -match '^\(T ') "and, Вертикально, up or down ($(Value 'CENTER-V'))"
 
 $dxf = Get-ChildItem (Join-Path $PSScriptRoot '..\..\pdfall\examples') -Filter '*.dxf' -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($dxf -and (Test-Path (Join-Path $Pdfall 'pdfall.lsp'))) {
@@ -183,6 +242,6 @@ $macros = @($cs.MenuGroup.MacroGroups | ForEach-Object { $_.MenuMacros } | ForEa
 Check ($tab.Text -eq 'Креслення') "BPTOOLS.cuix has a «Креслення» tab ($($tab.Text))"
 Check ((@('BPPOS', 'BPPIN', 'BPWIRE', 'BPNAME', 'BPVIEW', 'BPFIG', 'BPSTYLE', 'TEXTALIGN', 'MLEADERALIGN', 'BPNEW') | Where-Object { $macros -notcontains $_ }).Count -eq 0) `
     "with a button for each command ($($macros -join ', '))"
-Check (@(Get-ChildItem $Contents -Filter '*_32.png').Count -eq 10) 'and an icon for each'
+Check (@(Get-ChildItem $Contents -Filter '*_32.png').Count -eq 12) 'and an icon for each'
 
 if ($failures) { Write-Host "FAILED: $($failures -join '; ')"; exit 1 } else { Write-Host 'All passed.' }

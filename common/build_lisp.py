@@ -20,7 +20,9 @@ It fails, and writes nothing, when:
   - the code uses a key that the messages don't have, in the section it reads it from;
   - a message and the code that shows it disagree on its {names};
   - common and the plugin both have a key (a plugin can't change a common text by accident);
-  - a Ukrainian string is written in LISP outside the plugin's 00-settings.lsp (it belongs in messages.json);
+  - a Ukrainian string is written in LISP outside the plugin's 00-settings.lsp and the files plugin.json
+    lists as "generated" (made by a script from drawings, such as BPTOOLS's catalog of parts); it
+    belongs in messages.json;
   - the version in 00-settings.lsp and PackageContents.xml differ or isn't <major>.<minor>.<patch>.
 The updater is checked against common/messages.json alone, since that is all it has.
 A key that no code uses is only a warning; program.<exe> and suggest.<plugin> keys are read by
@@ -252,7 +254,8 @@ def main():
     # (name in the built file, text, whether Ukrainian is allowed); common first on a tie
     files = [(f"common/{p.name}", own_copy(p.read_text(encoding="utf-8"), plugin), False, p.name, 0)
              for p in (COMMON / "lsp").glob("*.lsp")]
-    files += [(p.name, p.read_text(encoding="utf-8"), p.name == "00-settings.lsp", p.name, 1)
+    generated = set(plugin.get("generated", [])) | {"00-settings.lsp"}
+    files += [(p.name, p.read_text(encoding="utf-8"), p.name in generated, p.name, 1)
               for p in (src / "lsp").glob("*.lsp")]
     files.sort(key=lambda f: (f[3], f[4]))
 

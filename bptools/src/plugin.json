@@ -1,5 +1,6 @@
 {
   "name": "BPTOOLS",
   "prefix": "bp",
-  "debug": "BPDEBUG"
+  "debug": "BPDEBUG",
+  "generated": ["45-parts.lsp"]
 }
