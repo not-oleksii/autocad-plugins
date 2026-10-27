@@ -51,7 +51,9 @@
 (setq *bptools-views*
   '(("front" "з лицьового боку")
     ("back" "з монтажного боку")
-    ("contacts" "з боку контактів")))
+    ("contacts" "з боку контактів")
+    ("top" "зверху")
+    ("side" "збоку")))
 (setq *bptools-part-dash* " — ")
 
 ;; The multileader style of позиційні номери (the number on a shelf, a dot on the part, ГОСТ 2.109)

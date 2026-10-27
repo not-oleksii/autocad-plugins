@@ -72,7 +72,7 @@ The library is `src\parts\library.dwg` plus the generated D-Sub parts ([ADR 0002
 6. Save `library.dwg`, run `src\make_parts.ps1`, then `build.bat` again, and check the part in BPPART's preview and pasted.
 7. Commit `library.dwg`, `src\parts\*.dwg` and `src\lsp\45-parts.lsp` together, and add a line to the changelog.
 
-A D-Sub of another size is a line in `*mk-dsubs*` in `make_parts.lsp`; check its dimensions against the роз'єм. To correct a generated part by hand, draw a block of the same name in `library.dwg`: it wins.
+Parts that follow a pattern are a line in a table of `make_parts.lsp` instead: a D-Sub shell in `*mk-dsubs*`, its top and side views in `*mk-dsub-sides*`, a single-row keyed connector (JST GH and the like) in `*mk-row-parts*`, a Futaba-style part in `*mk-futaba*`. Take the numbers from the maker's drawing and say where they came from in the comment; keep makers' datasheets in `datasheets\`, which git ignores (they are not ours to publish). A datasheet PDF that is encrypted opens with `py -3 -m pip install cryptography` and pypdf. To correct a generated part by hand, draw a block of the same name in `library.dwg`: it wins.
 
 ## Building and testing
 

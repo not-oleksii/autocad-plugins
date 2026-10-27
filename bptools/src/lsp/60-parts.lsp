@@ -1,13 +1,16 @@
 ;;; ---- BPPART -----------------------------------------------------------------
 ;;; «Вставити деталь»: pastes one вигляд of a part of the library (docs/adr/0002). A window lists
-;;; the parts, the вигляди of the one picked and a preview, with the rotation (in 90° steps) and the
-;;; scale; it opens on the part, вигляд, rotation and scale used last. The вигляд is pasted as a block
-;;; from its drawing in the bundle's parts folder, on the current layer, never mirrored, and its pin
-;;; numbers are stood upright at their style's height whatever the rotation and scale. The part's
-;;; name becomes the one BPNAME offers next. Defines c:BPPART. tests/run.ps1 also calls:
+;;; the parts (narrowed by what is typed in its search box), the вигляди of the one picked and a
+;;; preview with the pin numbers, with the rotation (in 90° steps) and the scale; it opens on the
+;;; part, вигляд, rotation and scale used last. The вигляд is pasted as a block from its drawing in
+;;; the bundle's parts folder, on the current layer, never mirrored, and its pin numbers are stood
+;;; upright at their style's height whatever the rotation and scale. Under it go the part's name and
+;;; its «Вигляд з …» note, as labels the user can move; the name becomes the one BPNAME offers next.
+;;; Defines c:BPPART. tests/run.ps1 also calls:
 ;;;   bp:part-names                     the parts of the catalog, sorted
 ;;;   bp:part-views (part)              its entries of the catalog, in the order of *bptools-views*
-;;;   bp:paste-part (entry pt rot scale)  inserts an entry at pt (or pause); returns the insert
+;;;   bp:paste-part (entry pt rot scale)  inserts an entry at pt (or pause) with its labels; returns the insert
+;;;   bp:part-search (text names)       the names that contain text, ignoring case
 ;;; Settings: Part, View (its key), Rotation and Scale, the ones used last.
 
 (defun bp:part-names (/ out)
@@ -35,15 +38,39 @@
     (setq e (entnext e)))
   (entupd ins))
 
-(defun bp:paste-part (entry pt rot scale / name)
+(defun bp:turned-box (entry rot scale / b a c s pts)
+  ;; The вигляд's extents once turned by rot and scaled, as ((x1 y1) (x2 y2)) from its base point.
+  (setq b (nth 3 entry) a (* pi (/ rot 180.0)) c (cos a) s (sin a))
+  (setq pts (mapcar '(lambda (p) (list (* scale (- (* (car p) c) (* (cadr p) s))) (* scale (+ (* (car p) s) (* (cadr p) c)))))
+                    (list (list (car b) (cadr b)) (list (caddr b) (cadr b)) (list (car b) (cadddr b)) (list (caddr b) (cadddr b)))))
+  (bp:corners pts))
+
+(defun bp:part-labels (entry ins rot scale / p b x y hn hv)
+  ;; The part's name and, under it, «Вигляд з …», centred under the pasted вигляд.
+  (setq p (cdr (assoc 10 (entget ins))) b (bp:turned-box entry rot scale)
+        hn (bp:kind-height "name") hv (bp:kind-height "view")
+        x (+ (car p) (/ (+ (caar b) (caadr b)) 2.0))
+        y (- (+ (cadr p) (cadar b)) 2.0 (/ hn 2.0)))
+  (bp:add-text "name" (car entry) (list x y 0.0))
+  (bp:add-text "view" (strcat (bp:label "view") " " (bp:view-name entry)) (list x (- y (/ hn 2.0) 1.5 (/ hv 2.0)) 0.0)))
+
+(defun bp:paste-part (entry pt rot scale / name ins)
   (setq name (bp:part-block entry))
   (bp:set-var "ATTREQ" 0)
   (bp:set-var "ATTDIA" 0)
   (command "_.-INSERT" (if (tblobjname "BLOCK" name) name (strcat name "=" (bp:part-file entry)))
            "_S" scale "_R" rot pt)
-  (bp:upright (entlast))
+  (setq ins (entlast))
+  (bp:upright ins)
+  (bp:part-labels entry ins rot scale)
   (bp:set-setting "Name" (car entry))
-  (entlast))
+  ins)
+
+(defun bp:part-search (text names / key)
+  (setq key (bp:lower (strcase (vl-string-trim " " text) T)))
+  (if (= key "")
+    names
+    (vl-remove-if-not '(lambda (n) (vl-string-search key (bp:lower (strcase n T)))) names)))
 
 ;;; ---- The window -------------------------------------------------------------
 
@@ -53,7 +80,8 @@
   "  : row {"
   "    : column {"
   "      : text { key = \"h_parts\"; width = 34; }"
-  "      : list_box { key = \"parts\"; width = 34; height = 22; }"
+  "      : edit_box { key = \"search\"; edit_width = 32; }"
+  "      : list_box { key = \"parts\"; width = 34; height = 21; }"
   "    }"
   "    : column {"
   "      : text { key = \"h_views\"; width = 44; }"
@@ -70,9 +98,30 @@
 
 (setq *bp-rotations* '(0 90 180 270) *bp-scales* '(1 2 3 4 5))
 
+;; The strokes of the digits 0-9 for the preview, image tiles having no text: segments of a cell
+;; 0.6 wide and 1 high as (x1 y1 x2 y2), y upwards from the middle.
+(setq *bp-digits*
+  (mapcar '(lambda (on) (vl-remove nil (mapcar '(lambda (seg flag) (if (= flag 1) seg))
+                                               '((0 0.5 0.6 0.5) (0.6 0.5 0.6 0) (0.6 0 0.6 -0.5) (0 -0.5 0.6 -0.5)
+                                                 (0 -0.5 0 0) (0 0 0 0.5) (0 0 0.6 0))
+                                               on)))
+          '((1 1 1 1 1 1 0) (0 1 1 0 0 0 0) (1 1 0 1 1 0 1) (1 1 1 1 0 0 1) (0 1 1 0 0 1 1)
+            (1 0 1 1 0 1 1) (1 0 1 1 1 1 1) (1 1 1 0 0 0 0) (1 1 1 1 1 1 1) (1 1 1 1 0 1 1))))
+
+(defun bp:preview-number (s px py hp / w x)
+  ;; s drawn in strokes hp pixels high, centred at the pixel px py.
+  (setq w (* 0.85 hp) x (- px (/ (* w (strlen s)) 2.0)))
+  (foreach ch (vl-string->list s)
+    (if (<= 48 ch 57)
+      (foreach g (nth (- ch 48) *bp-digits*)
+        (vector_image (fix (+ x (* 0.1 hp) (* hp (car g)))) (fix (- py (* hp (cadr g))))
+                      (fix (+ x (* 0.1 hp) (* hp (caddr g)))) (fix (- py (* hp (cadddr g)))) 1)))
+    (setq x (+ x w))))
+
 (defun bp:preview (entry rot / w h k dx dy b segs a c s x1 y1 x2 y2)
   ;; The вигляд's outline turned by rot, as big as fits the image tile and centred, y downwards:
-  ;; dark grey (250) on white (255), since colour 7 shows white on the dialog's grey.
+  ;; dark grey (250) on white (255), since colour 7 shows white on the dialog's grey; its pin numbers
+  ;; in red, upright as they are pasted.
   (setq w (dimx_tile "preview") h (dimy_tile "preview") b (nth 3 entry) segs (nth 4 entry)
         a (* pi (/ rot 180.0)) c (cos a) s (sin a))
   (defun bp:turn (x y) (list (- (* x c) (* y s)) (+ (* x s) (* y c))))
@@ -88,9 +137,12 @@
   (while segs
     (setq a (bp:turn (car segs) (cadr segs)) b (bp:turn (caddr segs) (cadddr segs)) segs (cddr (cddr segs)))
     (vector_image (fix (+ dx (* k (car a)))) (fix (- dy (* k (cadr a)))) (fix (+ dx (* k (car b)))) (fix (- dy (* k (cadr b)))) 250))
+  (foreach n (nth 5 entry)
+    (setq a (bp:turn (car n) (cadr n)))
+    (bp:preview-number (caddr n) (+ dx (* k (car a))) (- dy (* k (cadr a))) (max 6.0 (* k 1.8))))
   (end_image))
 
-(defun bp:part-dialog (/ d names part views view rot scale done)
+(defun bp:part-dialog (/ d names shown part views view rot scale done)
   ;; (entry rotation scale), 'cancel, or nil without a dialog (the console AutoCAD).
   (if (setq d (bp:dlg-open (bp:dcl-lines *bp-part-dcl* (list (list "title" (bp:msg "part.title" nil) "Insert part")
                                                              (list "rotation" (bp:msg "part.rotation" nil) "Rotation")
@@ -98,6 +150,7 @@
                            "bptools_part"))
     (progn
       (setq names (bp:part-names)
+            shown names
             part (cond ((member (bp:setting "Part") names) (bp:setting "Part")) ((car names)))
             rot (cond ((member (atoi (bp:setting "Rotation")) *bp-rotations*) (atoi (bp:setting "Rotation"))) (0))
             scale (cond ((member (atoi (bp:setting "Scale")) *bp-scales*) (atoi (bp:setting "Scale"))) (1)))
@@ -108,13 +161,14 @@
               view (nth (cond ((vl-position (if view (cadr view) (bp:setting "View")) keys)) (0)) views))
         (bp:dlg-list "views" (mapcar 'bp:view-name views) (vl-position view views))
         (bp:preview view rot))
-      (set_tile "h_parts" (bp:msg "part.parts" nil))
+      (set_tile "h_parts" (bp:msg "part.search" nil))
       (set_tile "h_views" (bp:msg "part.views" nil))
       (bp:dlg-list "parts" names (vl-position part names))
       (bp:dlg-list "rotation" (mapcar '(lambda (r) (strcat (itoa r) "°")) *bp-rotations*) (vl-position rot *bp-rotations*))
       (bp:dlg-list "scale" (mapcar '(lambda (s) (strcat (itoa s) ":1")) *bp-scales*) (vl-position scale *bp-scales*))
       (bp:part-show)
-      (action_tile "parts" "(setq part (nth (atoi $value) names)) (bp:part-show) (if (= $reason 4) (done_dialog 1))")
+      (action_tile "search" "(setq shown (bp:part-search $value names)) (bp:dlg-list \"parts\" shown (cond ((vl-position part shown)) (0))) (if (and shown (not (member part shown))) (progn (setq part (car shown)) (bp:part-show)))")
+      (action_tile "parts" "(setq part (nth (atoi $value) shown)) (bp:part-show) (if (= $reason 4) (done_dialog 1))")
       (action_tile "views" "(setq view (nth (atoi $value) views)) (bp:preview view rot) (if (= $reason 4) (done_dialog 1))")
       (action_tile "rotation" "(setq rot (nth (atoi $value) *bp-rotations*)) (bp:preview view rot)")
       (action_tile "scale" "(setq scale (nth (atoi $value) *bp-scales*))")

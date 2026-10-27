@@ -13,7 +13,7 @@ A connector at an end of a джгут or on a device, such as D-Sub DB-15F, Futa
 _Avoid_: з'єднувач, конектор, connector
 
 **Вигляд**:
-How a part is seen on a лист, named by the side it is seen from: з лицьового боку (the mating face), з монтажного боку (where the wires go in) or з боку контактів. A роз'єм drawn on a лист shows the вигляди the reader needs, each with its «Вигляд з …» note.
+How a part is seen on a лист, named by the side it is seen from: з лицьового боку (the mating face), з монтажного боку (where the wires go in), з боку контактів, зверху or збоку. A роз'єм drawn on a лист shows the вигляди the reader needs, each with its «Вигляд з …» note.
 _Avoid_: view, проєкція
 
 **Деталь бібліотеки**:

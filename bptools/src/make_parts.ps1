@@ -29,7 +29,7 @@ $scr = @"
 (load "$c/bptools.lsp")
 (load "$s/make_parts.lsp")
 (bp:ensure-styles)
-(mk:dsubs)
+(mk:generate)
 (mk:write-library "$($PSScriptRoot -replace '\\', '\\')")
 QUIT
 Y
