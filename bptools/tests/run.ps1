@@ -145,6 +145,10 @@ BPPART
       b (bp:paste-part (cadr (bp:part-views "D-Sub DB-09F")) '(400.0 300.0 0.0) 0 1)
       m (bp:paste-part (car (bp:part-views "D-Sub DB-09M")) '(500.0 300.0 0.0) 0 1))
 (show "PIN1" (list (> (pin-x f "PIN1") (pin-x f "PIN5")) (< (pin-x b "PIN1") (pin-x b "PIN5")) (< (pin-x m "PIN1") (pin-x m "PIN5"))))
+(bp:set-setting "Pins" "0")
+(setq np (bp:paste-part (car (bp:part-views "D-Sub DB-09F")) '(300.0 200.0 0.0) 0 1))
+(show "NO-PINS" (list (length (attribs np)) (bp:pins (car (bp:part-views "D-Sub DB-09F"))) (length (attribs f))))
+(bp:set-setting "Pins" "1")
 (defun blocks (/ b out) (while (setq b (tblnext "BLOCK" (null b))) (setq out (cons (cdr (assoc 2 b)) out))) out)
 (defun block-size (name / e n) (setq e (cdr (assoc -2 (tblsearch "BLOCK" name))) n 0) (while e (setq n (1+ n) e (entnext e))) n)
 (setq xt (bp:part-views "XT60_M") out (bp:outline (car xt)))
@@ -166,6 +170,8 @@ BPPART
                              (cdr (assoc 2 (entget xr)))))
 (bp:set-part-label "XT60_M" "XT60_M")
 (show "UNNAMED" (bp:part-label "XT60_M"))
+(setq ph (vl-some '(lambda (e) (if (= (cadr e) "bottom") e)) (bp:part-views "PHR-4")) phi (bp:paste-part ph '(950.0 300.0 0.0) 0 1))
+(show "PHR-PINS" (list (length (attribs phi)) (> (pin-x phi "PIN1") (pin-x phi "PIN4")) (length (nth 5 ph)) (nth 5 (car (bp:part-views "PHR-4")))))
 (entmake '((0 . "LINE") (10 0.0 -200.0 0.0) (11 100.0 -200.0 0.0)))
 (entmake '((0 . "LINE") (10 0.0 -240.0 0.0) (11 100.0 -240.0 0.0)))
 (entmake '((0 . "TEXT") (10 10.0 -230.0 0.0) (40 . 2.5) (1 . "ABC") (7 . "Standard") (8 . "0")))
@@ -231,6 +237,7 @@ Check ((Value 'SAFE-BLOCK') -eq '"Leergehäuse. Kabel-Platine RM 2.54 mm - 1 x 1
 Check ((Value 'RENAMED') -eq '("XT60 роз''єм живлення" ("XT60_M") "XT60_M")') "a part renamed on this PC keeps the name, is found by it and sorted by it ($(Value 'RENAMED'))"
 Check ((Value 'RENAMED-PASTED') -eq '("XT60 роз''єм живлення" T "XT60_M — спереду")') "and is pasted with it as its name, its block keeping the library's ($(Value 'RENAMED-PASTED'))"
 Check ((Value 'UNNAMED') -eq '"XT60_M"') 'giving it back the library''s name takes the rename back'
+Check ((Value 'PHR-PINS') -eq '(4 T 4 nil)') "a part of the components library pastes with its pin numbers, pin 1 at the right of a JST PHR from below, and only in the views that show its contacts ($(Value 'PHR-PINS'))"
 Check ((Value 'LABELS') -eq '(("D-Sub DB-15F" "Назва роз''єму" T) ("Вигляд з лицьового боку" "Вигляд" T))') "the part's name and its «Вигляд з …» note are placed under it ($(Value 'LABELS'))"
 Check ((Value 'SEARCH') -eq '(("JST GH 1.25 3 pin" "JST GH 1.25 4 pin") ("Futaba - F" "Futaba - M") nil)') "the window's search finds parts by any part of their name, ignoring case ($(Value 'SEARCH'))"
 Check ((Value 'FUTABA') -eq '(("front" "back" "side") T T ("front" "back" "top" "side") 4 ("front" "back" "side"))') "Futaba has front, back and side, pin 1 at the top and numbers on the right; DB-15F has top and side views too; JST GH 4 pin has 4 numbers and a side view ($(Value 'FUTABA'))"
@@ -239,6 +246,7 @@ Check ((Value 'PASTED') -eq '("D-Sub DB-15F — з лицьового боку" 
 Check ((Value 'UPRIGHT') -eq '((0.0 1.8 "Номер контакту малий"))') "the pin numbers stay upright and 1.8 high whatever the rotation and scale ($(Value 'UPRIGHT'))"
 Check ((Value 'NAME-NEXT') -eq '"D-Sub DB-15F"') 'BPNAME then offers the name of the part pasted'
 Check ((Value 'PIN1') -eq '(T T T)') 'pin 1 is at the right of a female роз''єм seen from the front, at the left seen from the back, and at the left of a male one from the front'
+Check ((Value 'NO-PINS') -eq '(0 nil 9)') "without «З номерами контактів» the part goes in without its pin numbers, while one pasted with them keeps all 9 ($(Value 'NO-PINS'))"
 Check ((Value 'CENTER-H') -match '^\(T ') "BPCENTER moves a text across to midway between the objects' outermost points ($(Value 'CENTER-H'))"
 Check ((Value 'CENTER-V') -match '^\(T ') "and, Вертикально, up or down ($(Value 'CENTER-V'))"
 

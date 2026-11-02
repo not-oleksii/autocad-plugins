@@ -7,7 +7,8 @@
 ;;; upright at their style's height whatever the rotation and scale. Under it go the part's name and
 ;;; its «Вигляд з …» note, as labels the user can move; the name becomes the one BPNAME offers next.
 ;;; The name is the library's unless the user gave the part another in the window, which this PC
-;;; then keeps; the block keeps the library's, so a drawing reads the same on every PC.
+;;; then keeps; the block keeps the library's, so a drawing reads the same on every PC. Without
+;;; «З номерами контактів» ticked the part goes in without its pin numbers.
 ;;; Defines c:BPPART. tests/run.ps1 also calls:
 ;;;   bp:part-names                     the parts of the catalog, sorted
 ;;;   bp:part-views (part)              its entries of the catalog, in the order of *bptools-views*
@@ -15,8 +16,9 @@
 ;;;   bp:part-search (text names)       the names that contain text, or whose name on this PC does, ignoring case
 ;;;   bp:part-label, bp:set-part-label  the part's name on this PC
 ;;;   bp:outline (entry)                the вигляд's lines for the preview
-;;; Settings: Part, View (its key), Rotation and Scale, the ones used last; Name:<part> for each
-;;; part the user renamed.
+;;;   bp:pins (entry)                   its pin numbers, none when the user wants none
+;;; Settings: Part, View (its key), Rotation, Scale and Pins (1 with pin numbers, 0 without), the
+;;; ones used last; Name:<part> for each part the user renamed.
 
 (defun bp:part-names (/ out)
   (foreach p *bptools-parts* (if (not (member (car p) out)) (setq out (cons (car p) out))))
@@ -79,6 +81,17 @@
     (nth 4 entry)
     (cdr (assoc (cadr entry) (cdr (bp:read-outlines (nth 4 entry)))))))
 
+(defun bp:pins (entry)
+  ;; entry's pin numbers, ((x y "n") ...), unless the user wants parts without them.
+  (if (/= (bp:setting "Pins") "0") (nth 5 entry)))
+
+(defun bp:drop-pins (ins)
+  ;; ins made again without its attributes (its pin numbers), the new insert returned: an
+  ;; attribute can't be deleted on its own, and ActiveX is missing in the console AutoCAD.
+  (entmake (vl-remove-if '(lambda (p) (member (car p) '(-1 5 66 330))) (entget ins)))
+  (entdel ins)
+  (entlast))
+
 (defun bp:style-height (style)
   (vl-some '(lambda (s) (if (= (strcase (cadr s)) (strcase style)) (caddr s))) *bptools-styles*))
 
@@ -98,7 +111,7 @@
   (setq b (nth 3 entry) a (* pi (/ rot 180.0)) c (cos a) s (sin a))
   (setq pts (mapcar '(lambda (p) (list (* scale (- (* (car p) c) (* (cadr p) s))) (* scale (+ (* (car p) s) (* (cadr p) c)))))
                     (list (list (car b) (cadr b)) (list (caddr b) (cadr b)) (list (car b) (cadddr b)) (list (caddr b) (cadddr b)))))
-  (foreach n (nth 5 entry)
+  (foreach n (bp:pins entry)
     (setq b (list (* scale (- (* (car n) c) (* (cadr n) s))) (* scale (+ (* (car n) s) (* (cadr n) c))))
           pts (append pts (list (mapcar '- b '(1.2 1.2)) (mapcar '+ b '(1.2 1.2))))))
   (bp:corners pts))
@@ -137,7 +150,7 @@
   (command "_.-INSERT" (if (tblobjname "BLOCK" name) name (strcat name "=" (bp:part-file entry)))
            "_S" scale "_R" rot pt)
   (setq ins (entlast))
-  (bp:upright ins)
+  (if (bp:pins entry) (bp:upright ins) (setq ins (bp:drop-pins ins)))
   (bp:part-labels entry ins rot scale)
   (bp:set-setting "Name" (bp:part-label (car entry)))
   ins)
@@ -173,6 +186,7 @@
   "        : popup_list { key = \"rotation\"; label = @rotation@; width = 22; }"
   "        : popup_list { key = \"scale\"; label = @scale@; width = 20; }"
   "      }"
+  "      : toggle { key = \"pins\"; label = @pins@; }"
   "      : text { key = \"h_label\"; width = 44; }"
   "      : edit_box { key = \"label\"; edit_width = 42; }"
   "    }"
@@ -221,23 +235,26 @@
   (while segs
     (setq a (bp:turn (car segs) (cadr segs)) b (bp:turn (caddr segs) (cadddr segs)) segs (cddr (cddr segs)))
     (vector_image (fix (+ dx (* k (car a)))) (fix (- dy (* k (cadr a)))) (fix (+ dx (* k (car b)))) (fix (- dy (* k (cadr b)))) 250))
-  (foreach n (nth 5 entry)
+  (foreach n (bp:pins entry)
     (setq a (bp:turn (car n) (cadr n)))
     (bp:preview-number (caddr n) (+ dx (* k (car a))) (- dy (* k (cadr a))) hp))
   (end_image))
 
-(defun bp:part-dialog (/ d names shown part views view rot scale done)
-  ;; (entry rotation scale), 'cancel, or nil without a dialog (the console AutoCAD).
+(defun bp:part-dialog (/ d names shown part views view rot scale pins done)
+  ;; (entry rotation scale), 'cancel, or nil without a dialog (the console AutoCAD). The Pins
+  ;; setting follows the check box at once, for the preview, and is put back on Cancel.
   (if (setq d (bp:dlg-open (bp:dcl-lines *bp-part-dcl* (list (list "title" (bp:msg "part.title" nil) "Insert part")
                                                              (list "rotation" (bp:msg "part.rotation" nil) "Rotation")
-                                                             (list "scale" (bp:msg "part.scale" nil) "Scale")))
+                                                             (list "scale" (bp:msg "part.scale" nil) "Scale")
+                                                             (list "pins" (bp:msg "part.pins" nil) "With pin numbers")))
                            "bptools_part"))
     (progn
       (setq names (bp:by-label (bp:part-names))
             shown names
             part (cond ((member (bp:setting "Part") names) (bp:setting "Part")) ((car names)))
             rot (cond ((member (atoi (bp:setting "Rotation")) *bp-rotations*) (atoi (bp:setting "Rotation"))) (0))
-            scale (cond ((member (atoi (bp:setting "Scale")) *bp-scales*) (atoi (bp:setting "Scale"))) (1)))
+            scale (cond ((member (atoi (bp:setting "Scale")) *bp-scales*) (atoi (bp:setting "Scale"))) (1))
+            pins (bp:setting "Pins"))
       (defun bp:part-show (/ keys)
         ;; The вигляди of part, the one of the same side as before kept, its preview and its name.
         (setq views (bp:part-views part)
@@ -245,6 +262,7 @@
               view (nth (cond ((vl-position (if view (cadr view) (bp:setting "View")) keys)) (0)) views))
         (bp:dlg-list "views" (mapcar 'bp:view-name views) (vl-position view views))
         (set_tile "label" (bp:part-label part))
+        (mode_tile "pins" (if (nth 5 view) 0 1))
         (bp:preview view rot))
       (defun bp:part-rename (s)
         ;; part takes the name s on this PC, in the list too.
@@ -257,6 +275,7 @@
       (bp:dlg-list "parts" (mapcar 'bp:part-label names) (vl-position part names))
       (bp:dlg-list "rotation" (mapcar '(lambda (r) (strcat (itoa r) "°")) *bp-rotations*) (vl-position rot *bp-rotations*))
       (bp:dlg-list "scale" (mapcar '(lambda (s) (strcat (itoa s) ":1")) *bp-scales*) (vl-position scale *bp-scales*))
+      (set_tile "pins" (if (= pins "0") "0" "1"))
       (bp:part-show)
       (action_tile "search" "(setq shown (bp:part-search $value names)) (bp:dlg-list \"parts\" (mapcar 'bp:part-label shown) (cond ((vl-position part shown)) (0))) (if (and shown (not (member part shown))) (progn (setq part (car shown)) (bp:part-show)))")
       (action_tile "parts" "(setq part (nth (atoi $value) shown)) (bp:part-show) (if (= $reason 4) (done_dialog 1))")
@@ -265,8 +284,10 @@
       (action_tile "views" "(setq view (nth (atoi $value) views)) (bp:preview view rot) (if (= $reason 4) (done_dialog 1))")
       (action_tile "rotation" "(setq rot (nth (atoi $value) *bp-rotations*)) (bp:preview view rot)")
       (action_tile "scale" "(setq scale (nth (atoi $value) *bp-scales*))")
+      (action_tile "pins" "(bp:set-setting \"Pins\" $value) (bp:preview view rot)")
       (setq done (start_dialog))
       (bp:dlg-close d)
+      (if (/= done 1) (bp:set-setting "Pins" pins))
       (if (= done 1) (list view rot scale) 'cancel))))
 
 (defun bp:pick-number (items default / i s)

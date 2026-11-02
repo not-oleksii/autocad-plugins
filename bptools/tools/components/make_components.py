@@ -20,6 +20,7 @@ from pathlib import Path
 
 import ezdxf
 from ezdxf import bbox, path as ezpath
+from ezdxf.enums import TextEntityAlignment
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 OUT = SRC / "parts" / "components"
@@ -57,6 +58,57 @@ def console(drawing, script, work):
         subprocess.run([CORE, "/i", str(drawing), "/s", str(scr), "/l", "en-US"], cwd=work, capture_output=True, timeout=300)
     except subprocess.TimeoutExpired:
         pass
+
+
+# ---- Pin numbers -----------------------------------------------------------------------------
+# The model's axes as each view shows them, its x and its y, Z pointing at the viewer of the front
+# view (as tools\step-views lays the views out); and the axis each view looks along.
+AXES = {"from-front": ("+X", "+Y"), "from-back": ("-X", "+Y"), "top": ("+X", "-Z"), "bottom": ("+X", "+Z"),
+        "left": ("+Z", "+Y"), "right": ("-Z", "+Y")}
+FACING = {"from-front": "Z", "from-back": "Z", "top": "Y", "bottom": "Y", "left": "X", "right": "X"}
+PIN_STYLE, PIN_HEIGHT, PIN_GAP = "Номер контакту малий", 1.8, 1.6  # as make_parts.lsp numbers its parts
+# The parts that get pin numbers: (pattern of the part's name, with its number of pins as n; pitch;
+# the axis its contacts point along, so the two views looking along it show them; the end of the
+# row pin 1 is at). Their rows are centred in those views. Pin 1 is after the makers' drawings in
+# datasheets\ (git keeps them out), matched to features the models show.
+PIN_PARTS = [
+    # ePH.pdf: No. 1 circuit at the right of the housing seen from the side with the contact
+    # windows, this drawing's front
+    (r"^PHR-(?P<n>\d+)$", 2.0, "Y", "+X"),
+    # ePH.pdf: No. 1 circuit at the right seen from the wall with the windows, posts down; that wall
+    # is this drawing's top, posts to the left
+    (r"^B(?P<n>\d+)B-PH-K-S$", 2.0, "X", "+Z"),
+    # ePH.pdf: PC board layout from above, leads away from the viewer: No. 1 circuit at the right;
+    # here the mating face is the right view, leads down
+    (r"^B(?P<n>\d+)B-PH-SM4-TB$", 2.0, "X", "+Z"),
+    # eSH.pdf: PC board layout from above, leads towards the viewer: No. 1 circuit at the left; here
+    # the front looks down on the mating face, leads up
+    (r"^SH1\.0 90 Socket - BM(?P<n>\d+)B-SRSS", 1.0, "Z", "+X"),
+    # eSH.pdf: the mating face with the board down, No. 1 circuit at the left: this drawing's bottom
+    (r"^SH1\.0 Straight Socket - SM(?P<n>\d+)B-SRSS", 1.0, "Y", "-X"),
+    # eSH.pdf: the mark of No. 1 circuit, a triangle on this drawing's bottom, at the left
+    (r"^SH1\.0 (Tabbed )?Plug - SHR-(?P<n>\d+)V-S", 1.0, "Z", "-X"),
+    # eGH.pdf: pin 1 at the right of the mating face with the lock up
+    (r"^JST_GHR-(?P<n>\d+)V-S", 1.25, "Z", "+X"),
+]
+
+
+def pins(name, key, box):
+    """A part's pin numbers in one view, [(x, y, "n")] from its base point (the centre of box,
+    (x1, y1, x2, y2) from it): one under each contact, or left of it for an upright row."""
+    rule = next((r for r in PIN_PARTS if re.search(r[0], name)), None)
+    if not rule or FACING.get(key) != rule[2]:
+        return []
+    pattern, pitch, _, end = rule
+    n = int(re.search(pattern, name).group("n"))
+    ax, ay = AXES[key]
+    along_x = ax[1] == end[1]
+    sign = 1 if (ax if along_x else ay)[0] == end[0] else -1
+    out = []
+    for i in range(n):
+        u = round(sign * ((n - 1) / 2 - i) * pitch, 3)
+        out.append((u, round(box[1] - PIN_GAP, 3), str(i + 1)) if along_x else (round(box[0] - PIN_GAP, 3), u, str(i + 1)))
+    return out
 
 
 # ---- Splitting a drawing into its views ------------------------------------------------------
@@ -244,6 +296,7 @@ def make(src, rel, name, pid):
         views, stray = classify(groups(entities(doc)))
         part = ezdxf.new("R2013", setup=["linetypes"])
         part.header["$INSUNITS"] = 4
+        part.styles.new(PIN_STYLE, dxfattribs={"font": "isocpeui.ttf"})
         lines = []
         for key, view in sorted(views.items(), key=lambda kv: list(VIEWS).index(kv[0])):
             b = view["box"]
@@ -260,6 +313,11 @@ def make(src, rel, name, pid):
                 c.dxf.discard("true_color")
                 c.translate(-cx, -cy, 0)
                 blk.add_entity(c)
+            for x, y, text in pins(name, key, (b[0] - cx, b[1] - cy, b[2] - cx, b[3] - cy)):
+                # a preset attribute, as make_parts.lsp makes them, which BPPART stands upright
+                a = blk.add_attdef(f"PIN{text}", (x, y), text, dxfattribs={
+                    "layer": "0", "color": 0, "height": PIN_HEIGHT, "style": PIN_STYLE, "flags": 8})
+                a.set_placement((x, y), align=TextEntityAlignment.MIDDLE_CENTER)
             step = max(b[2] - b[0], b[3] - b[1], 1e-6) / PREVIEW
             segs = segments(view["ents"], cx, cy, step)
             lines.append(f"V \"{key}\" {step:.6g} {b[0] - cx:.2f} {b[1] - cy:.2f} {b[2] - cx:.2f} {b[3] - cy:.2f}")
@@ -294,7 +352,9 @@ def write_catalog(index):
         for line in txt.read_text(encoding="ascii").splitlines():
             if line.startswith("V "):
                 _, key, _, *box = line.split()
-                rows.append(f"  ({lisp_str(name)} {key} {lisp_str('components\\' + pid)} ({' '.join(box)}) {lisp_str('components\\' + pid)} nil)")
+                ps = pins(name, key.strip('"'), [float(v) for v in box])
+                ps = "(" + " ".join(f"({x:g} {y:g} {lisp_str(t)})" for x, y, t in ps) + ")" if ps else "nil"
+                rows.append(f"  ({lisp_str(name)} {key} {lisp_str('components\\' + pid)} ({' '.join(box)}) {lisp_str('components\\' + pid)} {ps})")
     CATALOG.write_text(
         ";;; ---- Components library -----------------------------------------------------\n"
         ";;; Made by tools\\components\\make_components.py from the drawings of the components library; run it\n"
