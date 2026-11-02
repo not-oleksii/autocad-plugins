@@ -13,12 +13,16 @@ A connector at an end of a джгут or on a device, such as D-Sub DB-15F, Futa
 _Avoid_: з'єднувач, конектор, connector
 
 **Вигляд**:
-How a part is seen on a лист, named by the side it is seen from: з лицьового боку (the mating face), з монтажного боку (where the wires go in), з боку контактів, зверху or збоку. A роз'єм drawn on a лист shows the вигляди the reader needs, each with its «Вигляд з …» note.
+How a part is seen on a лист, named by the side it is seen from: з лицьового боку (the mating face), з монтажного боку (where the wires go in), з боку контактів, зверху or збоку. A роз'єм drawn on a лист shows the вигляди the reader needs, each with its «Вигляд з …» note. A part from the бібліотека компонентів has the 10 вигляди of its drawing instead, named by the direction they are seen from: спереду, ззаду, зверху, знизу, зліва, справа, and four isometric ones such as спереду зліва зверху. Its «спереду» is the front of its 3D model, which is not always the mating face.
 _Avoid_: view, проєкція
 
 **Деталь бібліотеки**:
-One вигляд of one роз'єм or other part, drawn once, correctly, with its номери контактів, and pasted onto листи as it is instead of being redrawn. Named «<part> — <вигляд>», such as «D-Sub DB-15F — з лицьового боку». The set grows when a new part is needed, and every user has the same set.
+One вигляд of one роз'єм or other part, drawn once, correctly, with its номери контактів, and pasted onto листи as it is instead of being redrawn. Named «<part> — <вигляд>», such as «D-Sub DB-15F — з лицьового боку». The set grows when a new part is needed, and every user has the same set. A user may give a part another name on their own PC; that name is what gets written under it, while its block keeps the library's name.
 _Avoid_: block, symbol, component
+
+**Бібліотека компонентів**:
+The folder of parts the team keeps outside BPTOOLS: the makers' 3D models of each kind of part, and a drawing of each part with its 10 вигляди. Most деталі бібліотеки are made from those drawings.
+_Avoid_: components library (in Ukrainian texts)
 
 **Позиційний номер**:
 The number on the shelf of a leader that ends in a dot on a part, naming the part's line in the специфікація (ГОСТ 2.109), one or two sizes larger than the dimension numbers. Numbered across the whole марка, not per лист: the same part has the same number on every лист.
