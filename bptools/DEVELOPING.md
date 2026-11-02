@@ -16,6 +16,7 @@ src\make_parts.lsp        generates the D-Sub parts, and writes the library out 
 src\make_parts.ps1        makes src\parts\<file>.dwg, one per вигляд, and src\lsp\45-parts.lsp; run when a part changes
 src\parts\*.dwg           what make_parts.ps1 made: one drawing per вигляд, shipped in the bundle's parts folder
 src\guide.html     the guide for colleagues: zip root, bundle, Start menu (Інструкція BPTOOLS)
+tools\step-views\         draws the 10 views of STEP models into DWGs (see "Views from STEP models"); not shipped
 build.bat                 builds dist\BPTOOLS.zip
 release.ps1               raises the version (-Prepare) and publishes a GitHub release, with ..\common\release.ps1
 CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
@@ -73,6 +74,29 @@ The library is `src\parts\library.dwg` plus the generated D-Sub parts ([ADR 0002
 7. Commit `library.dwg`, `src\parts\*.dwg` and `src\lsp\45-parts.lsp` together, and add a line to the changelog.
 
 Parts that follow a pattern are a line in a table of `make_parts.lsp` instead: a D-Sub shell in `*mk-dsubs*`, its top and side views in `*mk-dsub-sides*`, a single-row keyed connector (JST GH and the like) in `*mk-row-parts*`, a Futaba-style part in `*mk-futaba*`. Take the numbers from the maker's drawing and say where they came from in the comment; keep makers' datasheets in `datasheets\`, which git ignores (they are not ours to publish). A datasheet PDF that is encrypted opens with `py -3 -m pip install cryptography` and pypdf. To correct a generated part by hand, draw a block of the same name in `library.dwg`: it wins.
+
+## Views from STEP models
+
+`tools\step-views` draws a part from every side out of its 3D model, for the components library kept outside this repo (a folder with `3D model\` holding the makers' `.stp`/`.step` files and `dwg blueprints\` holding the drawings):
+
+```
+tools\step-views\make_views.bat "<components library>\connectors" --dry
+tools\step-views\make_views.bat "<components library>\connectors"
+```
+
+`--dry` lists the models that have no drawing yet; without it each gets `dwg blueprints\<family>\<model>.DWG`. A DWG already there is never overwritten, so delete one to have it made again. `--only=<regex>` takes only the models whose path matches. The first run sets up Python with OpenCascade and ezdxf in `%LOCALAPPDATA%\bptools-step-views`; it needs `py` and AutoCAD 2024's console.
+
+Each drawing has 10 views, hidden lines removed, at 1:1 in mm on layer 0:
+
+```
+iso        top      iso
+left       front    right     back
+iso        bottom   iso
+```
+
+- **Which side is the front.** `step_views.py` (one model) takes the axes as SolidWorks does: the front view looks from +Z with +Y up. The `FAMILIES` table in `make_views.py` says otherwise per family and picks the folder each family's drawings go to. For example, JST PH looks from −X and puts the back next to the front, as the drawings made by hand before.
+- **One file, many sizes.** A STEP that stacks every size of a connector at one origin (JST SH «ALL», Molex PicoBlade) becomes one drawing per size, «<model> - <size>». A size is any top-level part whose name differs from the others' only in its digits.
+- **Speed and fallback.** A model takes from under a second to a few minutes. If the exact hidden-line algorithm fails or takes over 30 minutes, the polygonal one is used, and the report says so. The report goes to `%TEMP%\step-views\report.tsv`.
 
 ## Building and testing
 
