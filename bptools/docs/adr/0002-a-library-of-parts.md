@@ -7,6 +7,8 @@ Front views missing or unlike the real роз'єм were one of the problems BPTO
 - **The source is `src\parts\library.dwg`**, the parts drawn by hand, plus the parts that `src\make_parts.lsp` computes from a few dimensions: D-Sub faces from the shell, pitch and pin count (pin 1 at the right of a female face seen from the front, at the left from the back), D-Sub top and side views, single-row connectors after the maker's drawing (JST GH from JST's catalogue), and Futaba drawn as on the user's sheets. Sizes that come from no maker's drawing are marked in that file as to be checked against the роз'єм. A hand-drawn block of the same name wins over a generated one.
 - **`src\make_parts.ps1` turns the library into what BPTOOLS ships**: one drawing per вигляд, `src\parts\<file>.dwg` with an ASCII file name, and the catalog `src\lsp\45-parts.lsp`, which lists every вигляд with its outline for the preview. Both are committed, as PDFALL's templates are, and run again only when a part changes. BPPART inserts a вигляд from its drawing by name (`<block>=<file>`), so a drawing receives only the blocks it uses.
 - **The library ships in the bundle**, so every colleague has the same parts, and a new part arrives with a release.
+- **The components library joins it** (November 2026). Every drawing of the team's components library, with its 10 views made from the maker's 3D model (`tools\step-views`) or drawn before, becomes a part: `tools\components\make_components.py` splits each drawing into its views, names them by where they are seen from (спереду, ззаду, зверху, знизу, зліва, справа, and four isometric views), and writes them as the blocks of one drawing per part, `src\parts\components\<id>.dwg`, with the base point at the centre of each view. BPPART inserts that drawing to bring in the view asked for and purges the others again, so a drawing still receives only the blocks it uses. The outlines for the preview, thousands of lines for some parts, are in `<id>.txt`, read when the part is shown, so loading BPTOOLS stays quick. These parts have no pin numbers yet. They make the bundle about 30 MB.
+- **A part's name may differ per PC.** Library names come from the makers' files («Leergehäuse, Kabel-Platine RM 2,54 mm - 1 x 10»), so each user may give a part their own name in BPPART's window, kept in their settings. That name is written under the part and searched for; the block keeps the library's name, so a drawing holds the same blocks whoever pasted them.
 
 ## Considered options
 
@@ -17,6 +19,6 @@ Front views missing or unlike the real роз'єм were one of the problems BPTO
 
 ## Consequences
 
-- Adding a part is: draw it in `library.dwg` as DEVELOPING.md says, run `make_parts.ps1`, release.
+- Adding a part is: draw it in `library.dwg` as DEVELOPING.md says, run `make_parts.ps1`, release. A part of the components library: put its drawing in the components library, run `tools\components\make_components.bat`, release.
 - A block already in a drawing is used as it is; a part corrected in the library reaches old drawings only when its block is redefined there.
 - The D-Sub dimensions in `make_parts.lsp` are the usual ones for those shells; a new size must be checked against the роз'єм itself.

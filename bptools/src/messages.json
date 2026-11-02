@@ -38,6 +38,7 @@
     "part.parts": "Деталь:",
     "part.search": "Деталь (пошук: назва й Enter):",
     "part.views": "Вигляд:",
+    "part.label": "Назва на кресленні (лише на цьому ПК):",
     "part.rotation": "Поворот",
     "part.scale": "Масштаб",
     "part.ask-number": "Номер зі списку <{n}>:",

@@ -15,8 +15,11 @@ src\parts\library.dwg     the parts drawn by hand (see "Adding a part")
 src\make_parts.lsp        generates the D-Sub parts, and writes the library out (with make_parts.ps1)
 src\make_parts.ps1        makes src\parts\<file>.dwg, one per вигляд, and src\lsp\45-parts.lsp; run when a part changes
 src\parts\*.dwg           what make_parts.ps1 made: one drawing per вигляд, shipped in the bundle's parts folder
+src\parts\components\     what tools\components made from the components library: per part a drawing of its 10 views
+                          and their outlines (<id>.dwg, <id>.txt), and index.tsv, which drawing each came from
 src\guide.html     the guide for colleagues: zip root, bundle, Start menu (Інструкція BPTOOLS)
 tools\step-views\         draws the 10 views of STEP models into DWGs (see "Views from STEP models"); not shipped
+tools\components\        turns the components library's drawings into parts (see "Parts from the components library")
 build.bat                 builds dist\BPTOOLS.zip
 release.ps1               raises the version (-Prepare) and publishes a GitHub release, with ..\common\release.ps1
 CHANGELOG.md              what changed in each version, in Ukrainian; also the release notes
@@ -38,13 +41,14 @@ common: 10-text, 12-log, 14-settings, 16-dialog   bp:msg ..., the debug log and 
 40-labels.lsp             c:BPPOS, c:BPPIN, c:BPWIRE, c:BPNAME, c:BPVIEW, c:BPFIG, c:BPSTYLE; names, views, captions
                           and notes are MTEXT one row wide, the rest TEXT
 45-parts.lsp              the catalog of parts with their outlines (made by make_parts.ps1, not edited by hand)
+46-components.lsp         the parts of the components library, added to the catalog (made by tools\components)
 50-new.lsp                c:BPNEW
 60-parts.lsp              c:BPPART: the window, the preview, pasting with rotation and scale, numbers upright (ADR 0002)
 70-center.lsp             c:BPCENTER: texts centred between the outermost points of other objects
 90-loaded.lsp             the line AutoCAD shows when it loads BPTOOLS
 ```
 
-The style names and heights are in `00-settings.lsp`, which with the generated `45-parts.lsp` (`"generated"` in `plugin.json`) are the only LISP files where Ukrainian text may be written; the words BPTOOLS writes into drawings (the colours, the views, `Рис.`) are in the `labels` of `messages.json`.
+The style names and heights are in `00-settings.lsp`, which with the generated `45-parts.lsp` and `46-components.lsp` (`"generated"` in `plugin.json`) are the only LISP files where Ukrainian text may be written; the words BPTOOLS writes into drawings (the colours, the views, `Рис.`) are in the `labels` of `messages.json`.
 
 Two things differ between the console AutoCAD the tests run in and the real one:
 
@@ -97,6 +101,20 @@ iso        bottom   iso
 - **Which side is the front.** `step_views.py` (one model) takes the axes as SolidWorks does: the front view looks from +Z with +Y up. The `FAMILIES` table in `make_views.py` says otherwise per family and picks the folder each family's drawings go to. For example, JST PH looks from −X and puts the back next to the front, as the drawings made by hand before.
 - **One file, many sizes.** A STEP that stacks every size of a connector at one origin (JST SH «ALL», Molex PicoBlade) becomes one drawing per size, «<model> - <size>». A size is any top-level part whose name differs from the others' only in its digits.
 - **Speed and fallback.** A model takes from under a second to a few minutes. If the exact hidden-line algorithm fails or takes over 30 minutes, the polygonal one is used, and the report says so. The report goes to `%TEMP%\step-views\report.tsv`.
+
+## Parts from the components library
+
+Every drawing in `<components library>\<kind>\dwg blueprints` (connectors and any other kind added beside it) is a part of BPPART's library ([ADR 0002](docs/adr/0002-a-library-of-parts.md)). After adding or changing drawings there:
+
+```
+tools\components\make_components.bat "<components library>"
+```
+
+It reads only the drawings that changed since the last run (by their contents, in `src\parts\components\index.tsv`), takes out the parts whose drawing was removed, and writes `src\lsp&-components.lsp` again. Then run `build.bat`, check the part in BPPART, and commit `src\parts\components` and `46-components.lsp` together with a line in the changelog. `--only=<regex>` reads the drawings whose path matches again even when unchanged.
+
+- **The views.** A drawing must have the layout `tools\step-views` draws: three rows, the front view in the middle row under the top view and over the bottom view, the left view left of it, the right and back views right of it (in either order: the one that mirrors the front is the back), and an isometric view in each corner. A view is everything whose lines touch; a view a drawing lacks is left out, and the run says how many groups were left over. Each becomes the block «<part> — <вигляд>» with its base point at its centre, on layer 0 coloured by block.
+- **The names.** A part is named after its drawing's file. AutoCAD takes no comma, `=` and a few more in a block name, so its blocks have a point or a dash in their place (`bp:block-safe`, `block_safe`); the name written under the part keeps the file's. Two drawings of the same name in different folders get the folder's name after theirs.
+- **No pin numbers yet.** To give a part numbers, draw its вигляд with `PIN<n>` attributes in `library.dwg` under the same block name, as in "Adding a part"; a block already in a drawing is used as it is.
 
 ## Building and testing
 

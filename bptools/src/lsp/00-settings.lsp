@@ -46,14 +46,26 @@
 ;; The layer every label goes on: never a шар заливки, so no label is lost from the листи без заливки.
 (setq *bptools-layer* "Написи")
 
-;; The вигляди a part of the library may have, as (key how-the-block-name-ends). A library block is
-;; named «<part> — <вигляд>», such as «D-Sub DB-09F — з лицьового боку» (docs/adr/0002).
+;; The вигляди a part of the library may have, as (key how-the-block-name-ends), in the order BPPART
+;; lists them. A library block is named «<part> — <вигляд>», such as «D-Sub DB-09F — з лицьового
+;; боку» (docs/adr/0002). The parts drawn for the листи have the faces of a роз'єм; the parts of the
+;; components library have the 10 views of its drawings, named by where they are seen from
+;; (spelled the same in tools\components\make_components.py).
 (setq *bptools-views*
   '(("front" "з лицьового боку")
     ("back" "з монтажного боку")
     ("contacts" "з боку контактів")
+    ("from-front" "спереду")
+    ("from-back" "ззаду")
     ("top" "зверху")
-    ("side" "збоку")))
+    ("bottom" "знизу")
+    ("left" "зліва")
+    ("right" "справа")
+    ("side" "збоку")
+    ("iso-left-top" "спереду зліва зверху")
+    ("iso-right-top" "спереду справа зверху")
+    ("iso-left-bottom" "спереду зліва знизу")
+    ("iso-right-bottom" "спереду справа знизу")))
 (setq *bptools-part-dash* " — ")
 
 ;; The multileader style of позиційні номери (the number on a shelf, a dot on the part, ГОСТ 2.109)
