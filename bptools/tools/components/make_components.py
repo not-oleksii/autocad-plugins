@@ -21,6 +21,7 @@ from pathlib import Path
 import ezdxf
 from ezdxf import bbox, path as ezpath
 from ezdxf.enums import TextEntityAlignment
+from ezdxf.math import Vec2
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 OUT = SRC / "parts" / "components"
@@ -62,53 +63,145 @@ def console(drawing, script, work):
 
 # ---- Pin numbers -----------------------------------------------------------------------------
 # The model's axes as each view shows them, its x and its y, Z pointing at the viewer of the front
-# view (as tools\step-views lays the views out); and the axis each view looks along.
+# view (as tools\step-views lays the views out); the axis each view looks along, and from which end.
 AXES = {"from-front": ("+X", "+Y"), "from-back": ("-X", "+Y"), "top": ("+X", "-Z"), "bottom": ("+X", "+Z"),
         "left": ("+Z", "+Y"), "right": ("-Z", "+Y")}
 FACING = {"from-front": "Z", "from-back": "Z", "top": "Y", "bottom": "Y", "left": "X", "right": "X"}
-PIN_STYLE, PIN_HEIGHT, PIN_GAP = "Номер контакту малий", 1.8, 1.6  # as make_parts.lsp numbers its parts
-# The parts that get pin numbers: (pattern of the part's name, with its number of pins as n; pitch;
-# the axis its contacts point along, so the two views looking along it show them; the end of the
-# row pin 1 is at). Their rows are centred in those views. Pin 1 is after the makers' drawings in
-# datasheets\ (git keeps them out), matched to features the models show.
+VIEWER = {"from-front": "+Z", "from-back": "-Z", "top": "+Y", "bottom": "-Y", "left": "-X", "right": "+X"}
+PIN_STYLE, PIN_HEIGHT = "Номер контакту малий", 1.8  # as make_parts.lsp numbers its parts
+DIGIT, CLEAR = 1.26, 0.3  # a digit's width in that style, and the room kept between two numbers
+# The parts that get pin numbers: (pattern of the part's name, with its pins per row as n and its
+# rows, 1 or 2, as rows; pitch; the axis its contacts point along; the end of the rows pin 1 is at;
+# the end of the contacts its wires leave from, for a header the end its mating housing's wires
+# do; for two rows the side of the row with the odd pins, 1, 3, ..., beside 2, 4, ...), as model
+# axes. Their rows are centred in the views, which number them across the contacts (on the side
+# of the views away from the wires) and along them; a view looking along the rows shows one pin
+# and has none. Pin 1 is after the maker's drawing in datasheets\ (git keeps them out) where there
+# is one, matched to a feature the model shows; else at the left of the front view (спереду), or
+# for two rows at its top left.
 PIN_PARTS = [
     # ePH.pdf: No. 1 circuit at the right of the housing seen from the side with the contact
-    # windows, this drawing's front
-    (r"^PHR-(?P<n>\d+)$", 2.0, "Y", "+X"),
+    # windows, this drawing's front; wires out of the top
+    (r"^PHR-(?P<n>\d+)$", 2.0, "Y", "+X", "+Y", None),
     # ePH.pdf: No. 1 circuit at the right seen from the wall with the windows, posts down; that wall
     # is this drawing's top, posts to the left
-    (r"^B(?P<n>\d+)B-PH-K-S$", 2.0, "X", "+Z"),
+    (r"^B(?P<n>\d+)B-PH-K-S$", 2.0, "X", "+Z", "+X", None),
     # ePH.pdf: PC board layout from above, leads away from the viewer: No. 1 circuit at the right;
     # here the mating face is the right view, leads down
-    (r"^B(?P<n>\d+)B-PH-SM4-TB$", 2.0, "X", "+Z"),
+    (r"^B(?P<n>\d+)B-PH-SM4-TB$", 2.0, "X", "+Z", "+X", None),
+    # eEH.pdf shows no feature this model has: as B..B-PH-K-S, mating face at the right
+    (r"^B(?P<n>\d+)B-EH-A$", 2.5, "X", "+Z", "+X", None),
     # eSH.pdf: PC board layout from above, leads towards the viewer: No. 1 circuit at the left; here
     # the front looks down on the mating face, leads up
-    (r"^SH1\.0 90 Socket - BM(?P<n>\d+)B-SRSS", 1.0, "Z", "+X"),
+    (r"^SH1\.0 90 Socket - BM(?P<n>\d+)B-SRSS", 1.0, "Z", "+X", "+Z", None),
     # eSH.pdf: the mating face with the board down, No. 1 circuit at the left: this drawing's bottom
-    (r"^SH1\.0 Straight Socket - SM(?P<n>\d+)B-SRSS", 1.0, "Y", "-X"),
-    # eSH.pdf: the mark of No. 1 circuit, a triangle on this drawing's bottom, at the left
-    (r"^SH1\.0 (Tabbed )?Plug - SHR-(?P<n>\d+)V-S", 1.0, "Z", "-X"),
+    (r"^SH1\.0 Straight Socket - SM(?P<n>\d+)B-SRSS", 1.0, "Y", "-X", "-Y", None),
+    # eSH.pdf: the mark of No. 1 circuit, a triangle on this drawing's bottom, at the left; the
+    # contacts' barrels face the front, the mating face the back
+    (r"^SH1\.0 (Tabbed )?Plug - SHR-(?P<n>\d+)V-S", 1.0, "Z", "-X", "+Z", None),
     # eGH.pdf: pin 1 at the right of the mating face with the lock up
-    (r"^JST_GHR-(?P<n>\d+)V-S", 1.25, "Z", "+X"),
+    (r"^JST_GHR-(?P<n>\d+)V-S", 1.25, "Z", "+X", "+Z", None),
+    # Molex PicoBlade, no drawing: the part number's 6th and 7th digits are the circuits. 53048,
+    # mating face at the front; 53047, mating face at the bottom, leads up; 51021, the housing on
+    # the wires, mating face at the top, wires down; 51047, the plug on the wires, mating face at
+    # the bottom, wires up
+    (r"^Molex 1\.25 Angle Socket - 53048(?P<n>\d\d)\d\d$", 1.25, "Z", "-X", "+Z", None),
+    (r"^Molex PicoBlade 1\.25 PCB Straight Socket - 53047(?P<n>\d\d)\d\d$", 1.25, "Y", "-X", "-Y", None),
+    (r"^Molex 1\.25 Plug - 51021(?P<n>\d\d)\d\d$", 1.25, "Y", "-X", "-Y", None),
+    (r"^Molex 1\.25 Socket - 51047(?P<n>\d\d)\d\d$", 1.25, "Y", "-X", "+Y", None),
+    # Pin headers, no drawing: straight, its long side to the back; angled, its straight pins up
+    # and the front row bent least
+    (r"^Pin Header (?P<rows>[12])x(?P<n>\d+) TH Pitch 2\.54mm$", 2.54, "Z", "-X", "-Z", "+Y"),
+    (r"^(?P<rows>[12])x(?P<n>\d+) Male Pin Header Angle$", 2.54, "Y", "-X", "+Y", "+Z"),
+    # BLD housings: their triangle marks pin 1, on the bottom at the back; the mating face, with
+    # the funnels, at the left, the wires out of the right
+    (r"^Leergehäuse, Kabel-Platine RM 2,54 mm - (?P<rows>[12]) x (?P<n>\d+)$", 2.54, "X", "-Z", "+X", "-Y"),
 ]
 
 
 def pins(name, key, box):
     """A part's pin numbers in one view, [(x, y, "n")] from its base point (the centre of box,
-    (x1, y1, x2, y2) from it): one under each contact, or left of it for an upright row."""
+    (x1, y1, x2, y2) from it), beside the view: across the contacts on its side away from the
+    wires, numbering the row nearer the viewer; along them beside the row, for two rows each beside
+    its own. Numbers too close for the pitch go out in a zig-zag of as many steps as they need."""
     rule = next((r for r in PIN_PARTS if re.search(r[0], name)), None)
-    if not rule or FACING.get(key) != rule[2]:
+    if not rule or key not in AXES:
         return []
-    pattern, pitch, _, end = rule
-    n = int(re.search(pattern, name).group("n"))
+    pattern, pitch, contact, end, wires, odd = rule
+    m = re.search(pattern, name)
+    n, rows = int(m["n"]), int(m.groupdict().get("rows") or 1)
+    if FACING[key] == end[1]:  # looking along the rows
+        return []
     ax, ay = AXES[key]
     along_x = ax[1] == end[1]
-    sign = 1 if (ax if along_x else ay)[0] == end[0] else -1
+    run, across = (ax, ay) if along_x else (ay, ax)
+    sign = 1 if run[0] == end[0] else -1
+    lo, hi = (box[1], box[3]) if along_x else (box[0], box[2])
+
+    def row(first):  # the numbers of a row, its column at pin 1's end first
+        return [str(first + rows * i) for i in range(n)]
+
+    if FACING[key] == contact:
+        if rows == 1:
+            sets = [(-1, row(1))]
+        else:
+            s = 1 if across[0] == odd[0] else -1
+            sets = [(s, row(1)), (-s, row(2))]
+    else:
+        sets = [(-1 if across[0] == wires[0] else 1, row(1 if rows == 1 or VIEWER[key] == odd else 2))]
+    if sum(len(t) for _, t in sets) < 2:
+        return []
     out = []
-    for i in range(n):
-        u = round(sign * ((n - 1) / 2 - i) * pitch, 3)
-        out.append((u, round(box[1] - PIN_GAP, 3), str(i + 1)) if along_x else (round(box[0] - PIN_GAP, 3), u, str(i + 1)))
+    for s, texts in sets:
+        w = max(len(t) for t in texts) * DIGIT
+        size, first, step = (w, PIN_HEIGHT / 2 + 0.7, PIN_HEIGHT + 0.5) if along_x else (PIN_HEIGHT, w / 2 + 0.5, w + 0.5)
+        k = math.ceil((size + CLEAR) / pitch)
+        for i, t in enumerate(texts):
+            u = round(sign * ((n - 1) / 2 - i) * pitch, 3)
+            v = round((hi if s > 0 else lo) + s * (first + i % k * step), 3)
+            out.append((u, v, t) if along_x else (v, u, t))
     return out
+
+
+# ---- Arcs the wrong way round ----------------------------------------------------------------
+
+def fix_arcs(ents, tol=0.005):
+    """Turns round the arcs the library's drawings have the wrong way round, mostly in the views
+    their maker mirrored: such an arc, more than half a circle where a fillet was meant, sets off
+    from an end along a line that meets it there, over that line, where the arc meant (its start
+    and end swapped) sets off away from it. How many."""
+    ends = []  # (point, the way the line leaves it)
+    for e in ents:
+        if e.dxftype() == "LINE":
+            ps = [(Vec2(e.dxf.start), Vec2(e.dxf.end))]
+        elif e.dxftype() == "LWPOLYLINE":
+            pts = [(Vec2(p[0], p[1]), p[2]) for p in e.get_points("xyb")]
+            ps = [(a, b) for (a, bulge), (b, _) in zip(pts, pts[1:] + (pts[:1] if e.closed else [])) if not bulge]
+        else:
+            continue
+        for a, b in ps:
+            if a.distance(b) > tol:
+                ends += [(a, (b - a).normalize()), (b, (a - b).normalize())]
+    turned = 0
+    for e in ents:
+        if e.dxftype() != "ARC" or tuple(e.dxf.extrusion) != (0, 0, 1) or (e.dxf.end_angle - e.dxf.start_angle) % 360 <= 180:
+            continue
+        c, r = Vec2(e.dxf.center), e.dxf.radius
+        s, t = math.radians(e.dxf.start_angle), math.radians(e.dxf.end_angle)
+        # each end, and the way the arc leaves it
+        arc_ends = [(c + Vec2(math.cos(s), math.sin(s)) * r, Vec2(-math.sin(s), math.cos(s))),
+                    (c + Vec2(math.cos(t), math.sin(t)) * r, Vec2(math.sin(t), -math.cos(t)))]
+        over = away = 0
+        for p, d in arc_ends:
+            for q, dq in ends:
+                if p.distance(q) < tol:
+                    dot = d.dot(dq)
+                    over += dot > 0.98
+                    away += dot < -0.98
+        if over > away:
+            e.dxf.start_angle, e.dxf.end_angle = e.dxf.end_angle, e.dxf.start_angle
+            turned += 1
+    return turned
 
 
 # ---- Splitting a drawing into its views ------------------------------------------------------
@@ -293,7 +386,9 @@ def make(src, rel, name, pid):
         if not (work / "in.dxf").exists():
             return rel, None, "AutoCAD did not open it"
         doc = ezdxf.readfile(work / "in.dxf")
-        views, stray = classify(groups(entities(doc)))
+        ents = entities(doc)
+        turned = fix_arcs(ents)
+        views, stray = classify(groups(ents))
         part = ezdxf.new("R2013", setup=["linetypes"])
         part.header["$INSUNITS"] = 4
         part.styles.new(PIN_STYLE, dxfattribs={"font": "isocpeui.ttf"})
@@ -329,7 +424,7 @@ def make(src, rel, name, pid):
             return rel, None, "AutoCAD did not save the part"
         shutil.move(str(work / "part.dwg"), OUT / f"{pid}.dwg")
         (OUT / f"{pid}.txt").write_text("\n".join(lines) + "\n", encoding="ascii")
-        note = f"{len(views)} views" + (f", {stray} left over" if stray else "")
+        note = f"{len(views)} views" + (f", {stray} left over" if stray else "") + (f", {turned} arcs turned round" if turned else "")
         return rel, sorted(views, key=list(VIEWS).index), note
     except Exception as e:
         return rel, None, f"{type(e).__name__}: {e}"
