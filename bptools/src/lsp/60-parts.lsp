@@ -262,6 +262,9 @@
               view (nth (cond ((vl-position (if view (cadr view) (bp:setting "View")) keys)) (0)) views))
         (bp:dlg-list "views" (mapcar 'bp:view-name views) (vl-position view views))
         (set_tile "label" (bp:part-label part))
+        (bp:view-show))
+      (defun bp:view-show ()
+        ;; The check box usable only when view has pin numbers, and view's preview.
         (mode_tile "pins" (if (nth 5 view) 0 1))
         (bp:preview view rot))
       (defun bp:part-rename (s)
@@ -281,7 +284,7 @@
       (action_tile "parts" "(setq part (nth (atoi $value) shown)) (bp:part-show) (if (= $reason 4) (done_dialog 1))")
       (action_tile "label" "(bp:part-rename $value)")
       (action_tile "accept" "(bp:part-rename (get_tile \"label\")) (done_dialog 1)")
-      (action_tile "views" "(setq view (nth (atoi $value) views)) (bp:preview view rot) (if (= $reason 4) (done_dialog 1))")
+      (action_tile "views" "(setq view (nth (atoi $value) views)) (bp:view-show) (if (= $reason 4) (done_dialog 1))")
       (action_tile "rotation" "(setq rot (nth (atoi $value) *bp-rotations*)) (bp:preview view rot)")
       (action_tile "scale" "(setq scale (nth (atoi $value) *bp-scales*))")
       (action_tile "pins" "(bp:set-setting \"Pins\" $value) (bp:preview view rot)")
